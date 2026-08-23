@@ -1,0 +1,1564 @@
+{
+ "adapters": [
+  {
+   "folder": "AHSZU",
+   "adapter_id": "AHSZU_01",
+   "adapter_name": "宿州学院青果教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ahszu_01.js",
+   "import_url": "http://211.86.128.194/suzxyjw/cas/login.action",
+   "maintainer": "星河欲转",
+   "description": "宿州学院青果教务适配,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "AHZYYGZ",
+   "adapter_id": "AHZYYGZ_01",
+   "adapter_name": "安徽中医药高等专科学校",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "AHZYYGZ.js",
+   "import_url": "https://authserver.ahzyygz.edu.cn/authserver/login?service=http://jwxt.ahzyygz.edu.cn/ahzyygzjw/caslogin",
+   "maintainer": "glxgo",
+   "description": "安徽中医药高等专科学校青果教务适配器，非本校开发者适配，如果有误建议提交issues"
+  },
+  {
+   "folder": "BUPT",
+   "adapter_id": "BUPT_01",
+   "adapter_name": "北京邮电大学本科教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "bupt_01.js",
+   "import_url": "https://jwgl.bupt.edu.cn/jsxsd/",
+   "maintainer": "cstkn",
+   "description": "适配北京邮电大学本科教务管理系统，登录后导入个人课表"
+  },
+  {
+   "folder": "CAPU",
+   "adapter_id": "CAPU",
+   "adapter_name": "成都航空职业技术大学金智新教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "capadap.js",
+   "import_url": "https://jwxt.cap.edu.cn/jwapp/sys/homeapp/home/index.html?av=&contextPath=/jwapp#/",
+   "maintainer": "Xuan-Xuann",
+   "description": "更新:您登录后直接点击导入即可食用,无需进入课表界面。有任何问题请通过GitHub/QQ联系开发者。"
+  },
+  {
+   "folder": "CAUC",
+   "adapter_id": "CAUC",
+   "adapter_name": "中国民航大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cauc.js",
+   "import_url": "https://http-jwgl-cauc-edu-cn-80.webvpn.cauc.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "星河欲转",
+   "description": "中国民航大学正方教务，webvpn入口，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "CCIT",
+   "adapter_id": "CCIT",
+   "adapter_name": "长春工程学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ccit.js",
+   "import_url": "https://webvpn.ccit.edu.cn/auth/login",
+   "maintainer": "星河欲转",
+   "description": "长春工程学院强智教务适配，webvpn入口，请进入教务系统页面再点击导入，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "CFEC",
+   "adapter_id": "CFEC_01",
+   "adapter_name": "重庆财经学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "CFEC.js",
+   "import_url": "http://jwmis.cfec.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default",
+   "maintainer": "glxgo",
+   "description": "重庆财经学院正方教务适配器，非本校开发者适配，如果有误建议提交issues"
+  },
+  {
+   "folder": "chaoxing_jiaowu",
+   "adapter_id": "chaoxing",
+   "adapter_name": "超星教务系统",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "chaoxing.js",
+   "import_url": "",
+   "maintainer": "b1n23",
+   "description": "超星教务系统理论通用，输入教务网址，登录后点击执行导入\\n支持导入开学日期和节次时间"
+  },
+  {
+   "folder": "CJLU",
+   "adapter_id": "CJLU",
+   "adapter_name": "中国计量大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cjlu.js",
+   "import_url": "https://jwxt.cjlu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "ying-ck",
+   "description": "中国计量大学正方教务系统课表导入，登录后执行导入。"
+  },
+  {
+   "folder": "CMC",
+   "adapter_id": "CMC_01",
+   "adapter_name": "成都医学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cmc_01.js",
+   "import_url": "https://jwweb.cmc.edu.cn/",
+   "maintainer": "linlinli000",
+   "description": "成都医学院乘方教务适配，请先登录教务系统后再执行导入"
+  },
+  {
+   "folder": "CQCIVC",
+   "adapter_id": "CQCIVC",
+   "adapter_name": "重庆化工职业学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqcivc.js",
+   "import_url": "http://dc.cqcivc.cn/cas/login?service=http://jwxt.cqcivc.edu.cn/sso/zllogin",
+   "maintainer": "星河欲转",
+   "description": "重庆化工职业学院适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "CQCST",
+   "adapter_id": "CQCST_01",
+   "adapter_name": "重庆城市科技学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqcst_01.js",
+   "import_url": "http://jw.cqcst.edu.cn/cqdxcskjxy_jsxsd/",
+   "maintainer": "Mutx163",
+   "description": "登录后需要点击进入教务系统才可以导入，重庆城市科技学院强智适配，"
+  },
+  {
+   "folder": "CQJTU",
+   "adapter_id": "CQJTU",
+   "adapter_name": "重庆交通大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqjtu.js",
+   "import_url": "https://jwgln.cqjtu.edu.cn/jsxsd/sso.jsp",
+   "maintainer": "烛谛",
+   "description": "适配重庆交通大学教务系统"
+  },
+  {
+   "folder": "CQRK",
+   "adapter_id": "CQRK_01",
+   "adapter_name": "重庆人文科技学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqrk_01.js",
+   "import_url": "https://https-auth-cqrk-edu-cn-443.webvpn.cqrk.edu.cn:8480/cas/login?service=http%3A%2F%2Fportal.cqrk.edu.cn&rewrite=1",
+   "maintainer": "星河欲转",
+   "description": "登录后需要点击进入教务系统才可以导入\\n重庆人文科技学院强智适配，适配双季作息，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "CQU",
+   "adapter_id": "CQU",
+   "adapter_name": "重庆大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqu.js",
+   "import_url": "https://my.cqu.edu.cn/",
+   "maintainer": "茵符草",
+   "description": "适配重庆大学智慧教务系统"
+  },
+  {
+   "folder": "CQUET",
+   "adapter_id": "CQUET_01",
+   "adapter_name": "强智",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cquet_01.js",
+   "import_url": "https://cquet.edu.cn/",
+   "maintainer": "Mutx666",
+   "description": ""
+  },
+  {
+   "folder": "CQUT",
+   "adapter_id": "CQUT",
+   "adapter_name": "重庆理工大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cqut_01.js",
+   "import_url": "https://timetable-cfc.cqut.edu.cn/",
+   "maintainer": "Dawn Drizzle",
+   "description": "适配重庆理工大学教务系统"
+  },
+  {
+   "folder": "CSUFT",
+   "adapter_id": "CSUFT_QZ_01",
+   "adapter_name": "中南林业科技大学（强智教务）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "csuft.js",
+   "import_url": "https://https-cas-csuft-edu-cn-443.webvpn.csuft.edu.cn/cas/login?service=https://webvpn.csuft.edu.cn/callback/cas/eAF0IG5N",
+   "maintainer": "jinnianliuxing",
+   "description": "中南林业科技大学强智教务系统课表导入"
+  },
+  {
+   "folder": "CTGU",
+   "adapter_id": "CTGU",
+   "adapter_name": "三峡大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ctgu.js",
+   "import_url": "http://jwxt.ctgu.edu.cn/jwapp/sys/yjsrzfwapp/dbLogin/main.do",
+   "maintainer": "星河欲转",
+   "description": "点击统一身份认证登录,\\n由于存在作用域问题,登录后需要点击课程表跳转课表页面才能让一键导入课表使用,\\n非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "CUIT",
+   "adapter_id": "CUIT_01",
+   "adapter_name": "成都信息工程大学本科实践教学平台",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cuit_bk_new.js",
+   "import_url": "https://ywtb.cuit.edu.cn/",
+   "maintainer": "igugyj(Pfolg)",
+   "description": "登录（外网用户把二维码发到另一台设备），进入「本科实践教学（管理）平台」进行导入"
+  },
+  {
+   "folder": "CUIT",
+   "adapter_id": "CUIT_02",
+   "adapter_name": "成都信息工程大学教务管理系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cuit_bk_old.js",
+   "import_url": "https://jwc.cuit.edu.cn/",
+   "maintainer": "igugyj(Pfolg)",
+   "description": "登录教务导入"
+  },
+  {
+   "folder": "CUP",
+   "adapter_id": "CUP_01",
+   "adapter_name": "中国石油大学(北京)本科教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cup_01.js",
+   "import_url": "https://bk.cup.edu.cn/student/",
+   "maintainer": "larryyan",
+   "description": "点击统一身份认证登录"
+  },
+  {
+   "folder": "CUP",
+   "adapter_id": "CUP_02",
+   "adapter_name": "中国石油大学(北京)研究生教务系统",
+   "category": "POSTGRADUATE",
+   "asset_js_path": "cup_02.js",
+   "import_url": "https://gmis.cup.edu.cn/gmis/student/default/index",
+   "maintainer": "larryyan",
+   "description": "点击统一身份认证登录\\n打开(培养管理=>学生课表查询)页面。\\n包含克拉玛依校区"
+  },
+  {
+   "folder": "CUPK",
+   "adapter_id": "CUPK_01",
+   "adapter_name": "中国石油大学(北京)克拉玛依校区本科教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cupk_01.js",
+   "import_url": "https://eams.cupk.edu.cn/student/",
+   "maintainer": "ARK-VALLEY",
+   "description": "登录后直接导入既可，无需进入课表页面，注意登录密码不是融合门户密码，初始密码为个人完整身份证号"
+  },
+  {
+   "folder": "CUST",
+   "adapter_id": "CUST_01",
+   "adapter_name": "长春理工大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cust.js",
+   "import_url": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
+   "maintainer": "itdong",
+   "description": ""
+  },
+  {
+   "folder": "CWXU",
+   "adapter_id": "CWXU_01",
+   "adapter_name": "无锡学院教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "cwxu_01.js",
+   "import_url": "https://jwgl.cwxu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "ewiro",
+   "description": "无锡学院正方教务系统适配，登录后选择学年和学期即可通过教务接口导入课表。"
+  },
+  {
+   "folder": "CZIMT",
+   "adapter_id": "CZIMT_01",
+   "adapter_name": "常州机电职业技术学院-正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "czimt.js",
+   "import_url": "https://webapp.czimt.edu.cn",
+   "maintainer": "ShallowY",
+   "description": "常州机电职业技术学院教务系统适配，采用新版Webapp(校内通)入口，统一身份认证后进入教务系统执行导入。"
+  },
+  {
+   "folder": "DLMU",
+   "adapter_id": "DLMU_01",
+   "adapter_name": "大连海事大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "dlmu_01.js",
+   "import_url": "http://jw.xpaas.dlmu.edu.cn/eams",
+   "maintainer": "whynusn",
+   "description": "大连海事大学适配教务，可能与`海大在线`中课程不一致"
+  },
+  {
+   "folder": "DLU",
+   "adapter_id": "DLU_01",
+   "adapter_name": "大连大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "dlu.js",
+   "import_url": "https://webvpn.dlu.edu.cn/login",
+   "maintainer": "platinumyrh",
+   "description": "大连大学正方教务系统课表导入"
+  },
+  {
+   "folder": "ECJTU",
+   "adapter_id": "ECJTU_01",
+   "adapter_name": "华东交通大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ecjtu_01.js",
+   "import_url": "https://jwxt.ecjtu.edu.cn/index.action",
+   "maintainer": "glxgo",
+   "description": "华东交通大学教务,登录后需要进入教务系统才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "FJCPC",
+   "adapter_id": "FJCPC",
+   "adapter_name": "福建船政交通职业学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "fjcpc.js",
+   "import_url": "https://webvpn.fjcpc.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "点击本校师生统一身份验证进行登录，登录后点击新教务系统在点击教务管理\\n 已使用自动获取开学日期，免去手动设置 \\n福建船政交通职业学院教务适配,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "FOSU",
+   "adapter_id": "FOSU_01",
+   "adapter_name": "佛山大学强智教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "fosu_01.js",
+   "import_url": "https://100.fosu.edu.cn/",
+   "maintainer": "e7g",
+   "description": "佛山大学强智教务系统适配，支持课程表导入，需要校园网访问"
+  },
+  {
+   "folder": "GDIPU",
+   "adapter_id": "GDIPU_01",
+   "adapter_name": "广东轻工职业技术大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdipu.js",
+   "import_url": "https://jw.gdipu.edu.cn",
+   "maintainer": "LittleArray",
+   "description": "广东轻工职业技术大学（南海北区）适配教务,适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GDOU",
+   "adapter_id": "GDOU_01",
+   "adapter_name": "广东海洋大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdou.js",
+   "import_url": "https://jw.gdou.edu.cn/",
+   "maintainer": "Mccurtain",
+   "description": "广东海洋大学教务适配，如有误请提交 issues"
+  },
+  {
+   "folder": "GDOU",
+   "adapter_id": "GDOUYJ_01",
+   "adapter_name": "广东海洋大学阳江校区教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdouyj.js",
+   "import_url": "https://jw.gdou.edu.cn/",
+   "maintainer": "Yihe-ng",
+   "description": "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间，如有误请提交issues"
+  },
+  {
+   "folder": "GDPU",
+   "adapter_id": "GDPU_01",
+   "adapter_name": "广东药科大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdpu_01.js",
+   "import_url": "https://webvpn.gdpu.edu.cn/https/77726476706e69737468656265737421f3f652d220347845300d8db9d6562d/lyuapServer/login?service=https%3A%2F%2Fjwsys.gdpu.edu.cn%2Fsso%2Flyiotlogin",
+   "maintainer": "星河欲转",
+   "description": "广东药科大学适配教务,支持多校区时间,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GDUST",
+   "adapter_id": "GDUST",
+   "adapter_name": "广东科技学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdust.js",
+   "import_url": "https://webvpn.gdust.edu.cn/https/77726476706e69737468656265737421f3f652d220347d436a468ca88d1b203b/cas/?service=https%3A%2F%2Fwebvpn.gdust.edu.cn%2Flogin%3Fcas_login%3Dtrue",
+   "maintainer": "星河欲转",
+   "description": "广东科技学院适配教务,登录后需要进入教务系统才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GLMU",
+   "adapter_id": "GLMU_01",
+   "adapter_name": "桂林医科大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "glmu.js",
+   "import_url": "https://ejwc.glmc.edu.cn/",
+   "maintainer": "xhh李",
+   "description": "桂林医科大学教务,本校开发者适配，如果有误请加入QQ频道：pd12631377"
+  },
+  {
+   "folder": "GLOBAL_TOOLS",
+   "adapter_id": "GENERAL_TOOL_01",
+   "adapter_name": "组件测试",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "school.js",
+   "import_url": "",
+   "maintainer": "星河欲转",
+   "description": "这是一个空网站，用于组件测试与演示模式"
+  },
+  {
+   "folder": "GLOBAL_TOOLS",
+   "adapter_id": "GENERAL_TOOL_02",
+   "adapter_name": "适配代码测试",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "test.js",
+   "import_url": "",
+   "maintainer": "星河欲转",
+   "description": "空网站以及不存在适配代码,用于在不更新索引的情况下给开发者进行适配的软件测试"
+  },
+  {
+   "folder": "GLOBAL_TOOLS",
+   "adapter_id": "WakeUp",
+   "adapter_name": "WakeUp课程表分享口令导入(支持新版)",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "wake_up.js",
+   "import_url": "https://api.wakeup.fun/",
+   "maintainer": "Airline233、星河欲转",
+   "description": "从WakeUP获取分享口令后，进入适配直接点击\\"
+  },
+  {
+   "folder": "GLOBAL_TOOLS",
+   "adapter_id": "StarLink",
+   "adapter_name": "星链课表分享码导入",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "starlink.js",
+   "import_url": "https://api.starlinkkb.cn/",
+   "maintainer": "星河欲转",
+   "description": "首先,先去星链课表获取分享码，然后点击本适配，进入后不需要管网页，点击\\"
+  },
+  {
+   "folder": "GPNU",
+   "adapter_id": "GPNU_01",
+   "adapter_name": "广师大教务管理系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gpnu_01.js",
+   "import_url": "https://jwglxt.gpnu.edu.cn/sso/lyiotlogin",
+   "maintainer": "moondish",
+   "description": "适配教务管理系统，登录后导入个人课表(可不打开相应页面)如有bug请提交issues,泥雞又赢了"
+  },
+  {
+   "folder": "GSCMXY",
+   "adapter_id": "GSCMXY_01",
+   "adapter_name": "甘肃财贸职业学院-金智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gscmxy.js",
+   "import_url": "https://jwxt.gscmxy.edu.cn/",
+   "maintainer": "ShallowY",
+   "description": "甘肃财贸职业学院教务系统适配，统一身份认证后执行导入。"
+  },
+  {
+   "folder": "GSMC",
+   "adapter_id": "GSMC_01",
+   "adapter_name": "甘肃医学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gsmc_01.js",
+   "import_url": "https://jw.gsmc.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "星河欲转",
+   "description": "甘肃医学院适配教务，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GUC",
+   "adapter_id": "GUC",
+   "adapter_name": "吉利学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "school.js",
+   "import_url": "https://jw.guc.edu.cn/yethan/UserAction?setAction=userLogin",
+   "maintainer": "Selffox",
+   "description": "吉利学院（Geely University of China）YETHAN以专教务系统，登录含图片验证码，需在页面内手动登录后导入"
+  },
+  {
+   "folder": "GUIT",
+   "adapter_id": "GUIT_01",
+   "adapter_name": "桂林信息科技学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "guit_01.js",
+   "import_url": "https://172-16-18-132.webvpn.guit.edu.cn",
+   "maintainer": "Mercury",
+   "description": "桂林信息科技学院适配教务"
+  },
+  {
+   "folder": "GXDLXY",
+   "adapter_id": "GXDLXY_01",
+   "adapter_name": "广西电力职业技术学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gxdlxy_01.js",
+   "import_url": "https://jw.gxdlxy.com/jsxsd/framework/xsMain.jsp",
+   "maintainer": "星河欲转",
+   "description": "广西电力职业技术学院强智教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GZST",
+   "adapter_id": "GZST",
+   "adapter_name": "广州松田职业学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzst.js",
+   "import_url": "https://jw.educationgroup.cn/gzstzyxy_jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "广州松田职业学院强智适配,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "GZTRC",
+   "adapter_id": "GZTRC",
+   "adapter_name": "铜仁学院联奕教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gztrc.js",
+   "import_url": "https://gztrc.edu.cn:17232/",
+   "maintainer": "Daoguan-king",
+   "description": "由于教务系统未适配手机端，须在右上角选择\\"
+  },
+  {
+   "folder": "GZU",
+   "adapter_id": "GZU",
+   "adapter_name": "贵州大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzu.js",
+   "import_url": "https://zhjw.gzu.edu.cn/jwglxt/xtgl/",
+   "maintainer": "Daoguan-king",
+   "description": "贵州大学需要登录学校VPN，登录后需要进入教务系统“个人课表查询”页面再点击导入，最后特别致谢24级农学波波的帮助，没有他我VPN登录不了，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HAUT",
+   "adapter_id": "HAUT_01",
+   "adapter_name": "河南工业大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "haut_01.js",
+   "import_url": "https://jwglxt.haut.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "星河欲转",
+   "description": "河南工业大学适配教务，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HBGUHX",
+   "adapter_id": "HBGUHX",
+   "adapter_name": "河北地质大学华信学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hbguhx_01.js",
+   "import_url": "http://61.182.88.214:8090",
+   "maintainer": "未来之乡",
+   "description": "河北地质大学华信学院强智教务,本校25届开发者适配如果有误请联系4831884790@qq.com"
+  },
+  {
+   "folder": "HBLGXY",
+   "adapter_id": "HBLGXY_01",
+   "adapter_name": "淮北理工学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hblgxy_01.js",
+   "import_url": "https://a.hblgxy.edu.cn:5111/jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "淮北理工学院强智适配，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HBMU",
+   "adapter_id": "HBMU_01",
+   "adapter_name": "湖北医药学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hbmu.js",
+   "import_url": "https://jw.hbmu.edu.cn/",
+   "maintainer": "xhh李",
+   "description": "湖北医药学院教务,由桂医开发者适配，如果有误请加入QQ频道：pd12631377"
+  },
+  {
+   "folder": "HFNU",
+   "adapter_id": "HFNU_01",
+   "adapter_name": "合肥师范学院树维教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hfnu.js",
+   "import_url": "https://jw.hfnu.edu.cn/eams/loginExt.action",
+   "maintainer": "星河欲转",
+   "description": "合肥师范学院树维教务，支持双校区作息，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HHTC",
+   "adapter_id": "HHTC_01",
+   "adapter_name": "怀化学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hhtc.js",
+   "import_url": "https://jwmis.hhtc.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "怀化学院强智教务，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HIIT",
+   "adapter_id": "HIIT_01",
+   "adapter_name": "河南信息科技学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hiit_01.js",
+   "import_url": "http://39.164.230.243:9527/#/authserver/login?redirect_uri=aHR0cDovLzM5LjE2NC4yMzAuMjQzOjkxL2VhbXMvbG9naW4uYWN0aW9u",
+   "maintainer": "Mercury",
+   "description": "河南信息科技学院适配教务。登陆后点击导入即可，无视界面异常显示问题。"
+  },
+  {
+   "folder": "HNIU",
+   "adapter_id": "HNIU_01",
+   "adapter_name": "湖南信息职业技术学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hniu_01.js",
+   "import_url": "https://authserver.hniu.cn/authserver/login?service=https%3A%2F%2Fehall.hniu.cn%3A443%2Flogin%3Fservice%3Dhttps%3A%2F%2Fehall.hniu.cn%2Fnew%2Findex.html%3Fbrowser%3Dno%25EF%25BC%2589#StudentAffairsA",
+   "maintainer": "星河欲转",
+   "description": "湖南信息职业技术学院强智适配，登录后需要点击进入教务系统才可以点开始导入，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HNSF",
+   "adapter_id": "HNSF_01",
+   "adapter_name": "河南师范大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hnsf_01.js",
+   "import_url": "https://jwc.htu.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "河南师范大学适配教务,添加双季作息,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HNSF",
+   "adapter_id": "HNSF_02",
+   "adapter_name": "河南师范大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hnsf_02.js",
+   "import_url": "https://jwc.htu.edu.cn/",
+   "maintainer": "一颗",
+   "description": "该作者没有添加说明"
+  },
+  {
+   "folder": "HNUST",
+   "adapter_id": "HNUST_01",
+   "adapter_name": "湖南科技大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "HNUST_01.js",
+   "import_url": "https://kdjw.hnust.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "湖南科技大学适配教务,请使用企业微信登录"
+  },
+  {
+   "folder": "HNVCC",
+   "adapter_id": "HNVCC_01",
+   "adapter_name": "湖南商务职业技术学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "HNVCC_01.js",
+   "import_url": "http://jwxt.hnvcc.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "湖南商务职业技术学院强智适配,添加双季作息,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HNZY",
+   "adapter_id": "HNZY_01",
+   "adapter_name": "河南职业技术学院课表",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hnzy.js",
+   "import_url": "https://one.hnzj.edu.cn/common-service/kcb-pc/personage/personage",
+   "maintainer": "一颗",
+   "description": ""
+  },
+  {
+   "folder": "HQU",
+   "adapter_id": "HQU",
+   "adapter_name": "华侨大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hquadap.js",
+   "import_url": "https://atrust.hqu.edu.cn/portal/?redirectid=0.6668972084789097#/login",
+   "maintainer": "Xuan-Xuann",
+   "description": "适配华侨大学。登录成功后选择个人课表查询，进入后等待加载完毕即可导入。"
+  },
+  {
+   "folder": "HUAT",
+   "adapter_id": "HUAT",
+   "adapter_name": "湖北汽车工业学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "HUAT.js",
+   "import_url": "https://cas.huat.edu.cn/authserver/login?service=http%3A%2F%2Fneweas.huat.edu.cn%2Flogin",
+   "maintainer": "老考滤一下",
+   "description": "湖北汽车工业学院适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "HUAYU",
+   "adapter_id": "HUAYU_01",
+   "adapter_name": "山东华宇工学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "huayu.js",
+   "import_url": "http://jwgl.huayu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "Noxiouskoala1",
+   "description": "适配山东华宇工学院正方教务系统"
+  },
+  {
+   "folder": "HUEL",
+   "adapter_id": "HUEL_01",
+   "adapter_name": "河南财经政法大学",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "huel_01.js",
+   "import_url": "https://xk.huel.edu.cn",
+   "maintainer": "Mercury",
+   "description": "河南财经政法大学适配教务"
+  },
+  {
+   "folder": "HUNNU",
+   "adapter_id": "HUNNU",
+   "adapter_name": "湖南师范大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hunnu.js",
+   "import_url": "https://jwglnew.hunnu.edu.cn/eams/courseTableForStd.action",
+   "maintainer": "EarOfWheat",
+   "description": "适配湖南师范大学教务系统，登录后进入课表页面(homeExt.action)，点击导入即可使用"
+  },
+  {
+   "folder": "HUSE",
+   "adapter_id": "HUSE",
+   "adapter_name": "湖南科技学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "HUSE.js",
+   "import_url": "http://jw.huse.cn/jsxsd",
+   "maintainer": "KevinZ",
+   "description": "湖南科技学院适配教务,如有错误请联系作者QQ:2865467965"
+  },
+  {
+   "folder": "HUST",
+   "adapter_id": "HUST_01",
+   "adapter_name": "华中科技大学 HUB 系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hust.js",
+   "import_url": "http://mhub.hust.edu.cn",
+   "maintainer": "Lucas04-nhr",
+   "description": "登录华中科技大学 HUB 系统后执行导入，可在近 6 年的春季、秋季学期之间切换。课程导入后请根据学校校历设置准确的开学日期。"
+  },
+  {
+   "folder": "HYNU",
+   "adapter_id": "HYNU_01",
+   "adapter_name": "衡阳师范学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hynu_01.js",
+   "import_url": "https://hysfjw.hynu.edu.cn/jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "衡阳师范学院强智适配,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "IMNC",
+   "adapter_id": "IMNC_01",
+   "adapter_name": "通过 WebVPN 登录",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "imnc_01.js",
+   "import_url": "https://webvpn.imnc.edu.cn",
+   "maintainer": "浮笙-WindDrift",
+   "description": "无需校园网，使用 WebVPN 登录，登录后依次点击【教务管理系统】-【本学期课表】-【个人课表】，在【小节课表】页面（即第1节、第2节...）点击下方【执行导入】。"
+  },
+  {
+   "folder": "IMNC",
+   "adapter_id": "IMNC_02",
+   "adapter_name": "已连接校园网？",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "imnc_01.js",
+   "import_url": "http://211.82.176.48/academic/login/imnc/loginIds6.jsp",
+   "maintainer": "浮笙-WindDrift",
+   "description": "需要校园网，适用于上方无法登录的情况，导入方法与上方相同。"
+  },
+  {
+   "folder": "IMU",
+   "adapter_id": "IMU_01",
+   "adapter_name": "内蒙古大学URP教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "imu_01.js",
+   "import_url": "https://jwxt.imu.edu.cn/login",
+   "maintainer": "星河欲转",
+   "description": "内蒙古大学URP教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "IMUT",
+   "adapter_id": "IMUT_01",
+   "adapter_name": "内蒙古工业大学教务处适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "IMUT_01.js",
+   "import_url": "http://jw.imut.edu.cn/academic/login/imut/loginIds6Valid.jsp",
+   "maintainer": "wuko233",
+   "description": "内蒙古工业大学教务处适配，采用新版统一身份认证登录页面"
+  },
+  {
+   "folder": "JHZYEDU",
+   "adapter_id": "JHZYEDU_01",
+   "adapter_name": "正方教务-江西航空职业技术学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zhengfang.js",
+   "import_url": "https://jw.jhzyedu.cn/xtgl/login_slogin.html?ydType=0",
+   "maintainer": "JN",
+   "description": "江西航空职业技术学院正方教务V9.0 API导入。登录教务系统后即可一键导入，自动获取课表及作息时间。"
+  },
+  {
+   "folder": "JLU",
+   "adapter_id": "JLU_01",
+   "adapter_name": "吉林大学（新）教务管理系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "JLU_01.js",
+   "import_url": "https://vpn.jlu.edu.cn/login",
+   "maintainer": "Leimeng52mc",
+   "description": "在网页版VPN系统登录后，打开(新)教务管理系统，定位到我的课表页面，点击导出按钮即可导出课表数据。"
+  },
+  {
+   "folder": "JNU",
+   "adapter_id": "JNU_01",
+   "adapter_name": "暨南大学金智教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jnu_01.js",
+   "import_url": "https://jw.jnu.edu.cn",
+   "maintainer": "White-Dew-Boy",
+   "description": "登录教务系统后进入我的课表界面。自动导入上课时间段仅适用于珠海校区，其它校区可自行配置"
+  },
+  {
+   "folder": "JSNU",
+   "adapter_id": "JSNU_01",
+   "adapter_name": "江苏师范大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "JSNU_01.js",
+   "import_url": "https://i.jsnu.edu.cn/home",
+   "maintainer": "dezige131",
+   "description": "江苏师范大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "JSTC",
+   "adapter_id": "JSTC_01",
+   "adapter_name": "江苏旅游职业学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jstc_01.js",
+   "import_url": "https://authserver.jstc.edu.cn/authserver/login?service=https%3A%2F%2Fjwxt.jstc.edu.cn%2Fstudent%2Fsso%2Flogin",
+   "maintainer": "星河欲转",
+   "description": "江苏旅游职业学院教务，进入教务系统页面即可开始导入，支持自动获取开学日期，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "JXFU",
+   "adapter_id": "JXFU_01",
+   "adapter_name": "江西飞行学院适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "JXFU_01.js",
+   "import_url": "https://jwxt.jxfu.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "江西飞行学院适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "JXNU",
+   "adapter_id": "JXNU",
+   "adapter_name": "江西师大教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "JXNU.js",
+   "import_url": "https://jwc.jxnu.edu.cn/",
+   "maintainer": "glxgo",
+   "description": "本校学生适配，登录教务在线后，点击导入"
+  },
+  {
+   "folder": "JXUST",
+   "adapter_id": "JXUST",
+   "adapter_name": "江西理工大学强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jxust.js",
+   "import_url": "https://authserver.jxust.edu.cn/authserver/login?service=https://jw.jxust.edu.cn/jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "江西理工大学强智教务适配\\n非本校开发者适配,如果有误建议提交issues"
+  },
+  {
+   "folder": "JYVTC",
+   "adapter_id": "JYVTC_01",
+   "adapter_name": "济源职业技术学院教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jyvtc.js",
+   "import_url": "https://jwgl.jyvtc.edu.cn/jyvtcjw/",
+   "maintainer": "星河欲转",
+   "description": "济源职业技术学院适配教务,添加双季作息,非本校开发者适配如果有误建议提交issue"
+  },
+  {
+   "folder": "KSU",
+   "adapter_id": "KSU_01",
+   "adapter_name": "喀什大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ksu_01.js",
+   "import_url": "https://cas.ksu.edu.cn/cas/login?service=https://jwnet.ksu.edu.cn/sso/ddlogin",
+   "maintainer": "星河欲转",
+   "description": "喀什大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "MMPT",
+   "adapter_id": "MMPT",
+   "adapter_name": "茂名职业技术学院课表",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "mmpt.js",
+   "import_url": "https://jwc.mmpt.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "一颗",
+   "description": "如果导入失败，请前往适配器仓库提交 issue 或 PR 以更新适配器。"
+  },
+  {
+   "folder": "NBUT",
+   "adapter_id": "NBUT_01",
+   "adapter_name": "宁波工程学院教务系统适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "nbut.js",
+   "import_url": "http://jwxt.nbut.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "xiekeqing",
+   "description": "先登录到教务网站，登录成功后执行导入操作"
+  },
+  {
+   "folder": "NCUT",
+   "adapter_id": "NCUT_01",
+   "adapter_name": "北方工业大学-教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ncut_01.js",
+   "import_url": "https://jwxtbk.ncut.edu.cn/jsxsd/",
+   "maintainer": "EnderHCO3",
+   "description": "适配北方工业大学本科教务管理系统课表导入 请在导入时将'我的课表'后的'第x周'改为全部周次"
+  },
+  {
+   "folder": "NEAU",
+   "adapter_id": "NEAU_01",
+   "adapter_name": "东北农业大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "NEAU_01.js",
+   "import_url": "https://webvpn.neau.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "东北农业大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "NENU",
+   "adapter_id": "NENU_01",
+   "adapter_name": "东北师范大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "NENU_01.js",
+   "import_url": "https://bkjx.nenu.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "东北师范大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "NEU",
+   "adapter_id": "NEU_1",
+   "adapter_name": "东北大学金智教育教务适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "neu.js",
+   "import_url": "http://jwxt.neu.edu.cn/",
+   "maintainer": "Vera-zero",
+   "description": "网页仅在校园网/连接校内vpn环境下可访问"
+  },
+  {
+   "folder": "NEUQ",
+   "adapter_id": "NEUQ",
+   "adapter_name": "东北大学秦皇岛分校树维教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "neuq.js",
+   "import_url": "https://jwxt.neuq.edu.cn",
+   "maintainer": "aryunm",
+   "description": "适用于东北大学秦皇岛分校教务系统的适配器，由非本校开发者开发，如有问题请提交issue。"
+  },
+  {
+   "folder": "NIIT",
+   "adapter_id": "NIIT",
+   "adapter_name": "南京工业职业技术大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "niit.js",
+   "import_url": "https://jwxt.niit.edu.cn/",
+   "maintainer": "nifs1729",
+   "description": "点击统一身份认证登录,登录后直接点击导入即可"
+  },
+  {
+   "folder": "NJFU",
+   "adapter_id": "NJFU_01",
+   "adapter_name": "南京林业大学",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "njfu_01.js",
+   "import_url": "https://jwxt.njfu.edu.cn/sso.jsp",
+   "maintainer": "Mercury",
+   "description": "南京林业大学适配教务"
+  },
+  {
+   "folder": "NJNU",
+   "adapter_id": "NJNU",
+   "adapter_name": "南京师范大学金智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "njnu.js",
+   "import_url": "https://authserver.nnu.edu.cn/authserver/login?service=https://hsnnu.nnu.edu.cn/login",
+   "maintainer": "aryunm",
+   "description": "南京师范大学金智教务适配"
+  },
+  {
+   "folder": "NJTECH",
+   "adapter_id": "NJTECH",
+   "adapter_name": "南京工业大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "njtech.js",
+   "import_url": "https://jwgl.njtech.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "星河欲转",
+   "description": "南京工业大学正方教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "NWPU",
+   "adapter_id": "NWPU_01",
+   "adapter_name": "西北工业大学",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "nwpu_01.js",
+   "import_url": "https://ecampus.nwpu.edu.cn/",
+   "maintainer": "zengzoxiong",
+   "description": "西北工业大学本科教务系统适配，请先登录翱翔门户，手动点击进入翱翔教务后执行脚本自动获取课程信息"
+  },
+  {
+   "folder": "QAU",
+   "adapter_id": "QAU_01",
+   "adapter_name": "青岛农业大学综合教务管理系统（强智科技）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "qau_01.js",
+   "import_url": "http://jwglxt.qau.edu.cn/",
+   "maintainer": "ReGoMark",
+   "description": "适用于青岛农业大学(仅限青岛校区、平度校区和蓝谷校区)的本科生个人课表导入"
+  },
+  {
+   "folder": "qingguo_jiaowu",
+   "adapter_id": "qingguo_01",
+   "adapter_name": "青果教务html通用获取",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "qingguo_01.js",
+   "import_url": "",
+   "maintainer": "星河欲转",
+   "description": "输入教务网址，登录，切换到个人课表页面点击执行导入"
+  },
+  {
+   "folder": "QQHRIT",
+   "adapter_id": "QQHRIT",
+   "adapter_name": "齐齐哈尔工程学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "qqhrit.js",
+   "import_url": "http://tysf.qqhrit.com:20261/cas/login",
+   "maintainer": "星河欲转",
+   "description": "齐齐哈尔工程学院正方教务，进入教务系统再点击导入，已添加特殊时间方案，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "QQHRU",
+   "adapter_id": "QQHRU",
+   "adapter_name": "齐齐哈尔大学URP教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "qqhru.js",
+   "import_url": "https://webvpn.qqhru.edu.cn/users/sign_in",
+   "maintainer": "星河欲转",
+   "description": "齐齐哈尔大学URP教务，登录后只需要进入教务系统就可以点击导入了，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "QUT",
+   "adapter_id": "QUT",
+   "adapter_name": "青岛理工大学教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "qut.js",
+   "import_url": "http://jxgl.qut.edu.cn/jwglxt/xtgl/index_initMenu.html",
+   "maintainer": "LucasAndrew0120",
+   "description": "适配青岛理工大学正方教务系统"
+  },
+  {
+   "folder": "SCUEC",
+   "adapter_id": "SCUEC",
+   "adapter_name": "中南民族大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "scuec.js",
+   "import_url": "https://webvpn.scuec.edu.cn/",
+   "maintainer": "Zellon0w0",
+   "description": "中南民族大学课程表导入适配 \\n\\n如果有适配问题请提issue"
+  },
+  {
+   "folder": "SCUT",
+   "adapter_id": "SCUT_01",
+   "adapter_name": "华南理工大学webvpn适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "SCUT_01.js",
+   "import_url": "https://xsjw2018-jw.webvpn.scut.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "华南理工大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SCUT",
+   "adapter_id": "SCUT_02",
+   "adapter_name": "华南理工大学内网适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "SCUT_01.js",
+   "import_url": "http://xsjw2018.jw.scut.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "华南理工大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SDDFVC",
+   "adapter_id": "SDDFVC",
+   "adapter_name": "山东药品食品职业学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sddfvc.js",
+   "import_url": "http://cas.sddfvc.edu.cn/login?type=usernamepassword&service=http%3A%2F%2Ffazhan.sddfvc.edu.cn%2Fjs%2Ffzzx%2Flogin",
+   "maintainer": "星河欲转",
+   "description": "山东药品食品职业学院教务适配,非本校开发者适配如果有误建议提交issues \\n\\n贵校网页经常变化参数我们需要本校的有兴趣的同学来主动维护适配的代码"
+  },
+  {
+   "folder": "SDIPCT",
+   "adapter_id": "SDIPCT",
+   "adapter_name": "山东石油化工学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdipct.js",
+   "import_url": "https://webvpn.sdipct.edu.cn/https/77726476706e69737468656265737421fae0598869236c596e0b9de29d51367bd943/",
+   "maintainer": "星河欲转",
+   "description": "山东石油化工学院教务适配,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SDJTU",
+   "adapter_id": "SDJTU",
+   "adapter_name": "山东交通学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdjtu.js",
+   "import_url": "https://wwebvpn.sdjtu.edu.cn",
+   "maintainer": "WuL0ong",
+   "description": "适配山东交通学院教务系统，登录成功后进入教务系统，找到“学期理论课表”，在“学年学期”下拉框内选择要导入的学期课表，之后点击“执行导入”按钮即可。\\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+  },
+  {
+   "folder": "SDLIVC",
+   "adapter_id": "SDLIVC",
+   "adapter_name": "山东轻工职业学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdlivc.js",
+   "import_url": "https://crp.sdlivc.cn/xsgl/xs/login/login.aspx",
+   "maintainer": "赛博丁真",
+   "description": "山东轻工职业学院教务适配"
+  },
+  {
+   "folder": "SDNU",
+   "adapter_id": "SDNU",
+   "adapter_name": "山东师范大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdnu.js",
+   "import_url": "http://jwxt.sdnu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "LiquoriceHy",
+   "description": "山东师范大学教务系统适配"
+  },
+  {
+   "folder": "SHUFEZJ",
+   "adapter_id": "SHUFEZJ",
+   "adapter_name": "上海财经大学浙江学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "shufezj.js",
+   "import_url": "https://jwxt.shufe-zj.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default",
+   "maintainer": "ZnonEn",
+   "description": "上海财经大学浙江学院正方教务，通过CAS统一身份认证登录后，进入个人课表查询页面即可点击导入。非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SHZQ",
+   "adapter_id": "SHZQ_01",
+   "adapter_name": "上海中侨职业技术大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "shzq.js",
+   "import_url": "https://cas.shzq.edu.cn/cas/login?service=https://jw.shzq.edu.cn/sso/ddlogin",
+   "maintainer": "Kredenk",
+   "description": "上海中侨大学,正方教务适配"
+  },
+  {
+   "folder": "SICNU",
+   "adapter_id": "SICNU_01",
+   "adapter_name": "四川师范大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "school.js",
+   "import_url": "http://202.115.194.60/",
+   "maintainer": "llingqing",
+   "description": "支持狮子山校区和成龙校区，自动识别学期和课程时间，另可从大学生通进入教务系统(https://zhxg.sicnu.edu.cn/edu/admin/)"
+  },
+  {
+   "folder": "STCNCHU",
+   "adapter_id": "STCNCHU",
+   "adapter_name": "南昌航空大学科技学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "stcnchu.js",
+   "import_url": "http://qzjwxt.stcnchu.edu.cn:800/jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "南昌航空大学科技学院强智教务，需要内网或者vpn，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SUDA",
+   "adapter_id": "SUDA_01",
+   "adapter_name": "苏州大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "suda.js",
+   "import_url": "http://xk.suda.edu.cn/",
+   "maintainer": "BernardYan2357",
+   "description": "苏州大学教务系统适配，网页仅在校园网/连接校内VPN环境下可访问"
+  },
+  {
+   "folder": "SWJTU",
+   "adapter_id": "SWJTU_01",
+   "adapter_name": "西南交通大学VATUU为途教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "swjtu_vatuu.js",
+   "import_url": "https://jwc.swjtu.edu.cn/service/login.jsp",
+   "maintainer": "Weedy233",
+   "description": "登录VATUU为途教务系统后，进入本学期选课/课表页面执行导入"
+  },
+  {
+   "folder": "SXGCXY",
+   "adapter_id": "SXGCXY_01",
+   "adapter_name": "山西工程职业学院超星教务适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sxgcxy_01.js",
+   "import_url": "https://sxevc.jw.chaoxing.com/admin/login",
+   "maintainer": "星河欲转",
+   "description": "山西工程职业学院适配教务,支持唐槐校区、龙潭校区作息时间,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "SYIST",
+   "adapter_id": "SYIST_01",
+   "adapter_name": "沈阳科技学院金智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "syist_01.js",
+   "import_url": "http://jwxt.syist.edu.cn:30334/jwapp/sys/emaphome/portal/index.do",
+   "maintainer": "星河欲转",
+   "description": "沈阳科技学院金智教务，支持自动获取开学日期，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "TARU",
+   "adapter_id": "TARU_01",
+   "adapter_name": "塔里木大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "taru_01.js",
+   "import_url": "https://auth.taru.edu.cn/cas/login?service=https%3A%2F%2Fhall.taru.edu.cn%2FserviceHall",
+   "maintainer": "星河欲转",
+   "description": "登录后需要进入查看课表的页面，才可以点击导入 \\n\\n塔里木大学适配教务,添加双季作息,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "TCU",
+   "adapter_id": "TCU_01",
+   "adapter_name": "天津城建大学URP教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "tcu_01.js",
+   "import_url": "https://authserver.tcu.edu.cn/authserver/login?service=https%3A%2F%2Fjwxs.tcu.edu.cn%2Flogin",
+   "maintainer": "星河欲转",
+   "description": "天津城建大学URP教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "TJAU",
+   "adapter_id": "TJAU",
+   "adapter_name": "天津农学院树维教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "tjau.js",
+   "import_url": "http://jwxt.tjau.edu.cn/eams/homeExt.action",
+   "maintainer": "星河欲转",
+   "description": "天津农学院树维教务适配，登录后直接点击导入,无视可能出现的显示异常,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "TONGJI",
+   "adapter_id": "TONGJI_01",
+   "adapter_name": "同济大学 1 系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "tongji_01.js",
+   "import_url": "https://1.tongji.edu.cn/",
+   "maintainer": "Linho1219",
+   "description": "同济大学教学信息管理一体化系统（1 系统）适配。无需进入课表页面，统一认证登录完成进入 1 系统后即可提取"
+  },
+  {
+   "folder": "TSU",
+   "adapter_id": "TSU_01",
+   "adapter_name": "泰山学院青果教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "tsu_01.js",
+   "import_url": "http://jwxt.tsu.edu.cn",
+   "maintainer": "素绫理",
+   "description": "泰山学院青果教务系统课表适配，登陆后点击左侧【教学安排】，再点击【执行导入】即可，导入后不要忘记设置本学期的开学日期"
+  },
+  {
+   "folder": "UESTC",
+   "adapter_id": "UESTC_01",
+   "adapter_name": "电子科技大学 EAMS 教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "uestc.js",
+   "import_url": "https://eams.uestc.edu.cn/eams",
+   "maintainer": "CorunLing",
+   "description": "登录 eams.uestc.edu.cn 后，在弹出的学期列表中选择对应学期即可自动导入。支持单双周、连周、自定义时间段。"
+  },
+  {
+   "folder": "UJN",
+   "adapter_id": "UJN_01",
+   "adapter_name": "济南大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "school.js",
+   "import_url": "https://sso.ujn.edu.cn/tpass/login?service=http%3A%2F%2Fjwgl.ujn.edu.cn%2Fsso%2Fdriotlogin",
+   "maintainer": "Moyu",
+   "description": "济南大学教务系统适配，支持班级课表和个人课表的导入，通过统一认证登录"
+  },
+  {
+   "folder": "UJS",
+   "adapter_id": "UJS_01",
+   "adapter_name": "江苏大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ujs_zhengfang_v9.0.js",
+   "import_url": "https://jwxt.ujs.edu.cn/sso/jziotlogin",
+   "maintainer": "洛初 Github@gongfuture",
+   "description": "江苏大学教务系统适配，仅支持个人课表的导入，通过统一认证登录"
+  },
+  {
+   "folder": "UPC",
+   "adapter_id": "UPC",
+   "adapter_name": "中国石油大学(华东)教务适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "upc.js",
+   "import_url": "https://webvpn.upc.edu.cn/users/sign_in",
+   "maintainer": "星河欲转",
+   "description": "中国石油大学(华东)强智教务适配,webvpn入口,登录后需要进入教务系统页面才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "urp_jiaowu",
+   "adapter_id": "urp_01",
+   "adapter_name": "URP教务通用获取",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "urp_01.js",
+   "import_url": "",
+   "maintainer": "星河欲转",
+   "description": "输入教务网址，登录，切换到个人课表页面点击执行导入"
+  },
+  {
+   "folder": "USTC",
+   "adapter_id": "USTC",
+   "adapter_name": "中国科学技术大学本科教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ustc.js",
+   "import_url": "https://id.ustc.edu.cn/cas/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin",
+   "maintainer": "Enthusjast",
+   "description": "中国科学技术大学本科教务系统适配，登录后进入课表查询页面，等待课表加载完成后点击导入"
+  },
+  {
+   "folder": "UZZ",
+   "adapter_id": "UZZ_01",
+   "adapter_name": "枣庄学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "uzz_01.js",
+   "import_url": "https://iam.uzz.edu.cn/esc-sso/login/page",
+   "maintainer": "素绫理",
+   "description": "枣庄学院方正教务系统课表适配，登陆后点击【正方教务管理系统】，再点击【个人课表查询】，最后点击【执行导入】即可，导入后不要忘记设置本学期的开学日期"
+  },
+  {
+   "folder": "WBU",
+   "adapter_id": "WBU_01",
+   "adapter_name": "武汉商学院-超星教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "wbu_01.js",
+   "import_url": "https://webvpn.wbu.edu.cn/",
+   "maintainer": "Foraes",
+   "description": "武汉商学院教务系统课表导入适配"
+  },
+  {
+   "folder": "WBU",
+   "adapter_id": "WBU_02",
+   "adapter_name": "武汉商学院-校园网访问",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "wbu_02.js",
+   "import_url": "https://jwxt.wbu.edu.cn/",
+   "maintainer": "HJWqa",
+   "description": "武汉商学院教务系统课表导入适配"
+  },
+  {
+   "folder": "WBU",
+   "adapter_id": "WBU_03",
+   "adapter_name": "武汉商学院-WebVPN访问",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "wbu_02.js",
+   "import_url": "https://webvpn.wbu.edu.cn/",
+   "maintainer": "HJWqa",
+   "description": "武汉商学院教务系统课表导入适配"
+  },
+  {
+   "folder": "WENHUA",
+   "adapter_id": "WENHUA_01",
+   "adapter_name": "文华学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "wenhua_01.js",
+   "import_url": "https://jw1.hustwenhua.net/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "glxgo",
+   "description": "文华学院教务,登录后需要进入教务系统才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "WHCB",
+   "adapter_id": "WHCB_1",
+   "adapter_name": "武汉船舶职业技术学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "WHCB.js",
+   "import_url": "http://jw.wspc.edu.cn/jwapp/sys/wdkb/*default/index.do?EMAP_LANG=zh#/xskcb",
+   "maintainer": "一丝不旺",
+   "description": "适配武汉船舶职业技术学院，学校网站很烂，课程表可能会加载一段时间，多等会"
+  },
+  {
+   "folder": "WHUT",
+   "adapter_id": "WHUT_01",
+   "adapter_name": "武汉理工大学金智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "whut_01.js",
+   "import_url": "https://jwxt.whut.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "武汉理工大学金智教务,支持自动获取开学日期,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XATU",
+   "adapter_id": "XATU_01",
+   "adapter_name": "西安工业大学",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "myschool.js",
+   "import_url": "http://jwgl2018.xatu.edu.cn",
+   "maintainer": "晨熯",
+   "description": "树维教务系统适配"
+  },
+  {
+   "folder": "XAUT",
+   "adapter_id": "XAUT_01",
+   "adapter_name": "西安理工大学适配教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "XAUT_01.js",
+   "import_url": "http://jwgl.xaut.edu.cn/",
+   "maintainer": "dezige131",
+   "description": "西安理工大学适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XAWL",
+   "adapter_id": "XAWL_01",
+   "adapter_name": "西安文理学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xawl_01.js",
+   "import_url": "http://jwgl.xawl.edu.cn/jwglxt/",
+   "maintainer": "星河欲转",
+   "description": "西安文理学院正方教务,添加双季作息,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XJIE",
+   "adapter_id": "XJIE_01",
+   "adapter_name": "新疆工程学院强智适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xjie_01.js",
+   "import_url": "https://authserver.xjie.edu.cn/authserver/login?service=https%3A%2F%2Fjwxt.xjie.edu.cn%2Fjsxsd%2F",
+   "maintainer": "星河欲转",
+   "description": "新疆工程学院强智适配，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XJZFU",
+   "adapter_id": "XJZFU_01",
+   "adapter_name": "新疆政法学院新教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xjzfu.js",
+   "import_url": "https://jwxt.xjzfu.edu.cn/jwapp/sys/homeapp/home/index.html",
+   "maintainer": "jesse-s4",
+   "description": "适配新疆政法学院金智教务系统 2026.07.20"
+  },
+  {
+   "folder": "XMCU",
+   "adapter_id": "XMCU_01",
+   "adapter_name": "厦门城市职业学院青果教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xmcu_01.js",
+   "import_url": "https://eone-443.webvpn.xmcu.edu.cn/",
+   "maintainer": "星河欲转",
+   "description": "输入账号密码登录，进入融合信息门户，在应用中心找到教务系统并进入，在左侧找到教学安排，点击后即可看到学生个人课表。\\n厦门城市职业学院适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XUST",
+   "adapter_id": "XUST_01",
+   "adapter_name": "西安科技大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xust_01.js",
+   "import_url": "http://jwsso.xust.edu.cn/frontend/center_portal/home/index.html#/",
+   "maintainer": "星河欲转",
+   "description": "西安科技大学正方教务，已适配西区差异时间，非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XYAFU",
+   "adapter_id": "XYAFU_01",
+   "adapter_name": "信阳农林学院青果教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xyafu_01.js",
+   "import_url": "https://sso.xyafu.edu.cn/sso/login?service=https%3A%2F%2Fjwgl.xyafu.edu.cn%2Fcaslogin",
+   "maintainer": "glxgo",
+   "description": "信阳农林学院教务,登录后需要进入教务系统才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XZIT",
+   "adapter_id": "XZIT_01",
+   "adapter_name": "徐州工程学院教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xzit_01.js",
+   "import_url": "http://jwglxt.xzit.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "盐泡",
+   "description": "徐州工程学院正方教务系统适配，登录选择个人课表页面导入即可。"
+  },
+  {
+   "folder": "YANGTZEU",
+   "adapter_id": "YU_01",
+   "adapter_name": "长江大学教务系统适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "yu.js",
+   "import_url": "https://cas-yangtzeu-edu-cn.atrust.yangtzeu.edu.cn/authserver/login?service=https%3A%2F%2Fatrust.yangtzeu.edu.cn%3A4443%2Fpassport%2Fv1%2Fauth%2Fcas%3FsfDomain%3DCAS",
+   "maintainer": "Jursin",
+   "description": "适配长江大学教务系统（树维）导入，进入教务系统后页面空白只有⌈我的账户⌋⌈返回首页⌋⌈退出⌋字样，此时点击执行导入即可"
+  },
+  {
+   "folder": "YIBINU",
+   "adapter_id": "YIBINU_01",
+   "adapter_name": "宜宾学院教务系统适配",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "yibinu_01.js",
+   "import_url": "https://authserver.yibinu.edu.cn/authserver/login?service=https://ehall.yibinu.edu.cn:443/login?service=https://ehall.yibinu.edu.cn/new/index.html",
+   "maintainer": "空灵",
+   "description": "适配宜宾学院教务，登录智慧校园后就可以执行导入，由于网站限制，需要执行2次导入才能导入包含理论和实验的完整课表，所以请仔细阅读操作提醒！！"
+  },
+  {
+   "folder": "YNUFE",
+   "adapter_id": "YNUFE_01",
+   "adapter_name": "云南财经大学本科教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ynufe.js",
+   "import_url": "https://xjwis.ynufe.edu.cn/jsxsd/",
+   "maintainer": "AxelPLN",
+   "description": "由于学校已于 2026 年上半年启用 aTrust 验证，登录教务系统之前必须使用云财小程序内登记的手机号完成短信验证，完成验证后再使用教务系统账号登录，若无法完成验证请确认是否在小程序登记了正确的手机号码或者向教务处反馈，对此不便开发者表示无能为力。登录教务系统后直接按下面的“执行导入”即可。"
+  },
+  {
+   "folder": "YXHMC",
+   "adapter_id": "YXHMC",
+   "adapter_name": "成都银杏酒店管理学院教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "yxhmc.js",
+   "import_url": "http://zfjw.gingkoc.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "Xuan-Xuann",
+   "description": "适配成都银杏酒店管理学院智慧教务系统。使用须知：请先登录再进入个人课表查询界面，然后按照流程即可导入当前课表。请注意！暂不适配调课补课，请及时关注教务系统按时修改"
+  },
+  {
+   "folder": "YZU",
+   "adapter_id": "YZU_01",
+   "adapter_name": "扬州大学URP教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "yzu.js",
+   "import_url": "https://webvpn.yzu.edu.cn/login",
+   "maintainer": "Thanatos",
+   "description": "扬州大学URP教务适配,通过网瑞达WebVPN访问,登录后需进入PC端教务系统「选课管理」页面,选择历年学期课表,再点击导入."
+  },
+  {
+   "folder": "ZCMU",
+   "adapter_id": "ZCMU",
+   "adapter_name": "浙江中医药大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zcmu.js",
+   "import_url": "https://jwmk.zcmu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "Daoguan-king",
+   "description": "登录浙江中医药大学教务系统后需要进入“信息查询”的“个人课表查询”页面再点击导入。\\n滨文校区和富春校区两个校区的时间安排不一致，请在导入课程表前选择对应的校区。\\n这是通过滨文校区的教务数据开发的，不确定富春校区是否支持。\\n特别感谢滨文校区生命科学学院杰哥的帮助，他在我的软磨硬泡下提供了学号和密码。\\n非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "zhengfang_jiaowu",
+   "adapter_id": "zhengfang_01",
+   "adapter_name": "正方教务html通用获取",
+   "category": "GENERAL_TOOL",
+   "asset_js_path": "zhengfang_01.js",
+   "import_url": "",
+   "maintainer": "星河欲转",
+   "description": "输入教务网址，登录，切换到个人课表页面点击执行导入"
+  },
+  {
+   "folder": "ZHKU",
+   "adapter_id": "ZHKU_00",
+   "adapter_name": "强智教务 - 学期理论课表",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zhku_lc6464.js",
+   "import_url": "https://edu-admin.zhku.edu.cn/",
+   "maintainer": "lc6464",
+   "description": "登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+  },
+  {
+   "folder": "ZJUT",
+   "adapter_id": "ZJUT_01",
+   "adapter_name": "浙江工业大学正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zjut_01.js",
+   "import_url": "http://www.gdjw.zjut.edu.cn/jwglxt/xtgl/login_slogin.html?kickout=1",
+   "maintainer": "glxgo",
+   "description": "浙江工业大学教务,登录后需要进入教务系统才可以点击导入,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "ZUA",
+   "adapter_id": "ZUA_01",
+   "adapter_name": "郑州航空工业管理学院教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zua.js",
+   "import_url": "http://jwglxt.zua.edu.cn/eams/loginExt.action",
+   "maintainer": "xBefore",
+   "description": "郑州航空工业管理学院树维 EAMS 教务课表导入。请在右上角切换为电脑版后登录教务；若页面显示异常，请手动刷新。登录成功后即可执行导入，无需进入“我的课表”等具体课程页面。支持自动同步学期日期与学校标准作息。"
+  }
+ ]
+}

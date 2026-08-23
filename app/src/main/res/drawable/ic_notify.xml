@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 铃铛(小图标须为纯白剪影) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3c-3.31,0 -6,2.69 -6,6v3.17L4.17,15.83C4.06,15.94 4,16.09 4,16.25V17c0,0.55 0.45,1 1,1h14c0.55,0 1,-0.45 1,-1v-0.75c0,-0.16 -0.06,-0.31 -0.17,-0.42L18,12.17V9c0,-3.31 -2.69,-6 -6,-6z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.5,20.5a2.5,2.5 0 0 0 5,0z" />
+</vector>

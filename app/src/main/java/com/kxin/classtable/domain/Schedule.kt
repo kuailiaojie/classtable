@@ -1,0 +1,189 @@
+package com.kxin.classtable.domain
+
+import com.kxin.classtable.domain.model.Course
+import java.time.LocalDate
+import java.time.LocalTime
+
+/**
+ * 作息表 = 时间段列表:每节课都有独立的开始与结束时间,可任意增删,不限于 12 节。
+ * 序列化格式:"480-530,610-660,..."(分钟自 0:00);兼容旧格式(纯开始时间列表,
+ * end 取下一节开始、末节 +50)。
+ */
+object Schedule {
+    const val DEFAULT_PERIODS =
+        "480-530,530-610,610-660,660-840,840-890,890-970,970-1020,1020-1140,1140-1190,1190-1240,1240-1290,1290-1340"
+    const val PERIOD_LENGTH_MIN = 50
+
+    /** 一节作息:开始/结束分钟(自 0:00),时长 = end - start。 */
+    data class Period(val start: Int, val end: Int) {
+        val duration: Int get() = (end - start).coerceAtLeast(1)
+    }
+
+    val defaultPeriods: List<Period> = parsePeriods(DEFAULT_PERIODS)
+
+    /** 解析 "480-530,610-660" 或旧格式 "480,530,610,..."。 */
+    fun parsePeriods(spec: String): List<Period> {
+        val items = spec.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        if (items.isEmpty()) return defaultPeriods
+        return if (items.any { it.contains('-') }) {
+            items.mapNotNull { item ->
+                val p = item.split('-')
+                val s = p.getOrNull(0)?.trim()?.toIntOrNull() ?: return@mapNotNull null
+                val e = p.getOrNull(1)?.trim()?.toIntOrNull() ?: (s + PERIOD_LENGTH_MIN)
+                if (e > s) Period(s, e) else null
+            }
+        } else {
+            val starts = items.mapNotNull { it.toIntOrNull() }
+            starts.mapIndexed { i, s ->
+                val e = starts.getOrNull(i + 1) ?: (s + PERIOD_LENGTH_MIN)
+                Period(s, e)
+            }
+        }
+    }
+
+    /** 序列化为 "480-530,610-660,..."。 */
+    fun serializePeriods(periods: List<Period>): String = periods.joinToString(",") { "${it.start}-${it.end}" }
+
+    /** 大节行:每 2 个小节一行,末行可为单节;节数不限于 12 */
+    fun bigPeriods(periodCount: Int): List<Pair<Int, Int>> {
+        val count = periodCount.coerceAtLeast(1)
+        return (1..count step 2).map { it to minOf(it + 1, count) }
+    }
+
+    /** 小节区间 → "08:00–08:50" 等宽时间串 */
+    fun periodRange(periods: List<Period> = defaultPeriods, startPeriod: Int, endPeriod: Int): String {
+        val s = periods.getOrNull(startPeriod - 1)?.start ?: periods.firstOrNull()?.start ?: 480
+        val e = periods.getOrNull(endPeriod - 1)?.end ?: (s + PERIOD_LENGTH_MIN)
+        return "${fmt(s)}–${fmt(e)}"
+    }
+
+    /** 分钟区间 → "18:30–20:00" */
+    fun timeRangeText(startMinute: Int, endMinute: Int): String = "${fmt(startMinute)}–${fmt(endMinute)}"
+
+    /** "HH:MM" → 分钟(自 0:00);无法解析返回 null。 */
+    fun parseClock(s: String): Int? {
+        val m = Regex("""^\s*(\d{1,2}):(\d{2})\s*$""").find(s) ?: return null
+        val h = m.groupValues[1].toIntOrNull() ?: return null
+        val min = m.groupValues[2].toIntOrNull() ?: return null
+        return if (h in 0..23 && min in 0..59) h * 60 + min else null
+    }
+
+    /** 分钟 → "HH:MM" */
+    fun clockText(minute: Int): String = fmt(minute)
+
+    /** 课程时间文本:自定义时间优先,否则按作息节次。 */
+    fun courseTimeText(course: Course, periods: List<Period> = defaultPeriods): String {
+        val cs = course.customStartMinute
+        val ce = course.customEndMinute
+        return if (cs != null && ce != null) {
+            timeRangeText(cs, ce)
+        } else {
+            periodRange(periods, course.startPeriod, course.endPeriod)
+        }
+    }
+
+    /** 课程是否落在某个大节行的时间范围内(自定义时间课程按分钟比对)。 */
+    fun courseOverlapsBigPeriod(course: Course, p1: Int, p2: Int, periods: List<Period>): Boolean {
+        val cs = course.customStartMinute
+        val ce = course.customEndMinute
+        if (cs == null || ce == null) return course.overlapsPeriod(p1, p2)
+        val rowStart = periods.getOrNull(p1 - 1)?.start ?: 0
+        val rowEnd = periods.getOrNull(p2 - 1)?.end ?: (rowStart + PERIOD_LENGTH_MIN)
+        return cs < rowEnd && ce > rowStart
+    }
+
+    /** 当前时刻所在小节序号(1..节数) */
+    fun currentPeriodIndex(periods: List<Period> = defaultPeriods): Int {
+        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
+        var idx = 0
+        for ((i, period) in periods.withIndex()) {
+            if (minutes >= period.start) idx = i + 1
+        }
+        return idx
+    }
+
+    /** 当前时刻所在大节序号(1..行数) */
+    fun currentBigPeriodIndex(periods: List<Period> = defaultPeriods): Int {
+        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
+        var idx = 0
+        for ((i, big) in bigPeriods(periods.size).withIndex()) {
+            val start = periods.getOrNull(big.first - 1)?.start ?: 0
+            if (minutes >= start) idx = i + 1
+        }
+        return idx
+    }
+
+    /** 自定义时间课程重叠的最小节序号;不重叠返回 0。 */
+    fun firstOverlapPeriod(course: Course, periods: List<Period>): Int {
+        if (!course.hasCustomTime()) return course.startPeriod
+        for ((i, _) in periods.withIndex()) {
+            val p = i + 1
+            if (courseOverlapsBigPeriod(course, p, p, periods)) return p
+        }
+        return 0
+    }
+
+    /** 自定义时间课程重叠的最大节序号;不重叠返回 0。 */
+    fun lastOverlapPeriod(course: Course, periods: List<Period>): Int {
+        if (!course.hasCustomTime()) return course.endPeriod
+        var last = 0
+        for ((i, _) in periods.withIndex()) {
+            val p = i + 1
+            if (courseOverlapsBigPeriod(course, p, p, periods)) last = p
+        }
+        return last
+    }
+
+    /** 当前时刻是否在该课程的时间区间内(自定义课按起止,普通课按节次)。 */
+    fun isCourseOngoing(course: Course, periods: List<Period> = defaultPeriods): Boolean {
+        val now = LocalTime.now().hour * 60 + LocalTime.now().minute
+        val s = course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start ?: return false
+        val e = course.customEndMinute ?: periods.getOrNull(course.endPeriod - 1)?.end ?: return false
+        return now >= s && now < e
+    }
+
+    /**
+     * 自定义时间课程在网格中的布局,返回 (top, height),单位 = 一节行高的倍数。
+     * 起点/终点未对齐节次节点时按分钟比例精确定位(如 8:30 落在第 1 节行内的 30/50 处)。
+     * top 相对第一节行顶部;不重叠或参数非法返回 (0f, 0f)。
+     */
+    fun customCourseLayout(course: Course, periods: List<Period>): Pair<Float, Float> {
+        val cs = course.customStartMinute ?: return 0f to 0f
+        val ce = course.customEndMinute ?: return 0f to 0f
+        if (periods.isEmpty()) return 0f to 0f
+        val first = firstOverlapPeriod(course, periods).coerceIn(1, periods.size)
+        val last = lastOverlapPeriod(course, periods).coerceIn(first, periods.size)
+        val dFirst = periods[first - 1].duration
+        val dLast = periods[last - 1].duration
+        val fracStart = ((cs - periods[first - 1].start).toFloat() / dFirst).coerceIn(0f, 1f)
+        val fracEnd = ((ce - periods[last - 1].start).toFloat() / dLast).coerceIn(0f, 1f)
+        val top = (first - 1) + fracStart
+        val height = (last - first + 1) - fracStart - (1f - fracEnd)
+        return top to height.coerceAtLeast(0.5f)
+    }
+
+    /** 由学期起始日(epochDay)推导当前周;未设置返回 1 */
+    fun currentWeek(startDay: Long, weekCount: Int): Int {
+        if (startDay <= 0L) return 1
+        val days = LocalDate.now().toEpochDay() - startDay
+        return ((days / 7) + 1).toInt().coerceIn(1, weekCount.coerceAtLeast(1))
+    }
+
+    /** 第 N 周的日期范围文本,如 "9/14–9/20";未设置学期返回空串 */
+    fun weekRangeText(startDay: Long, week: Int): String {
+        if (startDay <= 0L) return ""
+        val start = LocalDate.ofEpochDay(startDay + (week - 1) * 7)
+        val end = start.plusDays(6)
+        return "${start.monthValue}/${start.dayOfMonth}–${end.monthValue}/${end.dayOfMonth}"
+    }
+
+    fun todayWeekday(): Int = LocalDate.now().dayOfWeek.value
+
+    /** "9月23日 周三" */
+    fun todayDateText(): String {
+        val d = LocalDate.now()
+        return "${d.monthValue}月${d.dayOfMonth}日 周${"一二三四五六日"[d.dayOfWeek.value - 1]}"
+    }
+
+    private fun fmt(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
+}

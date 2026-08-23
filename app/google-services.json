@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "123208302848",
+    "project_id": "classtable-4a7d0",
+    "storage_bucket": "classtable-4a7d0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123208302848:android:dfecc47a03fbf4e48af3e5",
+        "android_client_info": {
+          "package_name": "com.kxin.classtable"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxhhRE5gDw8_jUwghAWc7oC83MOGf9rPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

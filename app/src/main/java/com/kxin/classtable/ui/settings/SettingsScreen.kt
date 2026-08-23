@@ -1,0 +1,428 @@
+package com.kxin.classtable.ui.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavHostController
+import com.kxin.classtable.data.AuthRepository
+import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.design.AccentOptions
+import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuTextField
+import com.kxin.classtable.design.YohakuTopBar
+import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.accentColor
+import com.kxin.classtable.domain.model.AppSettings
+import com.kxin.classtable.domain.model.AiProvider
+import com.kxin.classtable.domain.model.ThemeMode
+import com.kxin.classtable.domain.Schedule
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+    private val authRepository: AuthRepository,
+) : ViewModel() {
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    val userEmail: StateFlow<String?> = authRepository.currentUser
+        .map { it?.email }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+
+    fun setAccent(hex: String) = viewModelScope.launch { settingsRepository.setAccent(hex) }
+
+    fun setAiProvider(name: String) = viewModelScope.launch { settingsRepository.setAiProvider(name) }
+
+    fun setAiKey(key: String) = viewModelScope.launch { settingsRepository.setAiKey(key) }
+
+    fun setAiBaseUrl(url: String) = viewModelScope.launch { settingsRepository.setAiBaseUrl(url) }
+
+    fun setAiModel(model: String) = viewModelScope.launch { settingsRepository.setAiModel(model) }
+
+    fun setNotificationsEnabled(enabled: Boolean) =
+        viewModelScope.launch { settingsRepository.setNotificationsEnabled(enabled) }
+
+    fun setNotifyLeadMinutes(minutes: Int) =
+        viewModelScope.launch { settingsRepository.setNotifyLeadMinutes(minutes) }
+}
+
+/** 设置页:主题 / 强调色(5 和色)/ 列表入口。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SettingsScreen(
+    nav: NavHostController,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val colors = LocalYohakuColors.current
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+    val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val firstPeriodText = if (periods.isNotEmpty()) {
+        "第1节 %02d:%02d".format(periods[0].start / 60, periods[0].start % 60)
+    } else {
+        "未设置"
+    }
+    val realWeek = Schedule.currentWeek(settings.semesterStartDay, settings.semesterWeekCount)
+
+    var showAiDialog by remember { mutableStateOf(false) }
+    var showNotifyDialog by remember { mutableStateOf(false) }
+    var aiProvider by remember { mutableStateOf(settings.aiProvider) }
+    var aiKey by remember { mutableStateOf(settings.aiApiKey) }
+    var aiBaseUrl by remember { mutableStateOf(settings.aiBaseUrl) }
+    var aiModel by remember { mutableStateOf(settings.aiModel) }
+    var notifyEnabled by remember { mutableStateOf(settings.notificationsEnabled) }
+    var notifyLead by remember { mutableStateOf(settings.notifyLeadMinutes) }
+    LaunchedEffect(showNotifyDialog) {
+        if (showNotifyDialog) {
+            notifyEnabled = settings.notificationsEnabled
+            notifyLead = settings.notifyLeadMinutes
+        }
+    }
+    LaunchedEffect(showAiDialog) {
+        if (showAiDialog) {
+            aiProvider = settings.aiProvider
+            aiKey = settings.aiApiKey
+            aiBaseUrl = settings.aiBaseUrl
+            aiModel = settings.aiModel
+        }
+    }
+    if (showAiDialog) {
+        val provider = runCatching { AiProvider.valueOf(aiProvider) }.getOrDefault(AiProvider.GEMINI)
+        AlertDialog(
+            onDismissRequest = { showAiDialog = false },
+            title = { Text("AI 密钥", style = YohakuType.title20) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        text = "用于 AI 图片识别课表,密钥仅存本机。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AiProvider.entries.forEach { p ->
+                            YohakuChip(
+                                text = p.label,
+                                selected = aiProvider == p.name,
+                                onClick = {
+                                    aiProvider = p.name
+                                    aiBaseUrl = ""
+                                    aiModel = ""
+                                },
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    YohakuTextField(
+                        value = aiKey,
+                        onValueChange = { aiKey = it },
+                        label = "API Key",
+                        placeholder = "sk-...",
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    if (provider == AiProvider.OPENAI_COMPAT) {
+                        YohakuTextField(
+                            value = aiBaseUrl,
+                            onValueChange = { aiBaseUrl = it },
+                            label = "Base URL",
+                            placeholder = provider.defaultBaseUrl,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "常用:OpenAI https://api.openai.com/v1 · DeepSeek https://api.deepseek.com/v1 · 通义千问 https://dashscope.aliyuncs.com/compatible-mode/v1 · Kimi https://api.moonshot.cn/v1 · 智谱 https://open.bigmodel.cn/api/paas/v4",
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                    YohakuTextField(
+                        value = aiModel,
+                        onValueChange = { aiModel = it },
+                        label = "模型",
+                        placeholder = provider.defaultModel,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "图片识别需支持视觉的模型,如 gemini-2.5-flash / gpt-4o / qwen-vl-plus / glm-4v-flash / moonshot-v1-8k-vision-preview。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                }
+            },
+            confirmButton = {
+                Text(
+                    text = "保存",
+                    style = YohakuType.copy14,
+                    color = colors.accent,
+                    modifier = Modifier
+                        .clickable {
+                            viewModel.setAiProvider(aiProvider)
+                            viewModel.setAiKey(aiKey)
+                            viewModel.setAiBaseUrl(aiBaseUrl)
+                            viewModel.setAiModel(aiModel)
+                            showAiDialog = false
+                        }
+                        .padding(8.dp),
+                )
+            },
+            dismissButton = {
+                Text(
+                    text = "取消",
+                    style = YohakuType.copy14,
+                    color = colors.neutral7,
+                    modifier = Modifier
+                        .clickable { showAiDialog = false }
+                        .padding(8.dp),
+                )
+            },
+        )
+    }
+
+    if (showNotifyDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotifyDialog = false },
+            title = { Text("课程提醒", style = YohakuType.title20) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "在每节课开始前发送通知。内容在触发时动态计算(剩余分钟/开始时间/地点)。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        YohakuChip(
+                            text = "开启",
+                            selected = notifyEnabled,
+                            onClick = { notifyEnabled = true },
+                        )
+                        YohakuChip(
+                            text = "关闭",
+                            selected = !notifyEnabled,
+                            onClick = { notifyEnabled = false },
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "提前多少分钟提醒",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val leadOptions = listOf(0 to "准点", 5 to "5 分钟", 10 to "10 分钟", 15 to "15 分钟", 30 to "30 分钟", 60 to "1 小时")
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        leadOptions.forEach { (min, label) ->
+                            YohakuChip(
+                                text = label,
+                                selected = notifyEnabled && notifyLead == min,
+                                onClick = { notifyLead = min },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Text(
+                    text = "保存",
+                    style = YohakuType.copy14,
+                    color = colors.accent,
+                    modifier = Modifier
+                        .clickable {
+                            viewModel.setNotificationsEnabled(notifyEnabled)
+                            viewModel.setNotifyLeadMinutes(notifyLead)
+                            showNotifyDialog = false
+                        }
+                        .padding(8.dp),
+                )
+            },
+            dismissButton = {
+                Text(
+                    text = "取消",
+                    style = YohakuType.copy14,
+                    color = colors.neutral7,
+                    modifier = Modifier
+                        .clickable { showNotifyDialog = false }
+                        .padding(8.dp),
+                )
+            },
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.paper)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        YohakuTopBar(title = "设置", onBack = { nav.popBackStack() })
+
+        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
+            Text(text = "主题", style = YohakuType.label12, color = colors.neutral7)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    YohakuChip(
+                        text = when (mode) {
+                            ThemeMode.SYSTEM -> "跟随系统"
+                            ThemeMode.LIGHT -> "浅色"
+                            ThemeMode.DARK -> "深色"
+                        },
+                        selected = settings.themeMode == mode,
+                        onClick = { viewModel.setTheme(mode) },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+        }
+
+        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
+            Text(text = "强调色", style = YohakuType.label12, color = colors.neutral7)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                AccentOptions.forEach { (label, hex) ->
+                    val selected = settings.accentHex.equals(hex, ignoreCase = true)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(accentColor(hex))
+                                .then(
+                                    if (selected) {
+                                        Modifier.border(2.dp, colors.neutral10, CircleShape)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .clickable { viewModel.setAccent(hex) },
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = label,
+                            style = YohakuType.label12,
+                            color = if (selected) colors.neutral9 else colors.neutral7,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+        }
+
+        SettingRow(title = "作息时间", value = firstPeriodText, onClick = { nav.navigate("schedule_times") })
+        DividerLine()
+        SettingRow(
+            title = "课程提醒",
+            value = if (!settings.notificationsEnabled) {
+                "已关闭"
+            } else if (settings.notifyLeadMinutes <= 0) {
+                "准点提醒"
+            } else {
+                "课前 ${settings.notifyLeadMinutes} 分钟"
+            },
+            onClick = { showNotifyDialog = true },
+        )
+        DividerLine()
+        SettingRow(title = "学期周次", value = "当前第 $realWeek 周", onClick = { nav.navigate("semester") })
+        DividerLine()
+        SettingRow(
+            title = "AI 密钥",
+            value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
+            onClick = { showAiDialog = true },
+        )
+        DividerLine()
+        SettingRow(title = "教务导入", value = "3 步导入", onClick = { nav.navigate("import") })
+        DividerLine()
+        SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
+        DividerLine()
+        SettingRow(title = "关于", value = "v0.1.0", onClick = { nav.navigate("about") })
+
+        Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+    }
+}
+
+@Composable
+private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = YohakuDimens.screenPadding, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = YohakuType.copy15,
+            color = colors.neutral9,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = value, style = YohakuType.copy13, color = colors.neutral7)
+        Text(
+            text = "›",
+            style = YohakuType.copy15,
+            color = colors.neutral6,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun DividerLine() {
+    val colors = LocalYohakuColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = YohakuDimens.screenPadding)
+            .height(1.dp)
+            .background(colors.neutral3),
+    )
+}
