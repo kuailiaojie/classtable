@@ -18,9 +18,64 @@ const AUTH_UPSTREAM = "https://identitytoolkit.googleapis.com";
 const FIRESTORE_UPSTREAM = "https://firestore.googleapis.com";
 const PREFIX = "/.netlify/functions/proxy";
 
+// Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
+// 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
+import admin from "firebase-admin";
+
+let _admin = null;
+function getAdmin() {
+  if (_admin) return _admin;
+  const sa = JSON.parse(process.env.SERVICE_ACCOUNT);
+  _admin = admin.initializeApp({ credential: admin.credential.cert(sa) });
+  return _admin;
+}
+
+async function handlePush(req) {
+  const key = process.env.PUSH_API_KEY;
+  if (!key || req.headers.get("x-push-key") !== key) {
+    return json(401, { error: { code: 401, message: "invalid or missing X-Push-Key" } });
+  }
+  if (!process.env.SERVICE_ACCOUNT) {
+    return json(500, { error: { code: 500, message: "SERVICE_ACCOUNT env not configured (Firebase service account JSON)" } });
+  }
+  let payload;
+  try {
+    payload = JSON.parse(await req.text());
+  } catch {
+    return json(400, { error: { code: 400, message: "invalid JSON body" } });
+  }
+  const { uid, messageType = "marketing", title = "", body = "", data = {} } = payload;
+  if (!uid) {
+    return json(400, { error: { code: 400, message: "uid required" } });
+  }
+  try {
+    const app = getAdmin();
+    const snap = await app.firestore().collection("users").doc(uid).collection("devices").get();
+    const tokens = snap.docs.map((d) => d.id);
+    if (tokens.length === 0) {
+      return json(200, { sent: 0, message: "no devices for uid" });
+    }
+    // FCM data 消息:所有值必须是字符串
+    const dataMap = { messageType, title, body };
+    for (const [k, v] of Object.entries(data)) dataMap[k] = String(v);
+    const result = await app.messaging().sendEachForMulticast({
+      tokens,
+      data: dataMap,
+      android: { priority: "high" },
+    });
+    return json(200, { sent: result.successCount, failed: result.failureCount });
+  } catch (e) {
+    return json(500, { error: { code: 500, message: "push failed: " + e.message } });
+  }
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const rest = url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : url.pathname;
+
+  if (rest === "/push") {
+    return handlePush(req);
+  }
 
   let upstream = null;
   if (rest.startsWith("/auth/")) {

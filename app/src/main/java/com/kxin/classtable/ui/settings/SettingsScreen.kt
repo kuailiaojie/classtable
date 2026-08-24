@@ -92,6 +92,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setNotifyLeadMinutes(minutes: Int) =
         viewModelScope.launch { settingsRepository.setNotifyLeadMinutes(minutes) }
+
+    /** 首次启动权限引导完成/跳过标记(只弹一次,设置页可随时重进)。 */
+    fun completeOnboarding() =
+        viewModelScope.launch { settingsRepository.setOnboardingDone() }
 }
 
 /** 设置页:主题 / 强调色(5 和色)/ 列表入口。 */

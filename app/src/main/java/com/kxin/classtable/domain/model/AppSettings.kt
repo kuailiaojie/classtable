@@ -25,6 +25,8 @@ data class AppSettings(
     val notificationsEnabled: Boolean = true,
     /** 提前多少分钟发通知(0 = 准点)。 */
     val notifyLeadMinutes: Int = 10,
+    /** 首次启动权限引导是否已完成(完成/跳过后再也不弹,可随时在设置页重进)。 */
+    val onboardingDone: Boolean = false,
 ) {
     fun provider(): AiProvider = runCatching { AiProvider.valueOf(aiProvider) }
         .getOrDefault(AiProvider.GEMINI)

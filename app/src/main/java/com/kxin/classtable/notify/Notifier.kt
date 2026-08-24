@@ -18,6 +18,7 @@ import com.kxin.classtable.domain.Schedule
  */
 object Notifier {
     const val CHANNEL_REMINDER = "course_reminder"
+    const val CHANNEL_LIVE = "live_updates"
     const val EXTRA_COURSE_ID = "notify_course_id"
 
     private fun ensureChannels(context: Context) {
@@ -31,6 +32,17 @@ object Notifier {
                         NotificationManager.IMPORTANCE_HIGH,
                     ).apply {
                         description = "课程开始前的提醒"
+                    },
+                )
+            }
+            if (nm.getNotificationChannel(CHANNEL_LIVE) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_LIVE,
+                        "实时动态",
+                        NotificationManager.IMPORTANCE_DEFAULT,
+                    ).apply {
+                        description = "课表变更与活动通知(服务端推送)"
                     },
                 )
             }
@@ -85,6 +97,39 @@ object Notifier {
 
         runCatching {
             NotificationManagerCompat.from(context).notify(courseId.hashCode(), notification)
+        }
+    }
+
+    /**
+     * Live Updates 通用通知(服务端推送):课表变更 / 活动 / 上课提醒的附加通道。
+     * 通知 id 基于内容 hash,同一内容重复推送会覆盖,不会堆积。
+     */
+    fun showLiveUpdate(context: Context, title: String, body: String) {
+        if (!hasPermission(context)) return
+        ensureChannels(context)
+
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_LIVE)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+
+        runCatching {
+            NotificationManagerCompat.from(context).notify(title.hashCode(), notification)
         }
     }
 

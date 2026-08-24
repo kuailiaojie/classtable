@@ -21,6 +21,8 @@
 - **课程列表 + 详情**:底部导航「课程」;详情含**具体上课日期排期**(基于学期起始日列出每次课的日期,如 9/14 周一),可编辑/删除
 - **课程提醒通知**:每节课开始前发送通知(设置页可开关、可设提前量:准点/5/10/15/30/60 分钟);通知内容在触发时**动态计算**(课程名/剩余分钟/开始时间/地点/教师),点击直达课程详情;未来 14 天精确闹钟预排,开机/改时区自动重排,Android 12+ 无精确闹钟权限时自动降级
 - **国产 ROM 后台保护**:设置页「提醒可靠性」区块检测 ROM(小米/OPPO/vivo/华为/荣耀/魅族)并一键引导开启通知权限/精确闹钟/电池白名单/自启动(定向跳转各 ROM 管理页);WorkManager 每 12 小时**自愈重排**全部闹钟;FCM 消息到达(含营销推送)顺带重排——防止国产 ROM 清理闹钟导致提醒丢失
+- **首次启动权限引导**:首次启动弹出权限列表(通知权限/精确闹钟/电池白名单/自启动),「继续开启」逐个引导(通知走系统请求、其余跳系统设置页,返回自动推进),「稍后再说」只弹一次,设置页可随时重进
+- **Live Updates(FCM 实时推送)**:服务端经反代 `/push` 接口定向推送三类消息——`course_reminder` 上课提醒(与本地闹钟同通知 id 自动去重)/ `course_changed` 课表变更(提示+自动同步+重排闹钟)/ `marketing` 营销活动
 - **日视图实时动态**:每 30 秒刷新「正在上课 · 还有 N 分钟下课 / 距下一节还有 N 分钟」
 - **教务导入(真实接入 shiguang_warehouse)**:146 所学校 / 156 个适配器(正方/强智/青果/URP/超星等)
   - 选学校 → **选适配器**(一校多适配器可区分:作者/分类/描述)→ **阅读适配器说明(描述/作者/操作提示)后再确定导入**
@@ -93,6 +95,30 @@ Android App ──HTTPS──▶ Netlify 反代(你的站点) ──▶ Firebase
   4. 重新构建安装 App
 - 说明:已移除 `firebase-auth` / `firebase-firestore` SDK 依赖(改用 REST);`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留。同步由「实时监听」变为**按需 pull/push**(App 启动 / 登录 / 网络恢复时),对课程表场景无感知差异。崩溃报告走 Crashlytics 官方通道(不经过反代),大陆无网络时会本地缓存、恢复后补传。
 - 免费额度 12.5 万次请求/月,登录 + 同步绰绰有余。
+
+### Live Updates 推送(上课提醒 / 课表变更 / 营销)
+
+服务端通过 `POST <站点>/.netlify/functions/proxy/push` 向用户设备发 FCM data 消息,客户端按 `messageType` 分发:
+
+| messageType | 用途 | 客户端行为 |
+|---|---|---|
+| `course_reminder` | 上课提醒(服务端补充通道) | 渲染提醒;通知 id 与本地闹钟相同(`courseId.hashCode()`)→ **双通道自动去重** |
+| `course_changed` | 调课/停课/换教室 | 提示 + 自动云同步 + 重排闹钟 |
+| `marketing` | 活动/宣传 | 通用通知 |
+
+配置(一次性):
+1. Firebase Console → 项目设置 → 服务账号 → 生成新私钥 → 下载 JSON
+2. Netlify → Site settings → Environment variables 添加 `SERVICE_ACCOUNT`(JSON 完整内容)和 `PUSH_API_KEY`(自定义管理密钥)
+3. 重新部署
+
+调用示例:
+
+```powershell
+$body = @{ uid = "用户uid"; messageType = "course_changed"; title = "课表已更新"; body = "周一 10:00 高数换教室到 A203"; data = @{ courseId = "xxx" } } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "https://classtablek.netlify.app/.netlify/functions/proxy/push" -Headers @{ "X-Push-Key" = "你的密钥" } -ContentType "application/json" -Body $body
+```
+
+说明:本地精确闹钟仍是准点触发主力(离线可用);FCM 是实时增强通道。如需服务端**定时扫描课表自动推送**上课提醒,需 Cloud Functions 定时触发器(Pub/Sub schedule),可作为后续扩展。
 
 ## 数据模型
 

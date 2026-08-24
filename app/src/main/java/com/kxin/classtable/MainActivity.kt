@@ -1,17 +1,12 @@
 package com.kxin.classtable
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -27,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,11 +30,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kxin.classtable.data.RomHelper
+import com.kxin.classtable.data.RomType
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.ui.onboarding.PermissionOnboardingDialog
 import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
 import com.kxin.classtable.ui.courses.CourseDetailScreen
@@ -89,18 +86,22 @@ fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
         }
 
         val nav = rememberNavController()
-        // Android 13+ 通知权限:首次启动请求(拒绝不影响使用)
+        // 首次启动权限引导:未完成且存在未开启项 → 弹出(完成/跳过后只弹一次,设置页可重进)
         val context = LocalContext.current
-        val notifPermissionLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission(),
-        ) { /* 无论同意与否都不阻塞 */ }
-        LaunchedEffect(Unit) {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+        var onboardingDismissed by rememberSaveable { mutableStateOf(false) }
+        val needsOnboarding = !settings.onboardingDone && !onboardingDismissed && (
+            !RomHelper.notificationsEnabled(context) ||
+                !RomHelper.exactAlarmGranted(context) ||
+                !RomHelper.ignoreBatteryOptimizations(context) ||
+                RomHelper.detect() != RomType.STOCK
+        )
+        if (needsOnboarding) {
+            PermissionOnboardingDialog(
+                onDismiss = {
+                    onboardingDismissed = true
+                    settingsViewModel.completeOnboarding()
+                },
+            )
         }
         // 通知点击 → 直达课程详情(仅处理进程首次带参启动,避免重组合重复导航)
         var handledDeepLink by rememberSaveable { mutableStateOf(false) }

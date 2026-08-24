@@ -33,6 +33,7 @@ class SettingsRepository @Inject constructor(
     private val KEY_AI_MODEL = stringPreferencesKey("ai_model")
     private val KEY_NOTIFY_ENABLED = booleanPreferencesKey("notify_enabled")
     private val KEY_NOTIFY_LEAD = intPreferencesKey("notify_lead_minutes")
+    private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -48,6 +49,7 @@ class SettingsRepository @Inject constructor(
             aiModel = p[KEY_AI_MODEL] ?: "",
             notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
             notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
+            onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
         )
     }
 
@@ -96,5 +98,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setNotifyLeadMinutes(minutes: Int) {
         context.settingsDataStore.edit { it[KEY_NOTIFY_LEAD] = minutes.coerceIn(0, 180) }
+    }
+
+    suspend fun setOnboardingDone() {
+        context.settingsDataStore.edit { it[KEY_ONBOARDING_DONE] = true }
     }
 }
