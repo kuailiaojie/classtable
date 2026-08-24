@@ -26,8 +26,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
-import com.google.firebase.auth.FirebaseUser
 import com.kxin.classtable.data.AuthRepository
+import com.kxin.classtable.data.AuthSession
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
@@ -48,7 +48,7 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
-    val user: StateFlow<FirebaseUser?> = authRepository.currentUser
+    val user: StateFlow<AuthSession?> = authRepository.currentUser
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _busy = MutableStateFlow(false)

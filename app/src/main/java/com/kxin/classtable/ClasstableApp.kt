@@ -39,6 +39,9 @@ class ClasstableApp : Application() {
     @Inject
     lateinit var notificationScheduler: NotificationScheduler
 
+    @Inject
+    lateinit var fcmTokens: FcmTokens
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -50,7 +53,9 @@ class ClasstableApp : Application() {
             authRepository.currentUser.collect { user ->
                 if (user != null) {
                     syncWithRetry()
-                    FirebaseMessaging.getInstance().token.addOnSuccessListener { FcmTokens.upload(it) }
+                    FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                        scope.launch { fcmTokens.upload(token) }
+                    }
                 }
             }
         }

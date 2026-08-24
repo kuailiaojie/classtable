@@ -1,0 +1,9 @@
+# Netlify 部署配置:课程表 Firebase 反代
+# 用途:让中国大陆客户端通过本中间层访问 Firebase Auth / Firestore(绕过被墙域名)。
+# 部署:Netlify 控制台新建站点 → 连接本仓库 → 部署后得到 https://<site>.netlify.app,
+#       再把该地址填入 Android 端 FirebaseGateway.kt 的 BASE_URL。
+# 建议:绑定自有域名(走 Netlify DNS),netlify.app 域名在大陆可达性一般。
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

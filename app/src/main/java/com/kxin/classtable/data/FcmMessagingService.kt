@@ -4,6 +4,14 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.notify.Notifier
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * FCM 推送服务:
@@ -14,7 +22,11 @@ import com.kxin.classtable.notify.Notifier
 class FcmMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
-        FcmTokens.upload(token)
+        val fcmTokens = EntryPointAccessors.fromApplication(
+            applicationContext,
+            FcmEntryPoint::class.java,
+        ).fcmTokens()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { fcmTokens.upload(token) }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
@@ -35,5 +47,11 @@ class FcmMessagingService : FirebaseMessagingService() {
             teacher = data["teacher"].orEmpty(),
             leadMinutes = data["leadMinutes"]?.toIntOrNull() ?: 0,
         )
+    }
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface FcmEntryPoint {
+        fun fcmTokens(): FcmTokens
     }
 }
