@@ -1,0 +1,8 @@
+{
+  "name": "classtable-netlify-functions",
+  "private": true,
+  "description": "依赖声明:netlify/functions/proxy.mjs 的 /push 端点使用 firebase-admin(按需动态加载,不影响 /auth /firestore 反代)。Netlify 部署时自动执行 npm install。",
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

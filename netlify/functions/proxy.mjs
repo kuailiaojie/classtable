@@ -20,11 +20,13 @@ const PREFIX = "/.netlify/functions/proxy";
 
 // Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
 // 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
-import admin from "firebase-admin";
-
+// 注意:firebase-admin 是重依赖,必须「按需动态加载」——只在 /push 路径才 import,
+// 避免顶层静态导入导致整个函数(含 /auth、/firestore 反代)因依赖缺失而 502。
+// 依赖声明见仓库根 package.json(Netlify 部署时自动安装)。
 let _admin = null;
-function getAdmin() {
+async function getAdmin() {
   if (_admin) return _admin;
+  const { default: admin } = await import("firebase-admin");
   const sa = JSON.parse(process.env.SERVICE_ACCOUNT);
   _admin = admin.initializeApp({ credential: admin.credential.cert(sa) });
   return _admin;
@@ -49,7 +51,7 @@ async function handlePush(req) {
     return json(400, { error: { code: 400, message: "uid required" } });
   }
   try {
-    const app = getAdmin();
+    const app = await getAdmin();
     const snap = await app.firestore().collection("users").doc(uid).collection("devices").get();
     const tokens = snap.docs.map((d) => d.id);
     if (tokens.length === 0) {
