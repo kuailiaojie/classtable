@@ -32,7 +32,7 @@
 - **作息一键同步**:教务系统 / AI 图片 / 手动表格导入识别到作息时自动应用(手动导入可粘贴"08:00-08:50"行,导入时一并同步)
 - **账号**:Firebase Email/Password,访客本地模式,登录后自动同步;登录后可发送密码重置邮件
 - **同步**:Room 本地优先 + Firestore;updatedAt 后者胜;删除墓碑传播(防复活)
-- **Firebase**:Email/Password 认证 + Firestore 同步 + **Analytics**(课程增删/导入/登录/提醒等事件)+ **FCM 推送**(令牌自动同步到 Firestore,支持服务端定向推送课程提醒)。认证与同步经 **Netlify 反代中间层**访问(大陆可用,见下)
+- **Firebase**:Email/Password 认证 + Firestore 同步 + **Analytics**(课程增删/导入/登录/提醒等事件)+ **Crashlytics**(崩溃自动上报,带版本自定义 key)+ **FCM 推送**(令牌自动同步到 Firestore,支持服务端定向推送课程提醒)。认证与同步经 **Netlify 反代中间层**访问(大陆可用,见下)
 - **Glance 小组件**:1×1 下节课、4×2 今日课表(当前课 accent、跟随动态作息)
 
 ## 环境要求
@@ -88,9 +88,9 @@ Android App ──HTTPS──▶ Netlify 反代(你的站点) ──▶ Firebase
 - **部署步骤**:
   1. Netlify 控制台 → `Add new site` → 连接本仓库(或拖拽 `netlify/functions` 上传为 Functions)
   2. 部署完成后得到站点地址 `https://<site>.netlify.app`(**建议绑定自有域名**,netlify.app 在大陆可达性一般)
-  3. 把地址填入 `app/src/main/java/com/kxin/classtable/data/FirebaseGateway.kt` 的 `baseUrl`(替换 `YOUR-SITE`)
+  3. 把地址写进 `app/build.gradle.kts` 的 `FIREBASE_PROXY_URL`(当前已配置为 `https://classtablek.netlify.app/.netlify/functions/proxy`;换部署站点只改这一行,经 BuildConfig 注入)
   4. 重新构建安装 App
-- 说明:已移除 `firebase-auth` / `firebase-firestore` SDK 依赖(改用 REST);`firebase-analytics` / `firebase-messaging` 保留。同步由「实时监听」变为**按需 pull/push**(App 启动 / 登录 / 网络恢复时),对课程表场景无感知差异。
+- 说明:已移除 `firebase-auth` / `firebase-firestore` SDK 依赖(改用 REST);`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留。同步由「实时监听」变为**按需 pull/push**(App 启动 / 登录 / 网络恢复时),对课程表场景无感知差异。崩溃报告走 Crashlytics 官方通道(不经过反代),大陆无网络时会本地缓存、恢复后补传。
 - 免费额度 12.5 万次请求/月,登录 + 同步绰绰有余。
 
 ## 数据模型

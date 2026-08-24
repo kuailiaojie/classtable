@@ -1,5 +1,6 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -21,8 +22,8 @@ import javax.inject.Singleton
 @Singleton
 class FirebaseGateway @Inject constructor() {
 
-    /** 反代入口。部署 Netlify 后把 YOUR-SITE 换成你的站点名(建议绑自有域名)。 */
-    val baseUrl: String = "https://YOUR-SITE.netlify.app/.netlify/functions/proxy"
+    /** 反代入口(编译期注入,见 app/build.gradle.kts 的 FIREBASE_PROXY_URL;换站点只改那里)。 */
+    val baseUrl: String = BuildConfig.FIREBASE_PROXY_URL
 
     /** Firebase Web API key(google-services.json → api_key.current_key;公开值,安全靠规则 + HTTPS)。 */
     val apiKey: String = "AIzaSyBxhhRE5gDw8_jUwghAWc7oC83MOGf9rPY"

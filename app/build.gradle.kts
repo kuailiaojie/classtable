@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -18,6 +19,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
+        buildConfigField(
+            "String",
+            "FIREBASE_PROXY_URL",
+            "\"https://classtablek.netlify.app/.netlify/functions/proxy\"",
+        )
     }
 
     buildTypes {
@@ -39,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -68,6 +77,7 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.messaging)
 
     implementation(libs.androidx.glance.appwidget)

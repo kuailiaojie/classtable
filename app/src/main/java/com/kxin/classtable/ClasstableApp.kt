@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.AuthRepository
@@ -47,6 +48,14 @@ class ClasstableApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Analytics.init(this)
+
+        // Crashlytics:崩溃自动上报;附带版本信息便于定位。无网络时本地缓存,恢复后补传。
+        runCatching {
+            FirebaseCrashlytics.getInstance().apply {
+                setCustomKey("version_name", BuildConfig.VERSION_NAME)
+                setCustomKey("version_code", BuildConfig.VERSION_CODE)
+            }
+        }
 
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌
         scope.launch {
