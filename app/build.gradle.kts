@@ -28,6 +28,18 @@ android {
         )
     }
 
+    // CI 签名:配置 KEYSTORE_FILE 等环境变量时启用(未配置时 release 产出未签名 APK,本地构建不受影响)
+    signingConfigs {
+        if (!System.getenv("KEYSTORE_FILE").isNullOrBlank()) {
+            create("release") {
+                storeFile = file(System.getenv("KEYSTORE_FILE"))
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -35,6 +47,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

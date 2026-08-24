@@ -1,0 +1,124 @@
+# 构建并打包 APK
+#
+# 触发方式:
+#   - 推送代码到 main / master
+#   - 推送 tag(格式 v*)
+#   - Pull Request 到 main / master
+#   - 手动触发(Workflow dispatch)
+#
+# 产物:
+#   - debug APK(可直接安装)
+#   - release APK(配置签名密钥后为正式签名版,否则为未签名版)
+#
+# 可选签名(Release):
+#   在仓库 Settings → Secrets and variables → Actions 中配置以下密钥后,
+#   release APK 将使用对应 keystore 签名:
+#     KEYSTORE_BASE64   - keystore 文件的 Base64 编码内容
+#     KEYSTORE_PASSWORD - keystore 密码
+#     KEY_ALIAS         - 签名密钥别名
+#     KEY_PASSWORD      - 签名密钥密码
+#
+# 生成 Base64:
+#   base64 -w0 keystore.jks        (Linux / macOS)
+#   certutil -encode keystore.jks  (Windows,再去除换行)
+
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
+      # 仓库已随源码提交 Gradle Wrapper;此步用官方发行版重新生成,
+      # 确保 wrapper 脚本与 jar 均为官方产物。
+      - name: Regenerate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.11.1 --no-daemon
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Prepare release keystore (optional)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/keystore.jks"
+          echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/keystore.jks" >> "$GITHUB_ENV"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace \
+          -PfirebaseCrashlyticsMappingFileUploadEnabled=false
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            artifacts/apk-debug/*.apk \
+            artifacts/apk-release/*.apk \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
