@@ -18,7 +18,7 @@ import javax.inject.Singleton
  * 未登录 = 纯本地;登录后 pull 远端 → 合并(updatedAt 后者胜)→ 应用删除墓碑 → push 本地。
  * 删除通过「墓碑」传播,避免远端删除在下次 pull 时复活。
  *
- * 除课程外,配置(作息/学期/主题/提醒等)以 users/{uid}/settings 单文档随同步走 LWW:
+ * 除课程外,配置(作息/学期/主题/提醒等)以 users/{uid}/settings/config 单文档随同步走 LWW:
  * 本地从未改过(updatedAt=0)且远端存在时整包应用远端,避免新设备默认值覆盖云端;
  * AI 密钥与引导标记仅存本机,不落云端。
  *
@@ -43,13 +43,14 @@ class SyncRepository @Inject constructor(
 
     private fun deletedCol(uid: String) = "${dbBase()}/users/$uid/deleted"
 
-    private fun settingsDoc(uid: String) = "${dbBase()}/users/$uid/settings"
+    /** Firestore 文档路径段必须成对(集合/文档):users/{uid}/settings 只是集合路径,配置单文档固定落在 settings/config。 */
+    private fun settingsDoc(uid: String) = "${dbBase()}/users/$uid/settings/config"
 
     private fun coursesDocName(uid: String, id: String) = "${docBase()}/users/$uid/courses/${encodeSegment(id)}"
 
     private fun deletedDocName(uid: String, id: String) = "${docBase()}/users/$uid/deleted/${encodeSegment(id)}"
 
-    private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings"
+    private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings/config"
 
     suspend fun syncNow(): Result<Unit> = runCatching {
         val uid = authRepository.uid ?: return Result.success(Unit)
@@ -130,7 +131,7 @@ class SyncRepository @Inject constructor(
     }
 
     /**
-     * 配置单文档同步(users/{uid}/settings):拉远端 → 按 updatedAt 取新 → 写回。
+     * 配置单文档同步(users/{uid}/settings/config):拉远端 → 按 updatedAt 取新 → 写回。
      * 网络失败向上抛(整个 syncNow 失败,登录流程据此提示);文档不存在(404)视为空。
      * 本地从未改过(updatedAt==0)且远端不存在时不创建文档。
      */
