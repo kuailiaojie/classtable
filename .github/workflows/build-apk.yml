@@ -68,10 +68,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Prepare release keystore (optional)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        shell: bash
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/keystore.jks"
-          echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/keystore.jks" >> "$GITHUB_ENV"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/keystore.jks"
+            echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/keystore.jks" >> "$GITHUB_ENV"
+            echo "keystore prepared for release signing"
+          else
+            echo "KEYSTORE_BASE64 not configured - release APK will be unsigned"
+          fi
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -79,7 +84,8 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Build release APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace \
+        run: >-
+          ./gradlew assembleRelease --no-daemon --stacktrace
           -PfirebaseCrashlyticsMappingFileUploadEnabled=false
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
