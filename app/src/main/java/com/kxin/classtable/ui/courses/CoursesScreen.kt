@@ -61,7 +61,7 @@ fun CoursesScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "课程", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "课程")
 
         if (courses.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

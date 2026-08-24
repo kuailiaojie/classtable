@@ -1,6 +1,7 @@
 package com.kxin.classtable.ui.about
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
@@ -113,6 +116,17 @@ fun AboutScreen(nav: NavHostController) {
                 text = "© 2026 kuailikaojie · 本项目基于 MIT 协议开源,完整许可见项目 LICENSE 文件。第三方组件遵循各自许可协议,详见上文。",
                 style = YohakuType.copy14,
                 color = colors.neutral9,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            val uriHandler = LocalUriHandler.current
+            Text(
+                text = "GitHub 仓库:github.com/kuailiaojie/classtable",
+                style = YohakuType.copy14,
+                color = colors.neutral9,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    uriHandler.openUri("https://github.com/kuailiaojie/classtable")
+                },
             )
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))

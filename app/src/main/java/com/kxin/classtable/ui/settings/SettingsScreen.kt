@@ -1,7 +1,11 @@
 package com.kxin.classtable.ui.settings
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,6 +60,9 @@ import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.widget.NextClassWidgetReceiver
+import com.kxin.classtable.widget.TodayWidgetReceiver
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -119,6 +126,8 @@ fun SettingsScreen(
 
     var showAiDialog by remember { mutableStateOf(false) }
     var showNotifyDialog by remember { mutableStateOf(false) }
+    var showWidgetDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var aiProvider by remember { mutableStateOf(settings.aiProvider) }
     var aiKey by remember { mutableStateOf(settings.aiApiKey) }
     var aiBaseUrl by remember { mutableStateOf(settings.aiBaseUrl) }
@@ -308,6 +317,43 @@ fun SettingsScreen(
         )
     }
 
+    if (showWidgetDialog) {
+        AlertDialog(
+            onDismissRequest = { showWidgetDialog = false },
+            title = { Text("桌面小组件", style = YohakuType.title20) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "选择小组件后,按系统提示放置到桌面。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    WidgetOptionRow(
+                        title = "今日课表",
+                        subtitle = "4×2 · 今日课程列表,正在上的课带标记",
+                        onClick = { pinWidget(context, TodayWidgetReceiver::class.java) },
+                    )
+                    WidgetOptionRow(
+                        title = "下节课",
+                        subtitle = "1×1 · 下一节课的名称、时间与地点",
+                        onClick = { pinWidget(context, NextClassWidgetReceiver::class.java) },
+                    )
+                }
+            },
+            confirmButton = {
+                Text(
+                    text = "取消",
+                    style = YohakuType.copy14,
+                    color = colors.neutral7,
+                    modifier = Modifier
+                        .clickable { showWidgetDialog = false }
+                        .padding(8.dp),
+                )
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -383,7 +429,6 @@ fun SettingsScreen(
         )
         // —— 提醒可靠性(国产 ROM 后台保护) ——
         DividerLine()
-        val context = LocalContext.current
         val rom = remember { RomHelper.detect() }
         var notifOk by remember { mutableStateOf(RomHelper.notificationsEnabled(context)) }
         var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
@@ -441,6 +486,8 @@ fun SettingsScreen(
         DividerLine()
         SettingRow(title = "教务导入", value = "3 步导入", onClick = { nav.navigate("import") })
         DividerLine()
+        SettingRow(title = "桌面小组件", value = "今日 / 下节课", onClick = { showWidgetDialog = true })
+        DividerLine()
         SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
         DividerLine()
         SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
@@ -477,8 +524,7 @@ private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
 
 /** 提醒可靠性行:ok=true 已开启(accent)/ false 未开启 / null 无法自动检测(建议开启)。 */
 @Composable
-private fun ReliabilityRow(title: String, ok: Boolean?, onClick: () -> Unit) {
-    val colors = LocalYohakuColors.current
+private fun ReliabilityRow(title: String, ok: Boolean?, onClick: () -> Unit) {    val colors = LocalYohakuColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -520,4 +566,35 @@ private fun DividerLine() {
             .height(1.dp)
             .background(colors.neutral3),
     )
+}
+
+/** 小组件选项行:标题 + 尺寸说明,点击触发系统固定流程。 */
+@Composable
+private fun WidgetOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = YohakuType.copy15, color = colors.neutral9)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = subtitle, style = YohakuType.label12, color = colors.neutral7)
+        }
+        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+    }
+}
+
+/** 请求把指定小组件固定到桌面;Launcher 不支持时提示手动添加。 */
+private fun pinWidget(context: Context, receiver: Class<out GlanceAppWidgetReceiver>) {
+    val component = ComponentName(context.applicationContext, receiver)
+    val manager = AppWidgetManager.getInstance(context)
+    // extras 与添加成功回调 PendingIntent 均不需要,传 null
+    val ok = manager.requestPinAppWidget(component, null, null)
+    if (!ok) {
+        Toast.makeText(context, "当前桌面不支持直接添加,请长按桌面空白处手动添加", Toast.LENGTH_SHORT).show()
+    }
 }
