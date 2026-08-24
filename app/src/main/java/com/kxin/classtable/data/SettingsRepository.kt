@@ -1,6 +1,7 @@
 package com.kxin.classtable.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -12,6 +13,7 @@ import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,6 +36,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_NOTIFY_ENABLED = booleanPreferencesKey("notify_enabled")
     private val KEY_NOTIFY_LEAD = intPreferencesKey("notify_lead_minutes")
     private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+    /** 本机设置最后变更时间戳:配置同步(users/{uid}/settings)LWW 判断依据;0 = 从未改过。 */
+    private val KEY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -53,53 +57,68 @@ class SettingsRepository @Inject constructor(
         )
     }
 
-    suspend fun setThemeMode(mode: ThemeMode) {
-        context.settingsDataStore.edit { it[KEY_THEME] = mode.name }
-    }
+    /** 当前完整设置(同步推远端用)。 */
+    suspend fun currentSettings(): AppSettings = settings.first()
 
-    suspend fun setAccent(hex: String) {
-        context.settingsDataStore.edit { it[KEY_ACCENT] = hex }
-    }
+    /** 本机设置最后变更时间戳;0 = 从未改过。 */
+    suspend fun settingsUpdatedAt(): Long =
+        context.settingsDataStore.data.first()[KEY_SETTINGS_UPDATED_AT] ?: 0L
 
-    suspend fun setCurrentWeek(week: Int) {
-        context.settingsDataStore.edit { it[KEY_WEEK] = week }
-    }
-
-    suspend fun setPeriodTimes(spec: String) {
-        context.settingsDataStore.edit { it[KEY_PERIODS] = spec }
-    }
-
-    suspend fun setSemester(startDay: Long, weekCount: Int) {
-        context.settingsDataStore.edit {
-            it[KEY_SEMESTER_START] = startDay
-            it[KEY_SEMESTER_WEEKS] = weekCount
+    /** 应用远端配置(拉取合并后整包写回,时间戳取远端;AI 密钥与引导标记不落云端,不触碰)。 */
+    suspend fun applySynced(s: AppSettings, updatedAt: Long) {
+        context.settingsDataStore.edit { p ->
+            p[KEY_THEME] = s.themeMode.name
+            p[KEY_ACCENT] = s.accentHex
+            p[KEY_WEEK] = s.currentWeek
+            p[KEY_PERIODS] = s.periodTimes
+            p[KEY_SEMESTER_START] = s.semesterStartDay
+            p[KEY_SEMESTER_WEEKS] = s.semesterWeekCount
+            p[KEY_AI_PROVIDER] = s.aiProvider
+            p[KEY_AI_BASE_URL] = s.aiBaseUrl
+            p[KEY_AI_MODEL] = s.aiModel
+            p[KEY_NOTIFY_ENABLED] = s.notificationsEnabled
+            p[KEY_NOTIFY_LEAD] = s.notifyLeadMinutes
+            p[KEY_SETTINGS_UPDATED_AT] = updatedAt
         }
     }
 
-    suspend fun setAiProvider(name: String) {
-        context.settingsDataStore.edit { it[KEY_AI_PROVIDER] = name }
+    /** 写设置并打本地变更时间戳(仅同步字段;AI 密钥仅存本机、引导标记仅本机,单独处理)。 */
+    private suspend fun editSettings(block: (MutablePreferences) -> Unit) {
+        context.settingsDataStore.edit { p ->
+            block(p)
+            p[KEY_SETTINGS_UPDATED_AT] = System.currentTimeMillis()
+        }
     }
 
+    suspend fun setThemeMode(mode: ThemeMode) = editSettings { it[KEY_THEME] = mode.name }
+
+    suspend fun setAccent(hex: String) = editSettings { it[KEY_ACCENT] = hex }
+
+    suspend fun setCurrentWeek(week: Int) = editSettings { it[KEY_WEEK] = week }
+
+    suspend fun setPeriodTimes(spec: String) = editSettings { it[KEY_PERIODS] = spec }
+
+    suspend fun setSemester(startDay: Long, weekCount: Int) = editSettings {
+        it[KEY_SEMESTER_START] = startDay
+        it[KEY_SEMESTER_WEEKS] = weekCount
+    }
+
+    suspend fun setAiProvider(name: String) = editSettings { it[KEY_AI_PROVIDER] = name }
+
+    /** AI 密钥仅存本机,不同步到云端;密钥变更不触发同步时间戳。 */
     suspend fun setAiKey(key: String) {
         context.settingsDataStore.edit { it[KEY_AI_KEY] = key.trim() }
     }
 
-    suspend fun setAiBaseUrl(url: String) {
-        context.settingsDataStore.edit { it[KEY_AI_BASE_URL] = url.trim().trimEnd('/') }
-    }
+    suspend fun setAiBaseUrl(url: String) = editSettings { it[KEY_AI_BASE_URL] = url.trim().trimEnd('/') }
 
-    suspend fun setAiModel(model: String) {
-        context.settingsDataStore.edit { it[KEY_AI_MODEL] = model.trim() }
-    }
+    suspend fun setAiModel(model: String) = editSettings { it[KEY_AI_MODEL] = model.trim() }
 
-    suspend fun setNotificationsEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[KEY_NOTIFY_ENABLED] = enabled }
-    }
+    suspend fun setNotificationsEnabled(enabled: Boolean) = editSettings { it[KEY_NOTIFY_ENABLED] = enabled }
 
-    suspend fun setNotifyLeadMinutes(minutes: Int) {
-        context.settingsDataStore.edit { it[KEY_NOTIFY_LEAD] = minutes.coerceIn(0, 180) }
-    }
+    suspend fun setNotifyLeadMinutes(minutes: Int) = editSettings { it[KEY_NOTIFY_LEAD] = minutes.coerceIn(0, 180) }
 
+    /** 首次启动权限引导完成/跳过标记:仅本机,不同步。 */
     suspend fun setOnboardingDone() {
         context.settingsDataStore.edit { it[KEY_ONBOARDING_DONE] = true }
     }

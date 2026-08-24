@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
@@ -442,7 +443,7 @@ fun SettingsScreen(
         DividerLine()
         SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
         DividerLine()
-        SettingRow(title = "关于", value = "v0.1.0", onClick = { nav.navigate("about") })
+        SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
 
         Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
     }

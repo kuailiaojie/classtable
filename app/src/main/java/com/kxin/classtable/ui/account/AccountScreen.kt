@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.account
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,20 +15,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
-import com.kxin.classtable.data.AuthRepository
-import com.kxin.classtable.data.AuthSession
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
@@ -35,66 +34,6 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import javax.inject.Inject
-
-@HiltViewModel
-class AccountViewModel @Inject constructor(
-    private val authRepository: AuthRepository,
-) : ViewModel() {
-    val user: StateFlow<AuthSession?> = authRepository.currentUser
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    private val _busy = MutableStateFlow(false)
-    val busy: StateFlow<Boolean> = _busy.asStateFlow()
-
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
-
-    fun signIn(email: String, password: String) {
-        viewModelScope.launch {
-            _busy.value = true
-            val r = authRepository.signIn(email, password)
-            _message.value = r.fold({ "登录成功,开始同步" }, { it.message ?: "登录失败" })
-            _busy.value = false
-        }
-    }
-
-    fun signUp(email: String, password: String) {
-        viewModelScope.launch {
-            _busy.value = true
-            val r = authRepository.signUp(email, password)
-            _message.value = r.fold({ "注册成功,开始同步" }, { it.message ?: "注册失败" })
-            _busy.value = false
-        }
-    }
-
-    fun signOut() {
-        viewModelScope.launch {
-            authRepository.signOut()
-            _message.value = null
-        }
-    }
-
-    fun resetPassword() {
-        val email = user.value?.email ?: return
-        viewModelScope.launch {
-            _busy.value = true
-            val r = authRepository.sendPasswordReset(email)
-            _message.value = r.fold(
-                { "重置邮件已发送到 $email,请查收" },
-                { it.message ?: "发送失败" },
-            )
-            _busy.value = false
-        }
-    }
-}
 
 /** 账号页:Email/Password 登录或注册;未登录 = 访客本地模式。 */
 @Composable
@@ -106,6 +45,18 @@ fun AccountScreen(
     val user by viewModel.user.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val syncOutcome by viewModel.syncOutcome.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 登录/注册后的同步结果:提示后返回设置页(拉取配置完成/失败都会返回)
+    LaunchedEffect(syncOutcome) {
+        val outcome = syncOutcome ?: return@LaunchedEffect
+        if (!outcome.ok) {
+            Toast.makeText(context, outcome.message, Toast.LENGTH_LONG).show()
+        }
+        viewModel.consumeSyncOutcome()
+        nav.popBackStack()
+    }
 
     var mode by rememberSaveable { mutableIntStateOf(0) } // 0 = 登录, 1 = 注册
     var email by rememberSaveable { mutableStateOf("") }
@@ -129,11 +80,18 @@ fun AccountScreen(
                 )
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
                 Text(
-                    text = "课程数据将同步到 Firestore(仅本人可见)。",
+                    text = "课程与配置(作息/学期/提醒等)将同步到 Firestore(仅本人可见)。",
                     style = YohakuType.label12,
                     color = colors.neutral7,
                 )
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+                YohakuButton(
+                    text = if (busy) "同步中…" else "手动同步",
+                    onClick = { viewModel.manualSync() },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
                 YohakuButton(
                     text = "退出登录",
                     onClick = { viewModel.signOut() },
