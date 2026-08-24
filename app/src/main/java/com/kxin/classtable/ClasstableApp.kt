@@ -6,6 +6,10 @@ import android.net.ConnectivityManager
 import android.net.Network
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.kxin.classtable.notify.ReminderSelfHealWorker
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.CourseRepository
@@ -56,6 +60,13 @@ class ClasstableApp : Application() {
                 setCustomKey("version_code", BuildConfig.VERSION_CODE)
             }
         }
+
+        // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "reminder_self_heal",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<ReminderSelfHealWorker>(12, java.util.concurrent.TimeUnit.HOURS).build(),
+        )
 
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌
         scope.launch {

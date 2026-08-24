@@ -22,14 +22,25 @@ import kotlinx.coroutines.launch
 class FcmMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
-        val fcmTokens = EntryPointAccessors.fromApplication(
-            applicationContext,
-            FcmEntryPoint::class.java,
-        ).fcmTokens()
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { fcmTokens.upload(token) }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope.launch {
+            val entry = EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
+            runCatching { entry.fcmTokens().upload(token) }
+            // 令牌刷新 = 系统唤醒了应用,顺带自愈闹钟(国产 ROM 清理后补回来)
+            runCatching { entry.notificationScheduler().rescheduleAll() }
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // 任何 FCM 消息到达(含营销推送)= 系统唤醒,顺带自愈闹钟
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching {
+                EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
+                    .notificationScheduler()
+                    .rescheduleAll()
+            }
+        }
+
         val data = message.data
         val courseName = data["courseName"]
             ?: message.notification?.title
@@ -53,5 +64,6 @@ class FcmMessagingService : FirebaseMessagingService() {
     @InstallIn(SingletonComponent::class)
     interface FcmEntryPoint {
         fun fcmTokens(): FcmTokens
+        fun notificationScheduler(): com.kxin.classtable.notify.NotificationScheduler
     }
 }
