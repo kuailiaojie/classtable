@@ -259,7 +259,7 @@ curl -X POST "https://<site>/.netlify/functions/proxy/push" \
 
 ## 许可
 
-本项目暂未附带开源许可。第三方教务适配数据(shiguang_warehouse 子模块)遵循其自有许可(见 `warehouse/LICENSE`)。
+本项目基于 MIT 协议开源(见 [LICENSE](LICENSE))。第三方教务适配数据(shiguang_warehouse 子模块)遵循其自有许可(见 `warehouse/LICENSE`)。
 
 ---
 

@@ -110,7 +110,7 @@ fun AboutScreen(nav: NavHostController) {
 
             SectionTitle("版权与许可")
             Text(
-                text = "© 2026 课程表开发者 · 保留所有权利。本应用暂未开源;第三方组件遵循各自许可协议,详见上文。",
+                text = "© 2026 kuailikaojie · 本项目基于 MIT 协议开源,完整许可见项目 LICENSE 文件。第三方组件遵循各自许可协议,详见上文。",
                 style = YohakuType.copy14,
                 color = colors.neutral9,
             )

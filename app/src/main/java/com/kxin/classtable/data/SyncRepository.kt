@@ -33,13 +33,23 @@ class SyncRepository @Inject constructor(
     private val authRepository: AuthRepository,
     private val settingsRepository: SettingsRepository,
 ) {
+    /** 请求 URL 路径基址(含 v1 版本前缀,反代转发到 firestore.googleapis.com 后即完整路径)。 */
     private fun dbBase() = "v1/projects/${gateway.projectId}/databases/(default)/documents"
+
+    /** commit 请求体 write.update.name 的资源名基址——不带 v1 前缀,Firestore 要求以 "projects" 开头。 */
+    private fun docBase() = "projects/${gateway.projectId}/databases/(default)/documents"
 
     private fun coursesCol(uid: String) = "${dbBase()}/users/$uid/courses"
 
     private fun deletedCol(uid: String) = "${dbBase()}/users/$uid/deleted"
 
     private fun settingsDoc(uid: String) = "${dbBase()}/users/$uid/settings"
+
+    private fun coursesDocName(uid: String, id: String) = "${docBase()}/users/$uid/courses/${encodeSegment(id)}"
+
+    private fun deletedDocName(uid: String, id: String) = "${docBase()}/users/$uid/deleted/${encodeSegment(id)}"
+
+    private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings"
 
     suspend fun syncNow(): Result<Unit> = runCatching {
         val uid = authRepository.uid ?: return Result.success(Unit)
@@ -79,7 +89,7 @@ class SyncRepository @Inject constructor(
                 JSONObject().put(
                     "update",
                     JSONObject()
-                        .put("name", coursesCol(uid) + "/" + encodeSegment(c.id))
+                        .put("name", coursesDocName(uid, c.id))
                         .put("fields", RemoteCourse.toFields(RemoteCourse.fromDomain(c))),
                 ),
             )
@@ -89,7 +99,7 @@ class SyncRepository @Inject constructor(
                 JSONObject().put(
                     "update",
                     JSONObject()
-                        .put("name", deletedCol(uid) + "/" + encodeSegment(t.id))
+                        .put("name", deletedDocName(uid, t.id))
                         .put("fields", JSONObject().put("updatedAt", JSONObject().put("integerValue", t.updatedAt.toString()))),
                 ),
             )
@@ -167,7 +177,7 @@ class SyncRepository @Inject constructor(
                 JSONArray().put(
                     JSONObject().put(
                         "update",
-                        JSONObject().put("name", settingsDoc(uid)).put("fields", fields),
+                        JSONObject().put("name", settingsDocName(uid)).put("fields", fields),
                     ),
                 ),
             ),
