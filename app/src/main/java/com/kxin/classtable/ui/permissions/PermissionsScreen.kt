@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
@@ -29,6 +30,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
  * 提醒可靠性(权限)管理页:集中展示并引导开启课程提醒所需的四项系统权限。
@@ -36,10 +38,14 @@ import com.kxin.classtable.design.YohakuType
  * 返回系统设置页后通过 [LifecycleResumeEffect] 自动刷新状态。
  */
 @Composable
-fun PermissionsScreen(nav: NavHostController) {
+fun PermissionsScreen(
+    nav: NavHostController,
+    viewModel: PermissionsViewModel = hiltViewModel(),
+) {
     val colors = LocalYohakuColors.current
     val context = LocalContext.current
     val rom = remember { RomHelper.detect() }
+    val autoStartVisited by viewModel.autoStartVisited.collectAsStateWithLifecycle()
 
     var notifOk by remember { mutableStateOf(RomHelper.notificationsEnabled(context)) }
     var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
@@ -126,9 +132,10 @@ fun PermissionsScreen(nav: NavHostController) {
                 .background(colors.neutral3))
             PermissionRow(
                 title = "自启动(${rom.label})",
-                ok = null,
+                ok = if (autoStartVisited) true else null,
                 hint = "开机后自动恢复提醒",
                 onClick = {
+                    viewModel.markAutoStartVisited()
                     if (!RomHelper.tryOpenAutoStart(context)) {
                         context.startActivity(RomHelper.appDetailsIntent(context))
                     }

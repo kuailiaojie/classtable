@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.design.LocalYohakuColors
@@ -32,6 +34,7 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.ui.permissions.PermissionRow
+import com.kxin.classtable.ui.permissions.PermissionsViewModel
 
 /**
  * 首次启动全屏权限引导:解释缘由 + 逐项开启 + 实时状态。
@@ -39,7 +42,10 @@ import com.kxin.classtable.ui.permissions.PermissionRow
  * 相比旧弹窗:全屏更清晰、每项可直接点击跳设置、完成前不隐形误触。
  */
 @Composable
-fun OnboardingScreen(onDismiss: () -> Unit) {
+fun OnboardingScreen(
+    onDismiss: () -> Unit,
+    viewModel: PermissionsViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val colors = LocalYohakuColors.current
     val rom = remember { RomHelper.detect() }
@@ -47,7 +53,7 @@ fun OnboardingScreen(onDismiss: () -> Unit) {
     var notifOk by remember { mutableStateOf(RomHelper.notificationsEnabled(context)) }
     var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
     var batteryOk by remember { mutableStateOf(RomHelper.ignoreBatteryOptimizations(context)) }
-    var autoStartVisited by remember { mutableStateOf(false) }
+    val autoStartVisited by viewModel.autoStartVisited.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
         notifOk = RomHelper.notificationsEnabled(context)
@@ -69,7 +75,7 @@ fun OnboardingScreen(onDismiss: () -> Unit) {
             !alarmOk -> RomHelper.exactAlarmSettingsIntent(context)?.let { context.startActivity(it) }
             !batteryOk -> context.startActivity(RomHelper.batteryOptimizationIntent(context))
             rom != RomType.STOCK -> {
-                autoStartVisited = true
+                viewModel.markAutoStartVisited()
                 if (!RomHelper.tryOpenAutoStart(context)) {
                     context.startActivity(RomHelper.appDetailsIntent(context))
                 }
@@ -138,10 +144,10 @@ fun OnboardingScreen(onDismiss: () -> Unit) {
                 .background(colors.neutral3))
             PermissionRow(
                 title = "自启动(${rom.label})",
-                ok = null,
+                ok = if (autoStartVisited) true else null,
                 hint = "开机后自动恢复提醒",
                 onClick = {
-                    autoStartVisited = true
+                    viewModel.markAutoStartVisited()
                     if (!RomHelper.tryOpenAutoStart(context)) {
                         context.startActivity(RomHelper.appDetailsIntent(context))
                     }

@@ -58,15 +58,15 @@ object RomHelper {
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    /** 精确闹钟权限引导(未授权时返回可跳转的 Intent,已授权返回 null)。 */
-    fun exactAlarmSettingsIntent(context: Context): Intent? {
-        if (exactAlarmGranted(context)) return null
-        return if (Build.VERSION.SDK_INT >= 31) {
+    /** 精确闹钟权限设置页跳转(Android 12+)。无论是否已授权都返回可跳转的 Intent:
+     *  未授权时系统弹出授权页;已授权时打开「闹钟和提醒」特殊权限页,可查看/关闭开关。
+     *  低版本(Android 11-)无此权限,返回 null。 */
+    fun exactAlarmSettingsIntent(context: Context): Intent? =
+        if (Build.VERSION.SDK_INT >= 31) {
             Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
         } else {
             null
         }
-    }
 
     /** 电池优化白名单引导(API 30+ 跳白名单列表,低版本直接弹请求)。 */
     fun batteryOptimizationIntent(context: Context): Intent =
@@ -99,8 +99,11 @@ object RomHelper {
                 "com.huawei.systemmanager" to "com.huawei.permissionmanager.ui.MainActivity",
                 "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
             )
+            // MagicOS 10 实测:直接跳权限管理页(permissionmanager)是错的,用户要的是「应用启动管理」;
+            // 荣耀官方 action 会解析到 startupmgr 的应用启动管理页,component 直启兜底。
             RomType.MAGICOS -> listOf(
-                "com.hihonor.systemmanager" to "com.hihonor.permissionmanager.ui.MainActivity",
+                "hihonor.intent.action.HSM_STARTUPAPP_MANAGER" to null,
+                "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
             )
             RomType.FLYME -> listOf(
                 "com.meizu.safe" to "com.meizu.safe.permission.SmartBGActivity",

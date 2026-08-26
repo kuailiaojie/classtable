@@ -36,6 +36,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_NOTIFY_ENABLED = booleanPreferencesKey("notify_enabled")
     private val KEY_NOTIFY_LEAD = intPreferencesKey("notify_lead_minutes")
     private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+    /** 已进过 ROM「应用启动管理」页:引导标记,仅本机;荣耀无公开 API 可查真实自启动状态,访问过即视为已配置。 */
+    private val KEY_AUTO_START_VISITED = booleanPreferencesKey("autostart_visited")
     /** 本机设置最后变更时间戳:配置同步(users/{uid}/settings)LWW 判断依据;0 = 从未改过。 */
     private val KEY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
 
@@ -121,5 +123,14 @@ class SettingsRepository @Inject constructor(
     /** 首次启动权限引导完成/跳过标记:仅本机,不同步。 */
     suspend fun setOnboardingDone() {
         context.settingsDataStore.edit { it[KEY_ONBOARDING_DONE] = true }
+    }
+
+    /** 是否已进过 ROM「应用启动管理」页(引导标记,仅本机,不同步)。 */
+    val autoStartVisited: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_AUTO_START_VISITED] ?: false }
+
+    /** 记录已进过 ROM「应用启动管理」页:仅本机,不触发同步时间戳。 */
+    suspend fun markAutoStartVisited() {
+        context.settingsDataStore.edit { it[KEY_AUTO_START_VISITED] = true }
     }
 }
