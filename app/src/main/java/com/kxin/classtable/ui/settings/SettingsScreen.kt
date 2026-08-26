@@ -3,8 +3,6 @@ package com.kxin.classtable.ui.settings
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,14 +37,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.AuthRepository
-import com.kxin.classtable.data.RomHelper
-import com.kxin.classtable.data.RomType
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.AccentOptions
 import com.kxin.classtable.design.LocalYohakuColors
@@ -427,54 +422,9 @@ fun SettingsScreen(
             },
             onClick = { showNotifyDialog = true },
         )
-        // —— 提醒可靠性(国产 ROM 后台保护) ——
+        // —— 提醒可靠性:收敛为单个入口,集中到独立权限页 ——
         DividerLine()
-        val rom = remember { RomHelper.detect() }
-        var notifOk by remember { mutableStateOf(RomHelper.notificationsEnabled(context)) }
-        var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
-        var batteryOk by remember { mutableStateOf(RomHelper.ignoreBatteryOptimizations(context)) }
-        // 从系统设置页返回时刷新状态
-        LifecycleResumeEffect(Unit) {
-            notifOk = RomHelper.notificationsEnabled(context)
-            alarmOk = RomHelper.exactAlarmGranted(context)
-            batteryOk = RomHelper.ignoreBatteryOptimizations(context)
-            onPauseOrDispose { }
-        }
-        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding, vertical = 10.dp)) {
-            Text(text = "提醒可靠性", style = YohakuType.label12, color = colors.neutral7)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (rom == RomType.STOCK) {
-                    "精确闹钟可能被系统清理,建议加入电池白名单"
-                } else {
-                    "检测到 ${rom.label},建议开启自启动 + 电池白名单,防止提醒被清理"
-                },
-                style = YohakuType.label12,
-                color = colors.neutral6,
-            )
-        }
-        ReliabilityRow("通知权限", ok = notifOk, onClick = {
-            context.startActivity(
-                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-            )
-        })
-        DividerLine()
-        ReliabilityRow("精确闹钟", ok = alarmOk, onClick = {
-            RomHelper.exactAlarmSettingsIntent(context)?.let { context.startActivity(it) }
-        })
-        DividerLine()
-        ReliabilityRow("电池白名单", ok = batteryOk, onClick = {
-            context.startActivity(RomHelper.batteryOptimizationIntent(context))
-        })
-        if (rom != RomType.STOCK) {
-            DividerLine()
-            ReliabilityRow("自启动", ok = null, onClick = {
-                if (!RomHelper.tryOpenAutoStart(context)) {
-                    context.startActivity(RomHelper.appDetailsIntent(context))
-                }
-            })
-        }
+        SettingRow(title = "提醒可靠性", value = "通知/闹钟/自启动", onClick = { nav.navigate("permissions") })
         DividerLine()
         SettingRow(title = "学期周次", value = "当前第 $realWeek 周", onClick = { nav.navigate("semester") })
         DividerLine()
@@ -513,40 +463,6 @@ private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         Text(text = value, style = YohakuType.copy13, color = colors.neutral7)
-        Text(
-            text = "›",
-            style = YohakuType.copy15,
-            color = colors.neutral6,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
-}
-
-/** 提醒可靠性行:ok=true 已开启(accent)/ false 未开启 / null 无法自动检测(建议开启)。 */
-@Composable
-private fun ReliabilityRow(title: String, ok: Boolean?, onClick: () -> Unit) {    val colors = LocalYohakuColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = YohakuDimens.screenPadding, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = YohakuType.copy15,
-            color = colors.neutral9,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = when (ok) {
-                true -> "已开启"
-                false -> "未开启"
-                null -> "建议开启"
-            },
-            style = YohakuType.label12,
-            color = if (ok == true) colors.accent else colors.neutral7,
-        )
         Text(
             text = "›",
             style = YohakuType.copy15,

@@ -82,6 +82,14 @@ object Schedule {
         }
     }
 
+    /** 课程开始分钟(自定义时间优先,否则按作息节次);无作息信息返回 null。 */
+    fun courseStartMinute(course: Course, periods: List<Period> = defaultPeriods): Int? =
+        course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start
+
+    /** 课程结束分钟(自定义时间优先,否则按作息节次);无作息信息返回 null。 */
+    fun courseEndMinute(course: Course, periods: List<Period> = defaultPeriods): Int? =
+        course.customEndMinute ?: periods.getOrNull(course.endPeriod - 1)?.end
+
     /** 课程是否落在某个大节行的时间范围内(自定义时间课程按分钟比对)。 */
     fun courseOverlapsBigPeriod(course: Course, p1: Int, p2: Int, periods: List<Period>): Boolean {
         val cs = course.customStartMinute

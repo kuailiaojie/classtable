@@ -44,7 +44,7 @@ class CourseRepository @Inject constructor(
         val isNew = dao.getById(course.id) == null
         dao.upsert(CourseEntity.fromDomain(course.copy(updatedAt = System.currentTimeMillis())))
         sync.syncNow()
-        refreshWidgets()
+        postChangeSideEffects()
         Analytics.log(
             if (isNew) "course_created" else "course_updated",
             "course_id" to course.id,
@@ -56,7 +56,7 @@ class CourseRepository @Inject constructor(
         // 墓碑:向远端传播删除,防止下次 pull 时课程"复活"
         deletedDao.upsert(DeletedCourseEntity(id, System.currentTimeMillis()))
         sync.syncNow()
-        refreshWidgets()
+        postChangeSideEffects()
         // 取消该课程已排的提醒(combine 重排不会清理已删除课程的闹钟)
         notificationScheduler.cancelCourse(id)
         Analytics.log("course_deleted", "course_id" to id)
@@ -66,8 +66,14 @@ class CourseRepository @Inject constructor(
         val now = System.currentTimeMillis()
         dao.upsertAll(courses.map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
         sync.syncNow()
-        refreshWidgets()
+        postChangeSideEffects()
         Analytics.log("courses_imported", "count" to courses.size)
+    }
+
+    /** 课程数据变更后的副作用:刷新小组件 + 重排提醒(均在 IO,避免阻塞调用线程)。 */
+    private fun postChangeSideEffects() {
+        refreshWidgets()
+        scope.launch { notificationScheduler.rescheduleAll() }
     }
 
     private fun refreshWidgets() {

@@ -49,21 +49,27 @@ class NotificationScheduler @Inject constructor(
         val settings = runBlocking { settingsRepository.settings.first() }
         val courses = runBlocking { dao.getAll().map { it.toDomain() } }
         if (!settings.notificationsEnabled) {
-            courses.forEach { cancelCourse(it.id) }
+            cancelAll(courses)
             return
         }
         val lead = settings.notifyLeadMinutes.coerceIn(0, 180)
         val periods = Schedule.parsePeriods(settings.periodTimes)
         val today = LocalDate.now()
+        // 先清一段窗口内所有已排闹钟,再重排:课程被删/改时旧闹钟不会残留。
+        courses.forEach { cancelCourse(it.id) }
         courses.forEach { course ->
             for (d in 0 until WINDOW_DAYS) {
                 val date = today.plusDays(d.toLong())
-                val startMinute = courseStartMinute(course, periods) ?: continue
+                val startMinute = Schedule.courseStartMinute(course, periods) ?: continue
                 val fireAt = occurrenceFireTime(course, date, settings, periods, lead) ?: continue
                 if (fireAt <= System.currentTimeMillis()) continue
                 scheduleOne(course, date, fireAt, lead, startMinute)
             }
         }
+    }
+
+    private fun cancelAll(courses: List<Course>) {
+        courses.forEach { cancelCourse(it.id) }
     }
 
     /** 取消某课程已排的提醒(删除课程时调用)。 */
@@ -73,10 +79,6 @@ class NotificationScheduler @Inject constructor(
             alarmManager.cancel(reminderPendingIntent(courseId, today.plusDays(d.toLong())))
         }
     }
-
-    /** 课程开始分钟(自定义时间优先,否则按作息节次);无作息信息返回 null。 */
-    private fun courseStartMinute(course: Course, periods: List<Schedule.Period>): Int? =
-        course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start
 
     /** 某课程在指定日期那次课的提醒触发时刻(epoch millis);当天无课返回 null。 */
     private fun occurrenceFireTime(
@@ -94,7 +96,7 @@ class NotificationScheduler @Inject constructor(
             1
         }
         if (!course.isActiveOnWeek(week)) return null
-        val startMinute = courseStartMinute(course, periods) ?: return null
+        val startMinute = Schedule.courseStartMinute(course, periods) ?: return null
         val startMillis = date.atTime(startMinute / 60, startMinute % 60)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         return startMillis - lead * 60_000L

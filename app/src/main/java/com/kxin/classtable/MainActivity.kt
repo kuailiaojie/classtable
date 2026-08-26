@@ -37,7 +37,8 @@ import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
-import com.kxin.classtable.ui.onboarding.PermissionOnboardingDialog
+import com.kxin.classtable.ui.onboarding.OnboardingScreen
+import com.kxin.classtable.ui.permissions.PermissionsScreen
 import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
 import com.kxin.classtable.ui.courses.CourseDetailScreen
@@ -95,14 +96,6 @@ fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
                 !RomHelper.ignoreBatteryOptimizations(context) ||
                 RomHelper.detect() != RomType.STOCK
         )
-        if (needsOnboarding) {
-            PermissionOnboardingDialog(
-                onDismiss = {
-                    onboardingDismissed = true
-                    settingsViewModel.completeOnboarding()
-                },
-            )
-        }
         // 通知点击 → 直达课程详情(仅处理进程首次带参启动,避免重组合重复导航)
         var handledDeepLink by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) {
@@ -142,8 +135,18 @@ fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
                 composable("settings") { SettingsScreen(nav) }
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
+                composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
                 }
+            }
+            // 首次启动权限引导全屏覆盖层:置于最上层,完成后 Dismiss 露出主界面
+            if (needsOnboarding) {
+                OnboardingScreen(
+                    onDismiss = {
+                        onboardingDismissed = true
+                        settingsViewModel.completeOnboarding()
+                    },
+                )
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.kxin.classtable.notify
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -19,6 +20,7 @@ import com.kxin.classtable.domain.Schedule
 object Notifier {
     const val CHANNEL_REMINDER = "course_reminder"
     const val CHANNEL_LIVE = "live_updates"
+    const val CHANNEL_COURSE_LIVE = "course_live"
     const val EXTRA_COURSE_ID = "notify_course_id"
 
     private fun ensureChannels(context: Context) {
@@ -43,6 +45,17 @@ object Notifier {
                         NotificationManager.IMPORTANCE_DEFAULT,
                     ).apply {
                         description = "课表变更与活动通知(服务端推送)"
+                    },
+                )
+            }
+            if (nm.getNotificationChannel(CHANNEL_COURSE_LIVE) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_COURSE_LIVE,
+                        "课程开始提醒",
+                        NotificationManager.IMPORTANCE_HIGH,
+                    ).apply {
+                        description = "课前倒计时与上课状态(Android 16 Live Updates)"
                     },
                 )
             }
@@ -136,4 +149,46 @@ object Notifier {
     private fun hasPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 ||
             NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+    /** 进度轨最大刻度(与 ProgressStyle.Segment 长度同基准)。 */
+    const val LIVE_PROGRESS_MAX = 1000
+
+    /** 进度轨填充色(默认强调色 #C56473)。 */
+    private val RAIL_ACCENT: Int = android.graphics.Color.parseColor("#C56473")
+
+    /**
+     * 构建 Android 16 Live Updates 通知(ProgressStyle,状态栏 chip)。
+     * 仅 Build.VERSION.SDK_INT >= 36 时调用;返回的通知用于前台服务 startForeground,
+     * 由服务在课前到下课期间持续更新([progress] 递增,文案实时变化)。
+     *
+     * [shortText] 即状态栏小字(如「还有 10 分钟」);[contentTitle]/[contentBody] 用于展开视图。
+     * [progress] 为当前进度位置,范围 0..[LIVE_PROGRESS_MAX]。
+     */
+    fun buildCourseLiveUpdate(
+        context: Context,
+        contentTitle: String,
+        contentBody: String,
+        shortText: String,
+        progress: Int,
+        contentIntent: PendingIntent? = null,
+    ): Notification {
+        ensureChannels(context)
+        val progressStyle = Notification.ProgressStyle()
+            .setProgressIndeterminate(false)
+            .addProgressSegment(
+                Notification.ProgressStyle.Segment(LIVE_PROGRESS_MAX).setColor(RAIL_ACCENT),
+            )
+            .setProgress(progress.coerceIn(0, LIVE_PROGRESS_MAX))
+        val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle(contentTitle)
+            .setContentText(contentBody)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShortCriticalText(shortText)
+            .setStyle(progressStyle)
+            .apply { if (contentIntent != null) setContentIntent(contentIntent) }
+        return builder.build()
+    }
 }
