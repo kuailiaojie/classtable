@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    教务导入需要访问学校教务系统的 http 明文入口(正方/强智/青果等老系统大多无 https),
+    Android 9+ 默认禁止明文流量会导致 WebView 白屏,这里放行。
+    仅用于导入页访问教务域名;如需收紧可在此按 domain 白名单细化。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

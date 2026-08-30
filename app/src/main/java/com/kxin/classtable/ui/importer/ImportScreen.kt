@@ -2,6 +2,9 @@ package com.kxin.classtable.ui.importer
 
 import android.os.Handler
 import android.os.Looper
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -40,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -501,6 +505,7 @@ private fun StepLogin(
     val colors = LocalYohakuColors.current
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // 压缩头部:适配器名 + 网址一行,提示一行,把更多空间留给网页
@@ -553,6 +558,39 @@ private fun StepLogin(
                                 canGoBack = view?.canGoBack() == true
                                 canGoForward = view?.canGoForward() == true
                             }
+
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                super.onPageStarted(view, url, favicon)
+                                loadError = null
+                            }
+
+                            @Suppress("DEPRECATION")
+                            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                                super.onReceivedError(view, errorCode, description, failingUrl)
+                                loadError = friendlyLoadError(errorCode, description)
+                            }
+
+                            override fun onReceivedError(
+                                view: WebView?,
+                                request: WebResourceRequest?,
+                                error: WebResourceError?,
+                            ) {
+                                super.onReceivedError(view, request, error)
+                                if (request?.isForMainFrame == true) {
+                                    loadError = friendlyLoadError(error?.errorCode ?: -1, error?.description?.toString())
+                                }
+                            }
+
+                            override fun onReceivedHttpError(
+                                view: WebView?,
+                                request: WebResourceRequest?,
+                                errorResponse: WebResourceResponse?,
+                            ) {
+                                super.onReceivedHttpError(view, request, errorResponse)
+                                if (request?.isForMainFrame == true) {
+                                    loadError = "服务器返回错误 ${errorResponse?.statusCode ?: "未知"}"
+                                }
+                            }
                         }
                         addJavascriptInterface(bridge, "AndroidBridgeNative")
                         loadUrl(importUrl)
@@ -561,6 +599,37 @@ private fun StepLogin(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+            // 加载失败覆盖层:白屏时给出原因,而不是无声空白
+            loadError?.let { message ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.paper),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = "页面加载失败",
+                        style = YohakuType.copy15,
+                        color = colors.error,
+                    )
+                    Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                    Text(
+                        text = message,
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                    Text(
+                        text = "请检查网络或网址,点下方「刷新」重试",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
         }
         Row(
             modifier = Modifier
@@ -678,4 +747,17 @@ private fun weekSummary(course: Course): String = when (course.weekType) {
     WeekType.ODD_WEEK -> "单周"
     WeekType.EVEN_WEEK -> "双周"
     WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
+}
+
+/** WebView 错误码 → 用户可读的中文原因(避免白屏无提示)。 */
+private fun friendlyLoadError(errorCode: Int, raw: String?): String = when (errorCode) {
+    WebViewClient.ERROR_HOST_LOOKUP -> "无法解析域名,请确认教务网址是否正确"
+    WebViewClient.ERROR_CONNECT -> "无法连接到服务器,教务系统可能未开放外网访问"
+    WebViewClient.ERROR_TIMEOUT -> "连接超时,请检查网络后重试"
+    WebViewClient.ERROR_FAILED_SSL_HANDSHAKE -> "SSL 证书校验失败,该站点证书可能不受信任"
+    // WebViewClient.ERROR_CLEARTEXT_NOT_PERMITTED(API 26 起,值为 -29,SDK 无公开常量)
+    -29 -> "系统禁止访问 http 明文页面,请使用 https 地址或联系开发者放行"
+    WebViewClient.ERROR_UNSUPPORTED_SCHEME -> "不支持的网址协议"
+    WebViewClient.ERROR_BAD_URL -> "网址格式不正确"
+    else -> raw?.takeIf { it.isNotBlank() } ?: "未知错误(错误码 $errorCode)"
 }
