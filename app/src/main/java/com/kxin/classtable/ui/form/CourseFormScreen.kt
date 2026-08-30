@@ -104,14 +104,15 @@ fun CourseFormScreen(
     val editing = viewModel.editing
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
-    val periodRows = remember(periods.size) { Schedule.bigPeriods(periods.size) }
 
     var name by rememberSaveable { mutableStateOf("") }
     var teacher by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
     var weekdaysMask by rememberSaveable { mutableIntStateOf(1) }   // 位掩码:bit(day-1)=1
-    var periodIdx by rememberSaveable { mutableIntStateOf(0) }
+    var periodStart by rememberSaveable { mutableIntStateOf(1) }   // 节次区间起
+    var periodEnd by rememberSaveable { mutableIntStateOf(1) }     // 节次区间止
+    var pickingEnd by rememberSaveable { mutableStateOf(false) }   // 是否正在选结束节
     var weekTypeIdx by rememberSaveable { mutableIntStateOf(0) }
     var customStart by rememberSaveable { mutableStateOf("1") }
     var customEnd by rememberSaveable { mutableStateOf("16") }
@@ -136,9 +137,10 @@ fun CourseFormScreen(
                 customTimeEnd = Schedule.clockText(c.customEndMinute ?: 0)
             } else {
                 timeMode = 0
-                periodIdx = periodRows
-                    .indexOfFirst { it.first == c.startPeriod && it.second == c.endPeriod }
-                    .coerceAtLeast(0)
+                val max = periods.size.coerceAtLeast(1)
+                periodStart = c.startPeriod.coerceIn(1, max)
+                periodEnd = c.endPeriod.coerceIn(periodStart, max)
+                pickingEnd = false
             }
         }
     }
@@ -155,6 +157,23 @@ fun CourseFormScreen(
             if (weekdaysMask xor bit == 0) weekdaysMask else weekdaysMask xor bit
         } else {
             weekdaysMask or bit
+        }
+    }
+
+    /**
+     * 节次选择:点一节开始(单节),再点一节结束组成连续区间。
+     * 点同一节两次 = 单节;已选区间内再点任一节,该节成为新的开始。
+     */
+    fun tapPeriod(i: Int) {
+        if (!pickingEnd) {
+            periodStart = i
+            periodEnd = i
+            pickingEnd = true
+        } else {
+            val (a, b) = if (i < periodStart) i to periodStart else periodStart to i
+            periodStart = a
+            periodEnd = b
+            pickingEnd = false
         }
     }
 
@@ -191,15 +210,14 @@ fun CourseFormScreen(
             )
             viewModel.save(course)
         } else {
-            val (p1, p2) = periodRows[periodIdx]
             val course = Course(
                 id = editing?.id ?: UUID.randomUUID().toString(),
                 name = trimmed,
                 teacher = teacher.trim(),
                 location = location.trim(),
                 weekday = primaryWeekday,
-                startPeriod = p1,
-                endPeriod = p2,
+                startPeriod = periodStart,
+                endPeriod = periodEnd,
                 weekType = WeekType.entries[weekTypeIdx],
                 weekStart = ws,
                 weekEnd = we,
@@ -301,17 +319,22 @@ fun CourseFormScreen(
             Spacer(modifier = Modifier.height(10.dp))
             if (timeMode == 0) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    periodRows.forEachIndexed { index, (p1, p2) ->
+                    periods.indices.forEach { i ->
+                        val n = i + 1
                         YohakuChip(
-                            text = "$p1-$p2",
-                            selected = periodIdx == index,
-                            onClick = { periodIdx = index },
+                            text = "$n",
+                            selected = n in periodStart..periodEnd,
+                            onClick = { tapPeriod(n) },
                         )
                     }
                 }
-                val (selStart, selEnd) = periodRows[periodIdx]
+                val selText = if (periodStart == periodEnd) "第 $periodStart 节" else "第 $periodStart-$periodEnd 节"
                 Text(
-                    text = "已选:第 ${selStart}-${selEnd} 节 · ${Schedule.periodRange(periods, selStart, selEnd)}",
+                    text = if (pickingEnd) {
+                        "已选:$selText · 再点一节作为结束"
+                    } else {
+                        "已选:$selText · ${Schedule.periodRange(periods, periodStart, periodEnd)}"
+                    },
                     style = YohakuType.timeMono,
                     color = colors.neutral7,
                     modifier = Modifier.padding(top = 8.dp),

@@ -65,6 +65,10 @@ class SemesterViewModel @Inject constructor(
 
     fun save(startDay: Long, weekCount: Int) = viewModelScope.launch {
         settingsRepository.setSemester(startDay, weekCount)
+        // 开学日期变化后,当前周应跟随真实周数校准,否则周视图/单双周仍按旧周显示
+        if (startDay > 0L) {
+            settingsRepository.setCurrentWeek(Schedule.currentWeek(startDay, weekCount.coerceAtLeast(1)))
+        }
         _saved.value = true
     }
 }
@@ -82,14 +86,25 @@ fun SemesterScreen(
 
     var startDay by rememberSaveable { mutableLongStateOf(settings.semesterStartDay) }
     var weekCount by rememberSaveable { mutableStateOf(settings.semesterWeekCount.toString()) }
+    var hydrated by remember { mutableStateOf(false) }
     var showPicker by remember { mutableStateOf(false) }
+
+    // settings 流异步加载完成后,把已保存的值灌入表单。首次发射的是占位 AppSettings(),
+    // 等真实数据到达(≠占位)再灌入,且只灌一次,避免用户编辑中被远端同步旧值覆盖。
+    LaunchedEffect(settings) {
+        if (!hydrated && settings != AppSettings()) {
+            startDay = settings.semesterStartDay
+            weekCount = settings.semesterWeekCount.toString()
+            hydrated = true
+        }
+    }
 
     LaunchedEffect(saved) { if (saved) nav.popBackStack() }
 
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = if (startDay > 0L) startDay * 86_400_000L else System.currentTimeMillis(),
-    )
     if (showPicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = if (startDay > 0L) startDay * 86_400_000L else System.currentTimeMillis(),
+        )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {

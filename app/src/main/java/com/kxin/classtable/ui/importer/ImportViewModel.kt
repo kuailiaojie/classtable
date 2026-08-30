@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.importer.ImportParser
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,10 @@ class ImportViewModel @Inject constructor(
         viewModelScope.launch {
             ImportParser.parseCourseConfig(json)?.let { (weeks, startDay) ->
                 settingsRepository.setSemester(startDay, weeks)
+                // 导入开学日期后同样校准当前周,否则周视图/单双周仍按旧周显示
+                if (startDay > 0L) {
+                    settingsRepository.setCurrentWeek(Schedule.currentWeek(startDay, weeks.coerceAtLeast(1)))
+                }
             }
         }
     }

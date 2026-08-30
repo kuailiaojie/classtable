@@ -317,7 +317,14 @@ fun ImportScreen(
                     importUrl = importUrl,
                     holder = holder,
                     bridge = bridge,
-                    onReload = { holder.webView.loadUrl(importUrl) },
+                    onReload = {
+                        // 刷新当前页;尚未加载出 URL 时回到入口地址
+                        if (holder.webView.url.isNullOrBlank()) {
+                            holder.webView.loadUrl(importUrl)
+                        } else {
+                            holder.webView.reload()
+                        }
+                    },
                     onRun = {
                         val script = WarehouseIndex.readScript(context, adapter.folder, adapter.jsPath)
                         if (script == null) {
@@ -492,30 +499,41 @@ private fun StepLogin(
     onRun: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        // 压缩头部:适配器名 + 网址一行,提示一行,把更多空间留给网页
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-            Text(text = adapter.adapterName, style = YohakuType.title20, color = colors.neutral10)
-            Text(
-                text = "登录后进入课表页面,再点「执行导入」",
-                style = YohakuType.label12,
-                color = colors.neutral7,
-            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = adapter.adapterName,
+                    style = YohakuType.copy15,
+                    color = colors.neutral9,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = importUrl,
+                    style = YohakuType.timeMono,
+                    color = colors.neutral7,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = importUrl,
-                style = YohakuType.timeMono,
+                text = "登录后进入课表页,再点「执行导入」· 账号密码仅本机 WebView 使用",
+                style = YohakuType.label12,
                 color = colors.neutral7,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-            Text(
-                text = "账号密码仅在本机 WebView 会话中使用,不会上传到任何服务器。",
-                style = YohakuType.label12,
-                color = colors.neutral7,
-            )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
         }
         Box(
             modifier = Modifier
@@ -529,7 +547,13 @@ private fun StepLogin(
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        webViewClient = WebViewClient()
+                        webViewClient = object : WebViewClient() {
+                            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                                super.doUpdateVisitedHistory(view, url, isReload)
+                                canGoBack = view?.canGoBack() == true
+                                canGoForward = view?.canGoForward() == true
+                            }
+                        }
                         addJavascriptInterface(bridge, "AndroidBridgeNative")
                         loadUrl(importUrl)
                     }
@@ -545,13 +569,30 @@ private fun StepLogin(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "重新加载",
+                text = "‹",
+                style = YohakuType.title20,
+                color = if (canGoBack) colors.neutral9 else colors.neutral5,
+                modifier = Modifier
+                    .clickable(enabled = canGoBack) { holder.webView.goBack() }
+                    .padding(horizontal = 6.dp),
+            )
+            Text(
+                text = "›",
+                style = YohakuType.title20,
+                color = if (canGoForward) colors.neutral9 else colors.neutral5,
+                modifier = Modifier
+                    .clickable(enabled = canGoForward) { holder.webView.goForward() }
+                    .padding(horizontal = 6.dp),
+            )
+            Text(
+                text = "刷新",
                 style = YohakuType.copy13,
-                color = colors.neutral7,
+                color = colors.neutral9,
                 modifier = Modifier
                     .clickable(onClick = onReload)
-                    .padding(end = 24.dp),
+                    .padding(horizontal = 8.dp),
             )
+            Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
             YohakuButton(
                 text = "执行导入",
                 onClick = onRun,
