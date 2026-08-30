@@ -10,6 +10,12 @@
 #   - debug APK(可直接安装)
 #   - release APK(配置签名密钥后为正式签名版,否则为未签名版)
 #
+# 发布:
+#   - main 推送或手动触发且 APK 构建成功后,自动创建 GitHub Release:
+#     tag 取 app/build.gradle.kts 中的 versionName(如 0.1.5,无需手动打 tag),
+#     Release 正文取 CHANGELOG.md 中对应版本章节。
+#   - Pull Request 不会触发发布。
+#
 # 可选签名(Release):
 #   在仓库 Settings → Secrets and variables → Actions 中配置以下密钥后,
 #   release APK 将使用对应 keystore 签名:
@@ -109,22 +115,48 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 从 app/build.gradle.kts 读取 versionName 作为发布 tag(如 0.1.5)
+      - name: Resolve app version
+        id: version
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)
+          echo "version=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION_NAME"
+
       - name: Download APK artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      # 从 CHANGELOG.md 提取该版本对应章节作为 Release 正文
+      - name: Extract changelog for this version
+        run: |
+          awk -v ver="${{ steps.version.outputs.version }}" '
+            index($0, "## " ver " ") == 1 || $0 == "## " ver { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-body.md
+
       - name: Create GitHub Release
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          if [ ! -s release-body.md ]; then
+            echo "::warning::CHANGELOG.md 中没有版本 ${{ steps.version.outputs.version }} 的条目,跳过发布"
+            exit 0
+          fi
+          gh release create "${{ steps.version.outputs.version }}" \
             artifacts/apk-debug/*.apk \
             artifacts/apk-release/*.apk \
-            --generate-notes
+            --title "${{ steps.version.outputs.version }}" \
+            --notes-file release-body.md \
+            --clobber
         env:
           GH_TOKEN: ${{ github.token }}
