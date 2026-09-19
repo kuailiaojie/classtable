@@ -70,26 +70,26 @@ class ImportBridge(
         }
     }
 
-    /** 两按钮确认:左=positive 返回 true,右=negative 返回 false。 */
+    /**
+     * 单按钮提示框。契约(拾光 Bridge):`showAlert(titleText, contentText, confirmText)`,
+     * 只有 confirmText 指定的**一个**确认按钮,官方固定 resolve(true)。
+     *
+     * 这里此前被实现成「确定 / 取消」两按钮,且取消、点击外部都会 resolve(false)。
+     * 而适配器普遍写成 `const ok = await showAlert(...); if (!ok) return;`
+     * (如 AHSZU、AHZYYGZ、BBGU、CAUC 等),于是点一下取消或误触外部就会让脚本
+     * 静默退出——表现为「弹出一个取消导入的框,然后什么都没导入」。
+     */
     @JavascriptInterface
-    fun showAlert(title: String, message: String, positive: String, negative: String, callbackId: String) {
+    fun showAlert(title: String, message: String, confirmText: String, callbackId: String) {
         mainHandler.post {
-            showConfirmDialog(title, message, positive, negative, callbackId)
-        }
-    }
-
-    /** HUAT 等适配器显式请求的确认框(左按钮 = true)。与 showAlert 同实现,保留两个入口。 */
-    @JavascriptInterface
-    fun showConfirmDialog(title: String, message: String, positive: String, negative: String, callbackId: String) {
-        mainHandler.post {
-            val dialog = AlertDialog.Builder(webViewProvider().context)
-                .setTitle(title ?: "")
+            AlertDialog.Builder(webViewProvider().context)
+                .setTitle(title.ifBlank { "提示" })
                 .setMessage(message ?: "")
-                .setPositiveButton(positive.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
-                .setNegativeButton(negative.ifBlank { "取消" }) { _, _ -> resolve(callbackId, "false") }
-                .setOnCancelListener { resolve(callbackId, "false") }
-                .create()
-            dialog.show()
+                .setPositiveButton(confirmText.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
+                // 协议里没有「取消」这条路径:禁止返回键 / 点击外部关闭,
+                // 否则脚本会拿到 false 直接 return,用户看不到任何失败原因
+                .setCancelable(false)
+                .show()
         }
     }
 
@@ -251,11 +251,7 @@ class ImportBridge(
               window.AndroidBridgePromise = {
                 showAlert: function(){
                   var a = arguments;
-                  return callNative('showAlert', [arg(a,0), arg(a,1), arg(a,2), arg(a,3)]);
-                },
-                showConfirmDialog: function(){
-                  var a = arguments;
-                  return callNative('showConfirmDialog', [arg(a,0), arg(a,1), arg(a,2), arg(a,3)]);
+                  return callNative('showAlert', [arg(a,0), arg(a,1), arg(a,2)]);
                 },
                 showPrompt: function(){
                   var a = arguments;
@@ -263,8 +259,14 @@ class ImportBridge(
                 },
                 showSingleSelection: function(){
                   var a = arguments;
+                  // items 可能是数组,也可能是已序列化的 JSON 字符串。
+                  // 原生侧按 JSON 解析(JSONArray),而 WebView 把 JS 数组传给 Java 的
+                  // String 形参时只会 toString() 成逗号串(不是 JSON),会让列表解析失败、
+                  // 选择框根本不弹出。官方 polyfill 同样在这里先做序列化。
+                  var items = a[1];
+                  var itemsJson = (typeof items === 'string') ? items : JSON.stringify(items || []);
                   var idx = (typeof a[2] === 'number') ? a[2] : -1;
-                  return callNative('showSingleSelection', [arg(a,0), arg(a,1), idx]);
+                  return callNative('showSingleSelection', [arg(a,0), itemsJson, idx]);
                 },
                 saveImportedCourses: function(){ return callNative('saveImportedCourses', [arg(arguments,0)]); },
                 savePresetTimeSlots: function(){ return callNative('savePresetTimeSlots', [arg(arguments,0)]); },

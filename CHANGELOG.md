@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 (2026-09-19)
+
+### 修复
+- **点「执行导入」弹出「取消导入」且什么都没导入**:桥把 `showAlert` 实现成了「确定 / 取消」两按钮,取消与点击弹窗外都会返回 false。而拾光 Bridge 协议里 `showAlert(titleText, contentText, confirmText)` 是**只有 confirmText 一个按钮**的提示框,官方固定返回 true;适配器普遍写成 `const ok = await showAlert(...); if (!ok) return;`(234 个脚本中有 **55 个**是这样),于是点了取消或误触外部,脚本就静默退出——课程一条都不会导入,也没有任何失败提示。现在改回单按钮并禁止取消(与协议一致)。
+- 移除协议中并不存在的 `showConfirmDialog`(上一版误加,全部适配器均无调用),避免再出现「两个按钮里有一个会让脚本中止」的情况。
+- `showSingleSelection` 的 items 若传数组,改为在垫片内先 `JSON.stringify`:WebView 把 JS 数组传给 Java 的 String 形参只会 `toString()` 成逗号串,原生按 JSON 解析会失败并立即返回、选择框根本不弹出。内置的 240 处调用目前都会自己序列化,所以这是与官方 polyfill 对齐的防御性修正。
+
 ## 0.1.8 (2026-09-19)
 
 ### 修复
