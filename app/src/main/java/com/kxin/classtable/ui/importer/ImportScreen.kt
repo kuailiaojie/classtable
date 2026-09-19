@@ -817,6 +817,9 @@ private fun configureImportWebView(
         ViewGroup.LayoutParams.MATCH_PARENT,
     )
     webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    // 诊断期开关:允许用 adb + CDP 在真机上直接跑适配脚本核对桥的行为(不需要登录教务)。
+    // 只在导入页存活期间开放,定位到问题后随下一版移除。
+    WebView.setWebContentsDebuggingEnabled(true)
     webView.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
