@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 暴露路径:应用内更新下载的 APK 存放于 filesDir/updates -->
+<paths>
+    <files-path
+        name="updates"
+        path="updates/" />
+</paths>

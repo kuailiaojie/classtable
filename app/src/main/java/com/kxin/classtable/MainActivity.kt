@@ -8,10 +8,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -22,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +39,7 @@ import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuTheme
+import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
@@ -48,10 +54,14 @@ import com.kxin.classtable.ui.form.CourseFormScreen
 import com.kxin.classtable.ui.importer.AiImportScreen
 import com.kxin.classtable.ui.importer.ImportScreen
 import com.kxin.classtable.ui.importer.ManualImportScreen
+import com.kxin.classtable.ui.settings.AdapterSyncScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
 import com.kxin.classtable.ui.settings.SettingsScreen
 import com.kxin.classtable.ui.settings.SettingsViewModel
+import com.kxin.classtable.ui.settings.UpdateScreen
+import com.kxin.classtable.ui.settings.UpdateState
+import com.kxin.classtable.ui.settings.UpdateViewModel
 import com.kxin.classtable.ui.week.WeekScreen
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -65,8 +75,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
+fun ClasstableRoot(
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
+) {
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val dark = when (settings.themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
@@ -137,6 +151,8 @@ fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
                 composable("semester") { SemesterScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
+                composable("adapter_sync") { AdapterSyncScreen(nav) }
+                composable("update") { UpdateScreen(nav) }
                 }
             }
             // 首次启动权限引导全屏覆盖层:置于最上层,完成后 Dismiss 露出主界面
@@ -145,6 +161,54 @@ fun ClasstableRoot(settingsViewModel: SettingsViewModel = hiltViewModel()) {
                     onDismiss = {
                         onboardingDismissed = true
                         settingsViewModel.completeOnboarding()
+                    },
+                )
+            }
+            // 启动静默检查更新(24h 节流);有新版弹非阻断提示
+            var updateAutoChecked by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                if (!updateAutoChecked) {
+                    updateAutoChecked = true
+                    updateViewModel.autoCheck()
+                }
+            }
+            (updateState as? UpdateState.Available)?.let { available ->
+                AlertDialog(
+                    onDismissRequest = { updateViewModel.dismiss() },
+                    title = {
+                        Text(
+                            text = "发现新版本 v${available.info.latestVersion}",
+                            style = YohakuType.title20,
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "当前版本 v${updateViewModel.currentVersion},是否前往更新?",
+                            style = YohakuType.copy14,
+                        )
+                    },
+                    confirmButton = {
+                        Text(
+                            text = "查看更新",
+                            style = YohakuType.copy14,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .clickable {
+                                    updateViewModel.dismiss()
+                                    nav.navigate("update")
+                                }
+                                .padding(8.dp),
+                        )
+                    },
+                    dismissButton = {
+                        Text(
+                            text = "以后再说",
+                            style = YohakuType.copy14,
+                            color = colors.neutral7,
+                            modifier = Modifier
+                                .clickable { updateViewModel.dismiss() }
+                                .padding(8.dp),
+                        )
                     },
                 )
             }

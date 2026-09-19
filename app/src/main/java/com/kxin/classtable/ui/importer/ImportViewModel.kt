@@ -81,4 +81,7 @@ class ImportViewModel @Inject constructor(
 /** WebView 持有者:供 ImportBridge 与 StepLogin 共享同一实例。 */
 class WebViewHolder {
     lateinit var webView: WebView
+
+    /** 当前 WebView 对应的适配器 id:一致则复用(不丢登录态),不同才重建。 */
+    var adapterKey: String? = null
 }

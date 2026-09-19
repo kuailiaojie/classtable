@@ -18,6 +18,11 @@ const AUTH_UPSTREAM = "https://identitytoolkit.googleapis.com";
 const FIRESTORE_UPSTREAM = "https://firestore.googleapis.com";
 const PREFIX = "/.netlify/functions/proxy";
 
+// 应用更新:服务端代为查询 GitHub Release(客户端不直连 GitHub,规避大陆可达性问题)。
+// 可选环境变量 GITHUB_TOKEN:提升 GitHub API 限流额度(未授权 60 次/时)。
+const GITHUB_REPO = "kuailiaojie/classtable";
+const RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
 // Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
 // 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
 // 注意:firebase-admin 是重依赖,必须「按需动态加载」——只在 /push 路径才 import,
@@ -71,12 +76,79 @@ async function handlePush(req) {
   }
 }
 
+function githubHeaders() {
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "classtable-proxy",
+  };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  return headers;
+}
+
+async function latestRelease() {
+  const resp = await fetch(RELEASE_API, { headers: githubHeaders() });
+  if (!resp.ok) throw new Error(`GitHub API HTTP ${resp.status}`);
+  return resp.json();
+}
+
+// GET /version → 最新版本信息(客户端据此判断是否更新)。
+async function handleVersion() {
+  try {
+    const rel = await latestRelease();
+    const apk = (rel.assets || []).find((a) => a.name === "app-release.apk")
+      || (rel.assets || []).find((a) => a.name.endsWith(".apk"));
+    return jsonWithCache(200, {
+      versionName: String(rel.tag_name || "").replace(/^v/, ""),
+      notes: rel.body || "",
+      releaseUrl: rel.html_url || `https://github.com/${GITHUB_REPO}/releases`,
+      apkUrl: apk ? "/apk" : "",
+      publishedAt: rel.published_at || "",
+    }, 600);
+  } catch (e) {
+    return json(502, { error: { code: 502, message: "获取最新版本失败: " + e.message } });
+  }
+}
+
+// GET /apk → 流式代理最新 release 的 APK(下载走 Netlify 域名,规避 GitHub 资产域名不稳)。
+async function handleApk() {
+  try {
+    const rel = await latestRelease();
+    const asset = (rel.assets || []).find((a) => a.name === "app-release.apk")
+      || (rel.assets || []).find((a) => a.name.endsWith(".apk"));
+    if (!asset) {
+      return json(404, { error: { code: 404, message: "最新版本没有可下载的 APK" } });
+    }
+    const apkResp = await fetch(asset.browser_download_url, {
+      redirect: "follow",
+      headers: { "User-Agent": "classtable-proxy" },
+    });
+    if (!apkResp.ok || !apkResp.body) {
+      return json(502, { error: { code: 502, message: `下载 APK 失败(HTTP ${apkResp.status})` } });
+    }
+    const headers = {
+      "Content-Type": "application/vnd.android.package-archive",
+      "Cache-Control": "public, max-age=600",
+    };
+    const len = apkResp.headers.get("content-length");
+    if (len) headers["Content-Length"] = len;
+    return new Response(apkResp.body, { status: 200, headers });
+  } catch (e) {
+    return json(502, { error: { code: 502, message: "下载 APK 失败: " + e.message } });
+  }
+}
+
 export default async (req) => {
   const url = new URL(req.url);
   const rest = url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : url.pathname;
 
   if (rest === "/push") {
     return handlePush(req);
+  }
+  if (rest === "/version") {
+    return handleVersion();
+  }
+  if (rest === "/apk") {
+    return handleApk();
   }
 
   let upstream = null;
@@ -124,5 +196,16 @@ function json(status, obj) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+function jsonWithCache(status, obj, maxAge) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": `public, max-age=${maxAge}`,
+    },
   });
 }

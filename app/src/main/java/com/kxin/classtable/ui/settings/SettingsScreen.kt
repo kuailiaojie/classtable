@@ -436,52 +436,18 @@ fun SettingsScreen(
         DividerLine()
         SettingRow(title = "教务导入", value = "3 步导入", onClick = { nav.navigate("import") })
         DividerLine()
+        SettingRow(title = "适配器同步", value = "更新学校与脚本", onClick = { nav.navigate("adapter_sync") })
+        DividerLine()
         SettingRow(title = "桌面小组件", value = "今日 / 下节课", onClick = { showWidgetDialog = true })
         DividerLine()
         SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
+        DividerLine()
+        SettingRow(title = "检查更新", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("update") })
         DividerLine()
         SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
 
         Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
     }
-}
-
-@Composable
-private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
-    val colors = LocalYohakuColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = YohakuDimens.screenPadding, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = YohakuType.copy15,
-            color = colors.neutral9,
-            modifier = Modifier.weight(1f),
-        )
-        Text(text = value, style = YohakuType.copy13, color = colors.neutral7)
-        Text(
-            text = "›",
-            style = YohakuType.copy15,
-            color = colors.neutral6,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun DividerLine() {
-    val colors = LocalYohakuColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = YohakuDimens.screenPadding)
-            .height(1.dp)
-            .background(colors.neutral3),
-    )
 }
 
 /** 小组件选项行:标题 + 尺寸说明,点击触发系统固定流程。 */

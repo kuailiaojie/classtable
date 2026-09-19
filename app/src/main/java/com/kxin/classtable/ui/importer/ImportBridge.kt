@@ -34,6 +34,13 @@ class ImportBridge(
         mainHandler.post { onDone() }
     }
 
+    /** 适配脚本异常上报:之前脚本报错完全静默,现在统一以 toast 反馈。 */
+    @JavascriptInterface
+    fun reportError(message: String) {
+        val text = (message ?: "").trim().take(200).ifBlank { "未知错误" }
+        mainHandler.post { onToast("适配脚本错误:$text") }
+    }
+
     @JavascriptInterface
     fun saveImportedCourses(json: String, callbackId: String) {
         mainHandler.post {
@@ -118,23 +125,54 @@ class ImportBridge(
     }
 
     companion object {
+        /**
+         * 桌面 Chrome UA:多数教务系统按 UA 分发页面,适配脚本按桌面 DOM 编写,
+         * 用 WebView 默认(移动)UA 会拿到移动版页面导致解析不到课表。
+         */
+        const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由 unhandledrejection 兜底)。 */
+        fun wrapScript(script: String): String =
+            "(function(){try{\n$script\n}catch(e){AndroidBridgeNative.reportError((e&&e.message)||String(e));}})();"
+
         /** 桥垫片:定义 AndroidBridge / AndroidBridgePromise / shiguangBridge* / __resolve。 */
         const val SHIM_JS = """
             (function(){
               window.__resolvers = {};
               window.__resolve = function(id, value){
-                var r = window.__resolvers[id];
-                if (r) { delete window.__resolvers[id]; r(value); }
+                var entry = window.__resolvers[id];
+                if (entry) {
+                  delete window.__resolvers[id];
+                  if (entry.timer) { clearTimeout(entry.timer); }
+                  entry.resolve(value);
+                }
               };
+              function report(message){
+                try { AndroidBridgeNative.reportError(String(message)); } catch(e) {}
+              }
+              window.onerror = function(message){ report(message); };
+              window.addEventListener('unhandledrejection', function(ev){
+                var r = ev && ev.reason;
+                report(r && r.message ? r.message : r);
+              });
               function wrap(method){
                 return function(){
                   var args = Array.prototype.slice.call(arguments);
                   return new Promise(function(resolve){
                     var id = 'cb_' + (Math.random() * 1e9 | 0);
-                    window.__resolvers[id] = resolve;
+                    // 超时兜底:页面切换 / 原生未回调时不再永久挂起(60s)
+                    var timer = setTimeout(function(){
+                      if (window.__resolvers[id]) {
+                        delete window.__resolvers[id];
+                        resolve(null);
+                      }
+                    }, 60000);
+                    window.__resolvers[id] = { resolve: resolve, timer: timer };
                     args.push(id);
                     try { AndroidBridgeNative[method].apply(null, args); }
-                    catch(e) { delete window.__resolvers[id]; resolve(null); }
+                    catch(e) { delete window.__resolvers[id]; clearTimeout(timer); resolve(null); }
                   });
                 };
               }

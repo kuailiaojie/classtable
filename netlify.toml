@@ -4,6 +4,12 @@
 #       再把该地址填入 Android 端 FirebaseGateway.kt 的 BASE_URL。
 # 建议:绑定自有域名(走 Netlify DNS),netlify.app 域名在大陆可达性一般。
 
+[build]
+  # 构建期生成适配器 bundle(netlify/static/warehouse/bundle.json),由 CDN 静态分发。
+  # 客户端从 <site>/warehouse/bundle.json 同步最新适配器;APK 版本信息走 /version 反代。
+  command = "node tools/build-netlify.mjs"
+  publish = "netlify/static"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

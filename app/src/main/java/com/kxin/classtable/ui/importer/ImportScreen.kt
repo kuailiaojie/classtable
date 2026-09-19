@@ -63,6 +63,7 @@ import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import com.kxin.classtable.ui.navigateToTab
 import kotlinx.coroutines.launch
+import java.net.URL
 
 /**
  * 教务导入(3 步):选学校(首字母索引,已隐藏开发者自检工具)
@@ -77,8 +78,15 @@ fun ImportScreen(
 ) {
     val colors = LocalYohakuColors.current
     val context = LocalContext.current
-    val schools = remember { WarehouseIndex.loadSchools(context) }
-    val adapters = remember { WarehouseIndex.loadAdapters(context) }
+
+    // 索引加载:缓存优先(设置页「适配器同步」的产物),回退内置 assets。
+    // 两者皆失败时不再静默返回空列表,而是给出可操作的错误面板。
+    var indexReload by remember { mutableIntStateOf(0) }
+    val schoolsResult = remember(indexReload) { WarehouseIndex.loadSchools(context) }
+    val adaptersResult = remember(indexReload) { WarehouseIndex.loadAdapters(context) }
+    val schools = schoolsResult.getOrDefault(emptyList())
+    val adapters = adaptersResult.getOrDefault(emptyList())
+    val indexError = schoolsResult.isFailure || adaptersResult.isFailure || schools.isEmpty()
     val visibleSchools = remember(schools) {
         schools.filter { it.folder !in WarehouseIndex.SELF_CHECK_FOLDERS }
     }
@@ -234,18 +242,22 @@ fun ImportScreen(
                             value = customUrl,
                             onValueChange = { customUrl = it },
                             placeholder = "https://jw.xxx.edu.cn",
+                            isError = customUrl.isNotBlank() &&
+                                !isValidImportUrl(normalizeImportUrl(customUrl)),
                         )
                     }
                 }
             },
             confirmButton = {
-                val ok = !urlRequired || customUrl.isNotBlank()
+                val normalizedUrl = normalizeImportUrl(customUrl)
+                val ok = !urlRequired || isValidImportUrl(normalizedUrl)
                 Text(
                     text = "确定导入",
                     style = YohakuType.copy14,
                     color = if (ok) colors.accent else colors.neutral5,
                     modifier = Modifier
                         .clickable(enabled = ok) {
+                            if (urlRequired) customUrl = normalizedUrl
                             selectedAdapter = adapter
                             detailAdapter = null
                             step = 2
@@ -296,7 +308,12 @@ fun ImportScreen(
             color = colors.neutral7,
             modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
         )
-        when (step) {
+        if (indexError) {
+            IndexErrorPanel(
+                onSync = { nav.navigate("adapter_sync") },
+                onRetry = { indexReload++ },
+            )
+        } else when (step) {
             1 -> StepSchool(
                 schools = visibleSchools,
                 adapters = adapters,
@@ -315,7 +332,7 @@ fun ImportScreen(
                 onAi = { nav.navigate("import_ai") },
             )
             2 -> selectedAdapter?.let { adapter ->
-                val importUrl = adapter.importUrl.ifBlank { customUrl.trim() }
+                val importUrl = adapter.importUrl.ifBlank { normalizeImportUrl(customUrl) }
                 StepLogin(
                     adapter = adapter,
                     importUrl = importUrl,
@@ -332,9 +349,12 @@ fun ImportScreen(
                     onRun = {
                         val script = WarehouseIndex.readScript(context, adapter.folder, adapter.jsPath)
                         if (script == null) {
-                            viewModel.onToast("适配脚本缺失: ${adapter.jsPath}")
+                            viewModel.onToast("适配脚本缺失: ${adapter.jsPath},请到设置页「适配器同步」更新")
                         } else {
-                            holder.webView.evaluateJavascript(ImportBridge.SHIM_JS + "\n" + script, null)
+                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败
+                            holder.webView.evaluateJavascript(
+                                ImportBridge.SHIM_JS + "\n" + ImportBridge.wrapScript(script),
+                            ) { }
                         }
                     },
                 )
@@ -548,11 +568,18 @@ private fun StepLogin(
         ) {
             AndroidView(
                 factory = { ctx ->
-                    holder.webView = WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        webViewClient = object : WebViewClient() {
+                    // 同一适配器复用 WebView(返回上一步再进入不丢登录态),换适配器才重建。
+                    // adapterKey 与 webView 始终成对赋值,故用 key 判定即可。
+                    if (holder.adapterKey == adapter.adapterId) {
+                        holder.webView
+                    } else {
+                        val created = WebView(ctx)
+                        created.settings.javaScriptEnabled = true
+                        created.settings.domStorageEnabled = true
+                        created.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        // 桌面 UA:适配脚本按桌面 DOM 编写,移动 UA 会拿到移动版页面
+                        created.settings.userAgentString = ImportBridge.DESKTOP_UA
+                        created.webViewClient = object : WebViewClient() {
                             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                                 super.doUpdateVisitedHistory(view, url, isReload)
                                 canGoBack = view?.canGoBack() == true
@@ -562,6 +589,8 @@ private fun StepLogin(
                             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                 super.onPageStarted(view, url, favicon)
                                 loadError = null
+                                // 页面一开始就注入垫片,保证适配脚本执行前 AndroidBridge* 已就绪
+                                view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
                             }
 
                             @Suppress("DEPRECATION")
@@ -592,10 +621,12 @@ private fun StepLogin(
                                 }
                             }
                         }
-                        addJavascriptInterface(bridge, "AndroidBridgeNative")
-                        loadUrl(importUrl)
+                        created.addJavascriptInterface(bridge, "AndroidBridgeNative")
+                        created.loadUrl(importUrl)
+                        holder.webView = created
+                        holder.adapterKey = adapter.adapterId
+                        created
                     }
-                    holder.webView
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -760,4 +791,58 @@ private fun friendlyLoadError(errorCode: Int, raw: String?): String = when (erro
     WebViewClient.ERROR_UNSUPPORTED_SCHEME -> "不支持的网址协议"
     WebViewClient.ERROR_BAD_URL -> "网址格式不正确"
     else -> raw?.takeIf { it.isNotBlank() } ?: "未知错误(错误码 $errorCode)"
+}
+
+/** 补全协议:用户常直接填 jw.xxx.edu.cn,统一补 https://。 */
+private fun normalizeImportUrl(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        trimmed
+    } else {
+        "https://$trimmed"
+    }
+}
+
+/** 仅校验能否解析出主机名,避免明显无效的网址进入 WebView。 */
+private fun isValidImportUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    return !runCatching { URL(url).host }.getOrNull().isNullOrBlank()
+}
+
+/** 适配器索引不可用(缓存损坏且内置缺失)时的可操作错误面板,替代此前的静默空列表。 */
+@Composable
+private fun IndexErrorPanel(onSync: () -> Unit, onRetry: () -> Unit) {
+    val colors = LocalYohakuColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = YohakuDimens.screenPadding),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text = "适配器数据不可用", style = YohakuType.copy15, color = colors.error)
+        Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+        Text(
+            text = "未能读取适配器索引。可同步云端适配器,或重试使用内置数据。",
+            style = YohakuType.label12,
+            color = colors.neutral7,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+        YohakuButton(
+            text = "去同步适配器",
+            onClick = onSync,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+        Text(
+            text = "重试",
+            style = YohakuType.copy13,
+            color = colors.accent,
+            modifier = Modifier
+                .clickable(onClick = onRetry)
+                .padding(8.dp),
+        )
+    }
 }

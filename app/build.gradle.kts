@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    id("kotlin-parcelize")
 }
 
 android {
@@ -17,14 +18,21 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
 
         // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
         buildConfigField(
             "String",
             "FIREBASE_PROXY_URL",
             "\"https://classtablek.netlify.app/.netlify/functions/proxy\"",
+        )
+
+        // Netlify 站点根:适配器 bundle 等静态资源(<site>/warehouse/bundle.json)。
+        buildConfigField(
+            "String",
+            "SITE_BASE_URL",
+            "\"https://classtablek.netlify.app\"",
         )
     }
 

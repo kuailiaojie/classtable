@@ -83,6 +83,8 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 - 作息时间子页:每节独立设置开始 + 结束时间,可自由增删节次,不限于 12 节。
 - 学期周次子页:日期选择器设置学期起始日与总周数。
 - AI 密钥:多供应商配置。
+- 适配器同步:从自建站点拉取最新学校索引与教务适配脚本,落地后导入页优先用云端数据,失败自动回退内置。
+- 检查更新:检查新版本、应用内下载 APK 并拉起系统安装器;启动时按 24 小时节流静默检查。
 
 ## 技术栈
 
@@ -158,7 +160,7 @@ assets/warehouse/
 
 ### 更新仓库
 
-重新下载 shiguang_warehouse 到 `warehouse/` 后运行 `node tools/yaml2json.mjs` 重新生成索引。
+重新下载 shiguang_warehouse 到 `warehouse/` 后运行 `node tools/yaml2json.mjs` 重新生成 assets 索引,`node tools/build-netlify.mjs` 再把 assets 打包为 `netlify/static/warehouse/bundle.json`(Netlify 部署时自动执行)。App 端「设置 → 适配器同步」即可拉取该 bundle 覆盖内置数据。
 
 ## 数据模型与同步
 
@@ -181,8 +183,10 @@ app/src/main/java/com/kxin/classtable/
   notify/      # 本地闹钟 / 提醒通知
   ui/          # 周视图 日视图 表单 导入(3 步 + JS 桥) 设置(+ 子页) 账号
   widget/      # Glance:1×1 下节课 + 4×2 今日课表
-netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送)
+netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送 / 版本 / APK)
+netlify/static/               # 构建期生成:warehouse/bundle.json(适配器同步源,CDN 分发)
 tools/yaml2json.mjs           # 教务仓库 YAML → assets JSON 预编译
+tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
 .github/workflows/build-apk.yml   # GitHub Actions:自动构建并上传 APK
 gradlew / gradlew.bat             # Gradle Wrapper 启动脚本
 ```
@@ -206,8 +210,13 @@ firebase deploy --only firestore:rules
 
 1. Netlify 控制台 → Add new site → 连接本仓库(或单独部署 `netlify/functions`)。
 2. 部署完成后得到站点地址 `https://<site>.netlify.app`(建议绑定自有域名,`netlify.app` 域名在大陆可达性一般)。
-3. 将地址写入 `app/build.gradle.kts` 的 `FIREBASE_PROXY_URL`(当前配置:`https://classtablek.netlify.app/.netlify/functions/proxy`;更换部署站点仅需修改该处,经 BuildConfig 注入)。
+3. 将站点地址写入 `app/build.gradle.kts`(均经 BuildConfig 注入,换站点只改这两处):
+   - `FIREBASE_PROXY_URL` — 反代地址(`https://<site>/.netlify/functions/proxy`);
+   - `SITE_BASE_URL` — 站点根(`https://<site>`,用于适配器 bundle 与更新接口)。
 4. 重新构建并安装 App。
+
+> 适配器同步依赖 Netlify 的静态发布目录:`netlify.toml` 已配置 `[build] command = "node tools/build-netlify.mjs"` 与 `publish = "netlify/static"`,部署时自动生成 `<site>/warehouse/bundle.json`。
+> 「检查更新」由反代 `/version` 服务端代查 GitHub Release、`/apk` 流式代理安装包(客户端不直连 GitHub);如需提升 GitHub API 限流额度,可在 Netlify 环境变量设置 `GITHUB_TOKEN`(可选)。
 
 免费额度为 12.5 万次请求 / 月,登录 + 同步场景绰有余裕。
 
