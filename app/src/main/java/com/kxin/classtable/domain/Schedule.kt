@@ -170,17 +170,25 @@ object Schedule {
         return top to height.coerceAtLeast(0.5f)
     }
 
-    /** 由学期起始日(epochDay)推导当前周;未设置返回 1 */
-    fun currentWeek(startDay: Long, weekCount: Int): Int {
+    /** 某 epochDay 所在周的周一(ISO 周一对齐)。周次/周范围统一以它为锚。 */
+    fun mondayEpochDay(epochDay: Long): Long =
+        epochDay - (LocalDate.ofEpochDay(epochDay).dayOfWeek.value - 1)
+
+    /** 指定日期(epochDay)是学期第几周:以「开学日所在周的周一」为第 1 周起点。 */
+    fun weekOf(epochDay: Long, startDay: Long, weekCount: Int): Int {
         if (startDay <= 0L) return 1
-        val days = LocalDate.now().toEpochDay() - startDay
-        return ((days / 7) + 1).toInt().coerceIn(1, weekCount.coerceAtLeast(1))
+        val weeks = ((mondayEpochDay(epochDay) - mondayEpochDay(startDay)) / 7 + 1).toInt()
+        return weeks.coerceIn(1, weekCount.coerceAtLeast(1))
     }
 
-    /** 第 N 周的日期范围文本,如 "9/14–9/20";未设置学期返回空串 */
+    /** 由学期起始日(epochDay)推导当前周(周一对齐);未设置返回 1 */
+    fun currentWeek(startDay: Long, weekCount: Int): Int =
+        weekOf(LocalDate.now().toEpochDay(), startDay, weekCount)
+
+    /** 第 N 周的日期范围文本(周一~周日),如 "9/14–9/20";未设置学期返回空串 */
     fun weekRangeText(startDay: Long, week: Int): String {
         if (startDay <= 0L) return ""
-        val start = LocalDate.ofEpochDay(startDay + (week - 1) * 7)
+        val start = LocalDate.ofEpochDay(mondayEpochDay(startDay) + (week - 1) * 7)
         val end = start.plusDays(6)
         return "${start.monthValue}/${start.dayOfMonth}–${end.monthValue}/${end.dayOfMonth}"
     }

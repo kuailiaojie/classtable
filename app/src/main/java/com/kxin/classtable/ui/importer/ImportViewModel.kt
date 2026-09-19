@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.importer.ImportParser
-import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +31,24 @@ class ImportViewModel @Inject constructor(
     private val _imported = MutableStateFlow(false)
     val imported: StateFlow<Boolean> = _imported.asStateFlow()
 
+    /** 脚本识别到的学校作息("start-end,...");只记录,是否覆盖本地作息由用户在确认页决定。 */
+    private val _detectedPeriods = MutableStateFlow<String?>(null)
+    val detectedPeriods: StateFlow<String?> = _detectedPeriods.asStateFlow()
+
+    /** 脚本识别到的学期配置:(周数, 开学日 epochDay)。 */
+    private val _detectedSemester = MutableStateFlow<Pair<Int, Long>?>(null)
+    val detectedSemester: StateFlow<Pair<Int, Long>?> = _detectedSemester.asStateFlow()
+
     fun onCoursesJson(json: String) {
-        _parsedCourses.value = ImportParser.parseCourses(json)
+        val result = ImportParser.parseCourses(json)
+        _parsedCourses.value = result.courses
+        when {
+            result.error != null -> onToast("课程数据解析失败:${result.error}")
+            result.courses.isEmpty() && result.received > 0 ->
+                onToast("收到 ${result.received} 条记录但都无法识别,请确认已在课表页面执行导入")
+            result.dropped > 0 ->
+                onToast("已解析 ${result.courses.size} 门,跳过 ${result.dropped} 条无法识别的记录")
+        }
     }
 
     fun onDone() {
@@ -53,25 +68,30 @@ class ImportViewModel @Inject constructor(
     }
 
     fun onPresetTimeSlots(json: String) {
-        viewModelScope.launch {
-            ImportParser.parseTimeSlots(json)?.let { settingsRepository.setPeriodTimes(it) }
-        }
+        ImportParser.parseTimeSlots(json)?.let { _detectedPeriods.value = it }
     }
 
     fun onCourseConfig(json: String) {
+        ImportParser.parseCourseConfig(json)?.let { _detectedSemester.value = it }
+    }
+
+    /** 应用脚本识别到的作息与学期配置(用户在确认页确认后调用)。 */
+    private suspend fun applyDetected() {
+        _detectedPeriods.value?.let { settingsRepository.setPeriodTimes(it) }
+        _detectedSemester.value?.let { (weeks, startDay) -> settingsRepository.setSemester(startDay, weeks) }
+    }
+
+    /** 只应用作息/学期,不导入课程(脚本未给课程时的兜底入口)。 */
+    fun applyDetectedOnly() {
         viewModelScope.launch {
-            ImportParser.parseCourseConfig(json)?.let { (weeks, startDay) ->
-                settingsRepository.setSemester(startDay, weeks)
-                // 导入开学日期后同样校准当前周,否则周视图/单双周仍按旧周显示
-                if (startDay > 0L) {
-                    settingsRepository.setCurrentWeek(Schedule.currentWeek(startDay, weeks.coerceAtLeast(1)))
-                }
-            }
+            applyDetected()
+            _imported.value = true
         }
     }
 
-    fun importAll() {
+    fun importAll(applyDetectedConfig: Boolean) {
         viewModelScope.launch {
+            if (applyDetectedConfig) applyDetected()
             courseRepository.importAll(_parsedCourses.value)
             _imported.value = true
         }

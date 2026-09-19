@@ -89,12 +89,8 @@ class NotificationScheduler @Inject constructor(
         lead: Int,
     ): Long? {
         if (!course.isOnWeekday(date.dayOfWeek.value)) return null
-        val week = if (s.semesterStartDay > 0L) {
-            (((date.toEpochDay() - s.semesterStartDay) / 7) + 1).toInt()
-                .coerceIn(1, s.semesterWeekCount.coerceAtLeast(1))
-        } else {
-            1
-        }
+        // 与周视图同源:以开学日所在周的周一为锚推算该日期属于第几周
+        val week = Schedule.weekOf(date.toEpochDay(), s.semesterStartDay, s.semesterWeekCount)
         if (!course.isActiveOnWeek(week)) return null
         val startMinute = Schedule.courseStartMinute(course, periods) ?: return null
         val startMillis = date.atTime(startMinute / 60, startMinute % 60)

@@ -62,10 +62,10 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 
 ### 课程导入
 
-- **教务系统导入**:接入开源教务适配仓库 shiguang_warehouse,覆盖正方、强智、青果、URP、超星等系统的 146 所学校 / 156 个适配器。选校后先阅读适配器说明(描述 / 作者 / 操作提示)再确认导入;WebView 登录(账号密码仅存于本机会话)后注入适配脚本,自动应用脚本产出的作息时间与开学日期,课程按周次自动归类(每周 / 单周 / 双周 / 自定义)。
+- **教务系统导入**:接入开源教务适配仓库 shiguang_warehouse,覆盖正方、强智、青果、URP、超星等系统的 146 所学校 / 156 个适配器。选校后先阅读适配器说明(描述 / 作者 / 操作提示)再确认导入;WebView 登录(账号密码仅存于本机会话)后注入适配脚本,脚本识别到的**作息时间与开学日期**会在确认页列出,由你决定是否覆盖本地设置,课程按周次自动归类(每周 / 单周 / 双周 / 自定义)。
 - **手动导入**:粘贴 CSV / TSV 表格数据,或直接导入 Excel 文件(.xlsx / .csv / .tsv),自动识别表头与 UTF-8 / GBK 编码;表格第 8、9 列可填开始 / 结束时间(HH:MM),生成自定义时间课程。
 - **AI 图片导入**:多供应商——Google Gemini 或任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等),在设置页配置供应商、密钥、Base URL 与模型后,上传课表图片即可识别课程与作息并自动应用。
-- **作息一键同步**:教务 / AI 图片 / 手动表格导入识别到作息时自动应用;手动导入可直接粘贴「08:00-08:50」格式行同步作息。
+- **作息一键同步**:教务 / AI 图片 / 手动表格导入识别到作息时,会在确认页展示并等你确认后写入;手动导入可直接粘贴「08:00-08:50」格式行同步作息。
 
 ### 账号、同步与稳定性
 
@@ -80,7 +80,7 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 
 - 主题:浅色 / 深色 / 跟随系统。
 - 强调色:5 色可选。
-- 作息时间子页:每节独立设置开始 + 结束时间,可自由增删节次,不限于 12 节。
+- 作息时间子页:每节独立设置开始 + 结束时间,可自由增删节次,不限于 12 节;支持按「开始时间 + 单节时长 + 课间 + 节数」自动生成,并在保存前校验节次顺序与时间重叠。
 - 学期周次子页:日期选择器设置学期起始日与总周数。
 - AI 密钥:多供应商配置。
 - 适配器同步:从自建站点拉取最新学校索引与教务适配脚本,落地后导入页优先用云端数据,失败自动回退内置。
@@ -120,6 +120,8 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 
 > Release 签名配置(GitHub Actions Secrets / 本地构建)见 [`docs/release-signing.md`](docs/release-signing.md)。
 
+> Release 构建开启 R8 混淆 + 资源压缩,且只打 `arm64-v8a` / `armeabi-v7a`(x86 模拟器请用 debug 包);内置思源宋体已子集化到 GB2312 全字集(14.1MB → 3.3MB),需要重新生成时执行 `python tools/subset-font.py`。
+
 > 应用默认以访客本地模式运行,无需任何后端配置即可体验完整课表功能。账号同步与推送需按下文[部署与配置](#部署与配置)完成后端接入。
 
 ## 架构概览
@@ -145,9 +147,14 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 ### 数据流
 
 ```
+warehouse/                 # 上游仓库快照(源:保留 YAML,便于比对与重新生成)
+  index/root_index.yaml
+  resources/<SCHOOL>/{adapters.yaml, <script>.js}
+        │  node tools/yaml2json.mjs   → 预编译为下方 JSON,App 运行时不解析 YAML
+        ▼
 assets/warehouse/
-  index.json       # 146 所学校索引(由 tools/yaml2json.mjs 预编译自仓库 root_index.yaml)
-  adapters.json    # 156 个适配器配置(同上,自各校 adapters.yaml)
+  index.json       # 146 所学校索引
+  adapters.json    # 156 个适配器配置
   resources/<SCHOOL>/<script>.js   # 适配脚本(注入 WebView 执行)
 ```
 
@@ -156,7 +163,9 @@ assets/warehouse/
 脚本注入即自执行,通过 JS 桥与 App 交互:
 
 - `AndroidBridge.showToast` / `AndroidBridge.notifyTaskCompletion`
-- `AndroidBridgePromise.showAlert` / `showPrompt` / `showSingleSelection` / `saveImportedCourses` / `savePresetTimeSlots` / `saveCourseConfig`(v2 别名 `shiguangBridge*`)
+- `AndroidBridgePromise.showAlert` / `showConfirmDialog` / `showPrompt` / `showSingleSelection` / `saveImportedCourses` / `savePresetTimeSlots` / `saveCourseConfig`(v2 别名 `shiguangBridge*`)
+
+桥垫片会把每个方法的实参**补齐到固定个数**再追加 callbackId,以兼容各适配器 3 参 / 4 参的不同写法(形参错位会让 Promise 一直挂到 60s 超时);`showPrompt` 的校验函数名会在确认后于页面内执行,`showSingleSelection` 会预选 `defaultIndex`。
 
 ### 更新仓库
 

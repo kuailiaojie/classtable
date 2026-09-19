@@ -43,31 +43,34 @@ class CourseRepository @Inject constructor(
     suspend fun save(course: Course) {
         val isNew = dao.getById(course.id) == null
         dao.upsert(CourseEntity.fromDomain(course.copy(updatedAt = System.currentTimeMillis())))
-        sync.syncNow()
         postChangeSideEffects()
         Analytics.log(
             if (isNew) "course_created" else "course_updated",
             "course_id" to course.id,
         )
+        // 同步放到后台:本地已落库即返回,不阻塞调用方(如保存后返回上一层)
+        scope.launch { sync.syncNow() }
     }
 
     suspend fun delete(id: String) {
         dao.deleteById(id)
         // 墓碑:向远端传播删除,防止下次 pull 时课程"复活"
         deletedDao.upsert(DeletedCourseEntity(id, System.currentTimeMillis()))
-        sync.syncNow()
-        postChangeSideEffects()
-        // 取消该课程已排的提醒(combine 重排不会清理已删除课程的闹钟)
-        notificationScheduler.cancelCourse(id)
         Analytics.log("course_deleted", "course_id" to id)
+        // 取消该课程已排的提醒 + 云同步,均在后台完成,不阻塞导航
+        scope.launch {
+            runCatching { notificationScheduler.cancelCourse(id) }
+            runCatching { sync.syncNow() }
+        }
+        postChangeSideEffects()
     }
 
     suspend fun importAll(courses: List<Course>) {
         val now = System.currentTimeMillis()
         dao.upsertAll(courses.map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
-        sync.syncNow()
         postChangeSideEffects()
         Analytics.log("courses_imported", "count" to courses.size)
+        scope.launch { sync.syncNow() }
     }
 
     /** 课程数据变更后的副作用:刷新小组件 + 重排提醒(均在 IO,避免阻塞调用线程)。 */

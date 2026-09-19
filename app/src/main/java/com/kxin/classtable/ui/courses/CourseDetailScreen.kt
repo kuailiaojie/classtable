@@ -21,6 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,10 +44,8 @@ import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -55,24 +56,15 @@ class CourseDetailViewModel @Inject constructor(
     private val courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    private val _course = MutableStateFlow<Course?>(null)
-    val course: StateFlow<Course?> = _course.asStateFlow()
-
-    private val _deleted = MutableStateFlow(false)
-    val deleted: StateFlow<Boolean> = _deleted.asStateFlow()
+    /** 课程列表流:详情页响应式呈现;课程被删(本页或编辑页)时该课程随即从列表消失。 */
+    val courses: StateFlow<List<Course>> = courseRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
-    fun load(id: String) {
-        viewModelScope.launch { _course.value = courseRepository.get(id) }
-    }
-
     fun delete(id: String) {
-        viewModelScope.launch {
-            courseRepository.delete(id)
-            _deleted.value = true
-        }
+        viewModelScope.launch { runCatching { courseRepository.delete(id) } }
     }
 }
 
@@ -85,12 +77,20 @@ fun CourseDetailScreen(
     viewModel: CourseDetailViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
-    val course by viewModel.course.collectAsStateWithLifecycle()
+    val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val deleted by viewModel.deleted.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load(courseId) }
-    LaunchedEffect(deleted) { if (deleted) nav.popBackStack() }
+    // 响应式:课程存在过之后一旦从列表消失(本页删除 / 编辑页删除),立即返回上一层。
+    // hadCourse 用 rememberSaveable,保证「进编辑页删除后返回」也能识别。
+    val course = courses.firstOrNull { it.id == courseId }
+    var hadCourse by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(course) {
+        if (course != null) {
+            hadCourse = true
+        } else if (hadCourse) {
+            nav.popBackStack()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -214,16 +214,17 @@ private fun weekPatternText(course: Course): String = when (course.weekType) {
     WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
 }
 
-/** 课程在学期内的所有上课日期(需已设置学期起始日;未设置返回空列表)。 */
+/** 课程在学期内的所有上课日期(需已设置学期起始日;未设置返回空列表)。周一对齐,与周视图一致。 */
 private fun courseDates(course: Course, semesterStartDay: Long, weekCount: Int): List<Pair<LocalDate, Int>> {
     if (semesterStartDay <= 0L) return emptyList()
     val count = weekCount.coerceIn(1, 30)
+    val startMonday = Schedule.mondayEpochDay(semesterStartDay)
     return buildList {
         for (w in 1..count) {
             if (!course.isActiveOnWeek(w)) continue
             for (d in 1..7) {
                 if (!course.isOnWeekday(d)) continue
-                add(LocalDate.ofEpochDay(semesterStartDay + (w - 1) * 7L + (d - 1)) to w)
+                add(LocalDate.ofEpochDay(startMonday + (w - 1) * 7L + (d - 1)) to w)
             }
         }
     }

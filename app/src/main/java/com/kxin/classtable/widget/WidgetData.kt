@@ -15,16 +15,17 @@ import kotlinx.coroutines.runBlocking
 object WidgetData {
 
     private data class WidgetSettings(
-        val week: Int,
         val periods: List<Schedule.Period>,
         val semesterStart: Long,
         val semesterWeeks: Int,
-    )
+    ) {
+        /** 当前周实时推算(与周视图同源),避免小组件停留在持久化旧值。 */
+        val week: Int get() = Schedule.currentWeek(semesterStart, semesterWeeks)
+    }
 
     private fun settingsOf(context: Context): WidgetSettings = runBlocking {
         val p = context.settingsDataStore.data.first()
         WidgetSettings(
-            week = p[intPreferencesKey("current_week")] ?: 1,
             periods = Schedule.parsePeriods(
                 p[stringPreferencesKey("period_times")] ?: Schedule.DEFAULT_PERIODS,
             ),

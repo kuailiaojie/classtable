@@ -91,12 +91,21 @@ async function latestRelease() {
   return resp.json();
 }
 
+// 从 Release 资产中挑安装包:必须优先 release,绝不把 debug 包发给用户。
+// (未配置签名时 CI 产出 app-release-unsigned.apk,旧的「取第一个 .apk」会误选 app-debug.apk)
+function pickApk(rel) {
+  const apks = (rel.assets || []).filter((a) => a.name.endsWith(".apk"));
+  return apks.find((a) => a.name === "app-release.apk")
+    || apks.find((a) => /release/i.test(a.name))
+    || apks.find((a) => !/debug/i.test(a.name))
+    || apks[0];
+}
+
 // GET /version → 最新版本信息(客户端据此判断是否更新)。
 async function handleVersion() {
   try {
     const rel = await latestRelease();
-    const apk = (rel.assets || []).find((a) => a.name === "app-release.apk")
-      || (rel.assets || []).find((a) => a.name.endsWith(".apk"));
+    const apk = pickApk(rel);
     return jsonWithCache(200, {
       versionName: String(rel.tag_name || "").replace(/^v/, ""),
       notes: rel.body || "",
@@ -113,8 +122,7 @@ async function handleVersion() {
 async function handleApk() {
   try {
     const rel = await latestRelease();
-    const asset = (rel.assets || []).find((a) => a.name === "app-release.apk")
-      || (rel.assets || []).find((a) => a.name.endsWith(".apk"));
+    const asset = pickApk(rel);
     if (!asset) {
       return json(404, { error: { code: 404, message: "最新版本没有可下载的 APK" } });
     }

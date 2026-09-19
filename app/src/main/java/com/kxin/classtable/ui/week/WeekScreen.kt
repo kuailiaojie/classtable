@@ -20,9 +20,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,8 +65,6 @@ class WeekViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
-
-    fun setWeek(week: Int) = viewModelScope.launch { settingsRepository.setCurrentWeek(week) }
 }
 
 /**
@@ -81,7 +81,12 @@ fun WeekScreen(
     val colors = LocalYohakuColors.current
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val week = settings.currentWeek
+    val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
+    // 周次实时推算(以开学日所在周的周一为锚),不再依赖持久化旧值;
+    // ‹/› 只做临时偏移浏览,「今天」归零。跨天/回前台会自动重算。
+    val realWeek = Schedule.currentWeek(settings.semesterStartDay, weekCount)
+    var weekOffset by rememberSaveable { mutableIntStateOf(0) }
+    val week = (realWeek + weekOffset).coerceIn(1, weekCount)
     val today = Schedule.todayWeekday()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
@@ -162,17 +167,17 @@ fun WeekScreen(
                 Text(
                     text = "‹",
                     style = YohakuType.title24,
-                    color = colors.neutral9,
+                    color = if (week > 1) colors.neutral9 else colors.neutral5,
                     modifier = Modifier
-                        .clickable { viewModel.setWeek((week - 1).coerceAtLeast(1)) }
+                        .clickable(enabled = week > 1) { weekOffset -= 1 }
                         .padding(8.dp),
                 )
                 Text(
                     text = "›",
                     style = YohakuType.title24,
-                    color = colors.neutral9,
+                    color = if (week < weekCount) colors.neutral9 else colors.neutral5,
                     modifier = Modifier
-                        .clickable { viewModel.setWeek(week + 1) }
+                        .clickable(enabled = week < weekCount) { weekOffset += 1 }
                         .padding(8.dp),
                 )
                 Text(
@@ -181,9 +186,7 @@ fun WeekScreen(
                     color = colors.neutral7,
                     modifier = Modifier
                         .clickable {
-                            viewModel.setWeek(
-                                Schedule.currentWeek(settings.semesterStartDay, settings.semesterWeekCount),
-                            )
+                            weekOffset = 0
                             scope.launch { pagerState.scrollToPage(today - 1) }
                         }
                         .padding(start = 8.dp),

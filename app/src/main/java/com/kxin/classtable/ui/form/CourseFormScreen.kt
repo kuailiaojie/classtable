@@ -75,14 +75,15 @@ class CourseFormViewModel @Inject constructor(
 
     fun save(course: Course) {
         viewModelScope.launch {
-            courseRepository.save(course)
+            // 本地失败也不阻断返回:避免保存/删除后页面卡住
+            runCatching { courseRepository.save(course) }
             _saved.value = true
         }
     }
 
     fun delete(id: String) {
         viewModelScope.launch {
-            courseRepository.delete(id)
+            runCatching { courseRepository.delete(id) }
             _saved.value = true
         }
     }

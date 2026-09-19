@@ -1,5 +1,6 @@
 package com.kxin.classtable.data.importer
 
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import org.json.JSONArray
@@ -15,55 +16,89 @@ import java.util.UUID
  */
 object ImportParser {
 
-    fun parseCourses(json: String): List<Course> = runCatching {
-        val arr = JSONArray(json)
-        (0 until arr.length()).mapNotNull { i ->
-            val o = arr.getJSONObject(i)
-            val name = o.optString("name").trim()
-            val day = o.optInt("day")
-            val start = o.optInt("startSection")
-            val end = o.optInt("endSection", start).coerceAtLeast(start)
-            if (name.isEmpty() || day !in 1..7 || start < 1) return@mapNotNull null
-            val weeks = optIntList(o, "weeks").filter { it > 0 }
-            Course(
+    /** 解析结果:除课程外带上「收到多少条 / 丢了多少条 / 为什么失败」,便于给用户明确反馈。 */
+    data class ParseResult(
+        val courses: List<Course>,
+        val received: Int,
+        val dropped: Int,
+        val error: String? = null,
+    )
+
+    fun parseCourses(json: String): ParseResult {
+        val arr = runCatching { JSONArray(json) }.getOrElse { e ->
+            return ParseResult(emptyList(), 0, 0, e.message ?: "JSON 格式无法解析")
+        }
+        val out = ArrayList<Course>(arr.length())
+        var dropped = 0
+        for (i in 0 until arr.length()) {
+            val obj = runCatching { arr.getJSONObject(i) }.getOrNull()
+            val course = obj?.let { toCourse(it) }
+            if (course == null) dropped++ else out.add(course)
+        }
+        return ParseResult(out, arr.length(), dropped)
+    }
+
+    /** 单条 → 课程;信息不完整返回 null(计入 dropped,不再静默丢弃)。 */
+    private fun toCourse(o: JSONObject): Course? {
+        val name = o.optString("name").trim()
+        val day = o.optInt("day")
+        if (name.isEmpty() || day !in 1..7) return null
+        val weeks = optIntList(o, "weeks").filter { it > 0 }
+
+        val cs = parseTimeMinutes(o.optString("customStartTime"))
+        val ce = parseTimeMinutes(o.optString("customEndTime"))
+        // 自定义时间课程(如晚间讲座):没有节次号,之前会被当作非法记录丢掉
+        if (o.optBoolean("isCustomTime") || (cs != null && ce != null)) {
+            if (cs == null || ce == null || ce <= cs) return null
+            return Course(
                 id = "imp-${UUID.randomUUID()}",
                 name = name,
                 teacher = o.optString("teacher"),
                 location = o.optString("position"),
                 weekday = day,
-                startPeriod = start,
-                endPeriod = end,
+                startPeriod = 0,
+                endPeriod = 0,
                 weekType = detectWeekType(weeks),
                 weekStart = weeks.minOrNull() ?: 1,
                 weekEnd = weeks.maxOrNull() ?: 16,
+                customStartMinute = cs,
+                customEndMinute = ce,
             )
         }
-    }.getOrDefault(emptyList())
+
+        val start = o.optInt("startSection")
+        val end = o.optInt("endSection", start).coerceAtLeast(start)
+        if (start < 1) return null
+        return Course(
+            id = "imp-${UUID.randomUUID()}",
+            name = name,
+            teacher = o.optString("teacher"),
+            location = o.optString("position"),
+            weekday = day,
+            startPeriod = start,
+            endPeriod = end,
+            weekType = detectWeekType(weeks),
+            weekStart = weeks.minOrNull() ?: 1,
+            weekEnd = weeks.maxOrNull() ?: 16,
+        )
+    }
 
     /**
      * 预设节次 → "480-530,610-660,..."(每节起止时间对)。
-     * 有 endTime 用 endTime,否则用下一节 start(末节 +50)。
+     * 有 endTime 用 endTime;缺 endTime 的用下一节开始,末节 +50 分钟。
      */
     fun parseTimeSlots(json: String): String? = runCatching {
         val arr = JSONArray(json)
-        val slots = (0 until arr.length()).mapNotNull { i ->
+        val raw = (0 until arr.length()).mapNotNull { i ->
             val o = arr.getJSONObject(i)
             val s = parseTimeMinutes(o.optString("startTime")) ?: return@mapNotNull null
-            val e = parseTimeMinutes(o.optString("endTime")) ?: return@mapNotNull null
-            if (e > s) s to e else null
-        }
-        // 无 endTime 的旧脚本:补全为 下一节开始 - 末节 +50
-        val startsOnly = (0 until arr.length()).mapNotNull { i ->
-            val o = arr.getJSONObject(i)
-            parseTimeMinutes(o.optString("startTime"))
-        }.sorted()
-        val pairs = if (slots.isNotEmpty()) {
-            slots.distinct().sortedBy { it.first }
-        } else {
-            startsOnly.mapIndexed { i, s ->
-                s to (startsOnly.getOrNull(i + 1) ?: (s + 50))
-            }
-        }
+            s to parseTimeMinutes(o.optString("endTime"))
+        }.sortedBy { it.first }
+        if (raw.isEmpty()) return@runCatching null
+        val pairs = raw.mapIndexed { idx, (s, e) ->
+            val end = e ?: raw.getOrNull(idx + 1)?.first ?: (s + Schedule.PERIOD_LENGTH_MIN)
+            s to end
+        }.filter { it.second > it.first }
         if (pairs.isEmpty()) null else pairs.joinToString(",") { "${it.first}-${it.second}" }
     }.getOrNull()
 

@@ -78,7 +78,7 @@
    "asset_js_path": "chaoxing.js",
    "import_url": "",
    "maintainer": "b1n23",
-   "description": "超星教务系统理论通用，输入教务网址，登录后点击执行导入\\n支持导入开学日期和节次时间"
+   "description": "超星教务系统理论通用，输入教务网址，登录后点击执行导入\n支持导入开学日期和节次时间"
   },
   {
    "folder": "CJLU",
@@ -138,7 +138,7 @@
    "asset_js_path": "cqrk_01.js",
    "import_url": "https://https-auth-cqrk-edu-cn-443.webvpn.cqrk.edu.cn:8480/cas/login?service=http%3A%2F%2Fportal.cqrk.edu.cn&rewrite=1",
    "maintainer": "星河欲转",
-   "description": "登录后需要点击进入教务系统才可以导入\\n重庆人文科技学院强智适配，适配双季作息，非本校开发者适配如果有误建议提交issues"
+   "description": "登录后需要点击进入教务系统才可以导入\n重庆人文科技学院强智适配，适配双季作息，非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "CQU",
@@ -188,7 +188,7 @@
    "asset_js_path": "ctgu.js",
    "import_url": "http://jwxt.ctgu.edu.cn/jwapp/sys/yjsrzfwapp/dbLogin/main.do",
    "maintainer": "星河欲转",
-   "description": "点击统一身份认证登录,\\n由于存在作用域问题,登录后需要点击课程表跳转课表页面才能让一键导入课表使用,\\n非本校开发者适配如果有误建议提交issues"
+   "description": "点击统一身份认证登录,\n由于存在作用域问题,登录后需要点击课程表跳转课表页面才能让一键导入课表使用,\n非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "CUIT",
@@ -228,7 +228,7 @@
    "asset_js_path": "cup_02.js",
    "import_url": "https://gmis.cup.edu.cn/gmis/student/default/index",
    "maintainer": "larryyan",
-   "description": "点击统一身份认证登录\\n打开(培养管理=>学生课表查询)页面。\\n包含克拉玛依校区"
+   "description": "点击统一身份认证登录\n打开(培养管理=>学生课表查询)页面。\n包含克拉玛依校区"
   },
   {
    "folder": "CUPK",
@@ -308,7 +308,7 @@
    "asset_js_path": "fjcpc.js",
    "import_url": "https://webvpn.fjcpc.edu.cn/",
    "maintainer": "星河欲转",
-   "description": "点击本校师生统一身份验证进行登录，登录后点击新教务系统在点击教务管理\\n 已使用自动获取开学日期，免去手动设置 \\n福建船政交通职业学院教务适配,非本校开发者适配如果有误建议提交issues"
+   "description": "点击本校师生统一身份验证进行登录，登录后点击新教务系统在点击教务管理\n 已使用自动获取开学日期，免去手动设置 \n福建船政交通职业学院教务适配,非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "FOSU",
@@ -408,7 +408,7 @@
    "asset_js_path": "wake_up.js",
    "import_url": "https://api.wakeup.fun/",
    "maintainer": "Airline233、星河欲转",
-   "description": "从WakeUP获取分享口令后，进入适配直接点击\\"
+   "description": "从WakeUP获取分享口令后，进入适配直接点击\"执行导入\"，输入分享口令即可"
   },
   {
    "folder": "GLOBAL_TOOLS",
@@ -418,7 +418,7 @@
    "asset_js_path": "starlink.js",
    "import_url": "https://api.starlinkkb.cn/",
    "maintainer": "星河欲转",
-   "description": "首先,先去星链课表获取分享码，然后点击本适配，进入后不需要管网页，点击\\"
+   "description": "首先,先去星链课表获取分享码，然后点击本适配，进入后不需要管网页，点击\"执行导入\"输入你刚刚获取的分享码就好"
   },
   {
    "folder": "GPNU",
@@ -498,7 +498,7 @@
    "asset_js_path": "gztrc.js",
    "import_url": "https://gztrc.edu.cn:17232/",
    "maintainer": "Daoguan-king",
-   "description": "由于教务系统未适配手机端，须在右上角选择\\"
+   "description": "由于教务系统未适配手机端，须在右上角选择\"切换到电脑模式\"，然后点击\"刷新\"，正常登录后点击下方\"执行导入\"按钮进行导入。"
   },
   {
    "folder": "GZU",
@@ -838,7 +838,7 @@
    "asset_js_path": "jxust.js",
    "import_url": "https://authserver.jxust.edu.cn/authserver/login?service=https://jw.jxust.edu.cn/jsxsd/",
    "maintainer": "星河欲转",
-   "description": "江西理工大学强智教务适配\\n非本校开发者适配,如果有误建议提交issues"
+   "description": "江西理工大学强智教务适配\n非本校开发者适配,如果有误建议提交issues"
   },
   {
    "folder": "JYVTC",
@@ -1038,7 +1038,7 @@
    "asset_js_path": "scuec.js",
    "import_url": "https://webvpn.scuec.edu.cn/",
    "maintainer": "Zellon0w0",
-   "description": "中南民族大学课程表导入适配 \\n\\n如果有适配问题请提issue"
+   "description": "中南民族大学课程表导入适配 \n\n如果有适配问题请提issue"
   },
   {
    "folder": "SCUT",
@@ -1068,7 +1068,7 @@
    "asset_js_path": "sddfvc.js",
    "import_url": "http://cas.sddfvc.edu.cn/login?type=usernamepassword&service=http%3A%2F%2Ffazhan.sddfvc.edu.cn%2Fjs%2Ffzzx%2Flogin",
    "maintainer": "星河欲转",
-   "description": "山东药品食品职业学院教务适配,非本校开发者适配如果有误建议提交issues \\n\\n贵校网页经常变化参数我们需要本校的有兴趣的同学来主动维护适配的代码"
+   "description": "山东药品食品职业学院教务适配,非本校开发者适配如果有误建议提交issues \n\n贵校网页经常变化参数我们需要本校的有兴趣的同学来主动维护适配的代码"
   },
   {
    "folder": "SDIPCT",
@@ -1088,7 +1088,7 @@
    "asset_js_path": "sdjtu.js",
    "import_url": "https://wwebvpn.sdjtu.edu.cn",
    "maintainer": "WuL0ong",
-   "description": "适配山东交通学院教务系统，登录成功后进入教务系统，找到“学期理论课表”，在“学年学期”下拉框内选择要导入的学期课表，之后点击“执行导入”按钮即可。\\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+   "description": "适配山东交通学院教务系统，登录成功后进入教务系统，找到“学期理论课表”，在“学年学期”下拉框内选择要导入的学期课表，之后点击“执行导入”按钮即可。\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
   },
   {
    "folder": "SDLIVC",
@@ -1198,7 +1198,7 @@
    "asset_js_path": "taru_01.js",
    "import_url": "https://auth.taru.edu.cn/cas/login?service=https%3A%2F%2Fhall.taru.edu.cn%2FserviceHall",
    "maintainer": "星河欲转",
-   "description": "登录后需要进入查看课表的页面，才可以点击导入 \\n\\n塔里木大学适配教务,添加双季作息,非本校开发者适配如果有误建议提交issues"
+   "description": "登录后需要进入查看课表的页面，才可以点击导入 \n\n塔里木大学适配教务,添加双季作息,非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "TCU",
@@ -1428,7 +1428,7 @@
    "asset_js_path": "xmcu_01.js",
    "import_url": "https://eone-443.webvpn.xmcu.edu.cn/",
    "maintainer": "星河欲转",
-   "description": "输入账号密码登录，进入融合信息门户，在应用中心找到教务系统并进入，在左侧找到教学安排，点击后即可看到学生个人课表。\\n厦门城市职业学院适配教务,非本校开发者适配如果有误建议提交issues"
+   "description": "输入账号密码登录，进入融合信息门户，在应用中心找到教务系统并进入，在左侧找到教学安排，点击后即可看到学生个人课表。\n厦门城市职业学院适配教务,非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "XUST",
@@ -1518,7 +1518,7 @@
    "asset_js_path": "zcmu.js",
    "import_url": "https://jwmk.zcmu.edu.cn/jwglxt/xtgl/login_slogin.html",
    "maintainer": "Daoguan-king",
-   "description": "登录浙江中医药大学教务系统后需要进入“信息查询”的“个人课表查询”页面再点击导入。\\n滨文校区和富春校区两个校区的时间安排不一致，请在导入课程表前选择对应的校区。\\n这是通过滨文校区的教务数据开发的，不确定富春校区是否支持。\\n特别感谢滨文校区生命科学学院杰哥的帮助，他在我的软磨硬泡下提供了学号和密码。\\n非本校开发者适配如果有误建议提交issues"
+   "description": "登录浙江中医药大学教务系统后需要进入“信息查询”的“个人课表查询”页面再点击导入。\n滨文校区和富春校区两个校区的时间安排不一致，请在导入课程表前选择对应的校区。\n这是通过滨文校区的教务数据开发的，不确定富春校区是否支持。\n特别感谢滨文校区生命科学学院杰哥的帮助，他在我的软磨硬泡下提供了学号和密码。\n非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "zhengfang_jiaowu",
@@ -1538,7 +1538,7 @@
    "asset_js_path": "zhku_lc6464.js",
    "import_url": "https://edu-admin.zhku.edu.cn/",
    "maintainer": "lc6464",
-   "description": "登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+   "description": "登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
   },
   {
    "folder": "ZJUT",

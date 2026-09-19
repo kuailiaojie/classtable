@@ -64,6 +64,7 @@ import com.kxin.classtable.domain.model.WeekType
 import com.kxin.classtable.ui.navigateToTab
 import kotlinx.coroutines.launch
 import java.net.URL
+import java.time.LocalDate
 
 /**
  * 教务导入(3 步):选学校(首字母索引,已隐藏开发者自检工具)
@@ -103,6 +104,10 @@ fun ImportScreen(
     val done by viewModel.done.collectAsStateWithLifecycle()
     val imported by viewModel.imported.collectAsStateWithLifecycle()
     val toastMsg by viewModel.toast.collectAsStateWithLifecycle()
+    val detectedPeriods by viewModel.detectedPeriods.collectAsStateWithLifecycle()
+    val detectedSemester by viewModel.detectedSemester.collectAsStateWithLifecycle()
+    // 脚本识别到的作息/学期默认应用,但由用户在这里确认(之前是静默覆盖本地作息)
+    var applyDetected by rememberSaveable { mutableStateOf(true) }
 
     val holder = remember { WebViewHolder() }
     val bridge = remember {
@@ -361,7 +366,12 @@ fun ImportScreen(
             }
             3 -> StepConfirm(
                 courses = parsedCourses,
-                onImport = { viewModel.importAll() },
+                detectedPeriods = detectedPeriods,
+                detectedSemester = detectedSemester,
+                applyDetected = applyDetected,
+                onApplyDetectedChange = { applyDetected = it },
+                onImport = { viewModel.importAll(applyDetected) },
+                onApplyDetectedOnly = { viewModel.applyDetectedOnly() },
                 onSkip = { nav.popBackStack() },
             )
         }
@@ -705,10 +715,16 @@ private fun StepLogin(
 @Composable
 private fun StepConfirm(
     courses: List<Course>,
+    detectedPeriods: String?,
+    detectedSemester: Pair<Int, Long>?,
+    applyDetected: Boolean,
+    onApplyDetectedChange: (Boolean) -> Unit,
     onImport: () -> Unit,
+    onApplyDetectedOnly: () -> Unit,
     onSkip: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
+    val hasDetected = detectedPeriods != null || detectedSemester != null
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
@@ -717,11 +733,53 @@ private fun StepConfirm(
                 style = YohakuType.copy13,
                 color = if (courses.isEmpty()) colors.error else colors.neutral7,
             )
-            Text(
-                text = "若脚本提供作息时间/开学日期,已自动应用。",
-                style = YohakuType.label12,
-                color = colors.neutral7,
-            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+            if (hasDetected) {
+                // 脚本给的作息/学期在这里显式确认,不再静默覆盖用户已设好的作息
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onApplyDetectedChange(!applyDetected) }
+                        .padding(vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "${if (applyDetected) "☑" else "☐"} 一并应用脚本识别到的作息/学期",
+                        style = YohakuType.copy13,
+                        color = colors.accent,
+                    )
+                    detectedPeriods?.let { spec ->
+                        val periods = Schedule.parsePeriods(spec)
+                        Text(
+                            text = "作息:${periods.size} 节 · " +
+                                periods.take(2).joinToString(" / ") {
+                                    Schedule.timeRangeText(it.start, it.end)
+                                } +
+                                if (periods.size > 2) " …" else "",
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                        )
+                    }
+                    detectedSemester?.let { (weeks, startDay) ->
+                        val start = if (startDay > 0L) {
+                            val d = LocalDate.ofEpochDay(startDay)
+                            "${d.year}/${d.monthValue}/${d.dayOfMonth}"
+                        } else {
+                            "脚本未提供"
+                        }
+                        Text(
+                            text = "学期:开学 $start · 共 $weeks 周",
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = "脚本未提供作息时间与开学日期。",
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                )
+            }
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
         }
         LazyColumn(
@@ -731,7 +789,7 @@ private fun StepConfirm(
             items(courses, key = { it.id }) { course ->
                 Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Text(
-                        text = Schedule.periodRange(startPeriod = course.startPeriod, endPeriod = course.endPeriod),
+                        text = Schedule.courseTimeText(course),
                         style = YohakuType.timeMono,
                         color = colors.neutral7,
                         modifier = Modifier.width(100.dp),
@@ -763,12 +821,21 @@ private fun StepConfirm(
                     .clickable(onClick = onSkip)
                     .padding(end = 24.dp),
             )
-            YohakuButton(
-                text = "导入",
-                onClick = onImport,
-                enabled = courses.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            )
+            if (courses.isEmpty() && hasDetected) {
+                // 没有课程但识别到了作息/学期:仍然允许把这段时间表存下来
+                YohakuButton(
+                    text = "应用作息/学期",
+                    onClick = onApplyDetectedOnly,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                YohakuButton(
+                    text = "导入",
+                    onClick = onImport,
+                    enabled = courses.isNotEmpty(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

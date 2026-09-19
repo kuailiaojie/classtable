@@ -103,7 +103,13 @@ fun SemesterScreen(
 
     if (showPicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = if (startDay > 0L) startDay * 86_400_000L else System.currentTimeMillis(),
+            // Material3 的 selectedDateMillis 是 UTC 零点;未设置时取「今日 UTC 零点」,
+            // 传当前瞬时会在 UTC+8 等时区把日期预选到前一天。
+            initialSelectedDateMillis = if (startDay > 0L) {
+                startDay * 86_400_000L
+            } else {
+                LocalDate.now().toEpochDay() * 86_400_000L
+            },
         )
         DatePickerDialog(
             onDismissRequest = { showPicker = false },

@@ -12,6 +12,9 @@ import org.json.JSONObject
 /**
  * WebView ⇄ 适配脚本桥(实现 shiguang_warehouse 的 AndroidBridge* 契约)。
  * 脚本注入即自执行,通过桥回传课程/作息/学期配置;弹窗类调用原生实现。
+ *
+ * 形参约定:所有 Promise 方法由垫片把实参**归一化到固定个数**后再追加 callbackId,
+ * 因此这里可以按位置取参,不必迁就各适配器 3 参 / 4 参的不同写法。
  */
 @SuppressLint("SetJavaScriptEnabled")
 class ImportBridge(
@@ -34,7 +37,7 @@ class ImportBridge(
         mainHandler.post { onDone() }
     }
 
-    /** 适配脚本异常上报:之前脚本报错完全静默,现在统一以 toast 反馈。 */
+    /** 适配脚本自身抛出的异常上报(wrapScript 捕获同步异常,异步异常由脚本自己 showToast)。 */
     @JavascriptInterface
     fun reportError(message: String) {
         val text = (message ?: "").trim().take(200).ifBlank { "未知错误" }
@@ -65,36 +68,87 @@ class ImportBridge(
         }
     }
 
+    /** 两按钮确认:左=positive 返回 true,右=negative 返回 false。 */
     @JavascriptInterface
-    fun showAlert(title: String, message: String, positive: String, callbackId: String) {
+    fun showAlert(title: String, message: String, positive: String, negative: String, callbackId: String) {
+        mainHandler.post {
+            showConfirmDialog(title, message, positive, negative, callbackId)
+        }
+    }
+
+    /** HUAT 等适配器显式请求的确认框(左按钮 = true)。与 showAlert 同实现,保留两个入口。 */
+    @JavascriptInterface
+    fun showConfirmDialog(title: String, message: String, positive: String, negative: String, callbackId: String) {
         mainHandler.post {
             val dialog = AlertDialog.Builder(webViewProvider().context)
                 .setTitle(title ?: "")
                 .setMessage(message ?: "")
                 .setPositiveButton(positive.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
-                .setNegativeButton("取消") { _, _ -> resolve(callbackId, "false") }
+                .setNegativeButton(negative.ifBlank { "取消" }) { _, _ -> resolve(callbackId, "false") }
                 .setOnCancelListener { resolve(callbackId, "false") }
                 .create()
             dialog.show()
         }
     }
 
+    /**
+     * 输入框。第 4 个参数 validator 是**适配器页面里的校验函数名**(如 validateYearInput);
+     * 之前被忽略,导致非法输入直接进入后续流程。现在校验不通过会带着原输入重新弹出。
+     */
     @JavascriptInterface
     fun showPrompt(title: String, message: String, defaultText: String, validator: String, callbackId: String) {
         mainHandler.post {
-            val input = EditText(webViewProvider().context).apply { setText(defaultText ?: "") }
-            val dialog = AlertDialog.Builder(webViewProvider().context)
-                .setTitle(title ?: "")
-                .setMessage(message ?: "")
-                .setView(input)
-                .setPositiveButton("确定") { _, _ -> resolve(callbackId, JSONObject.quote(input.text.toString())) }
-                .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
-                .setOnCancelListener { resolve(callbackId, "null") }
-                .create()
-            dialog.show()
+            showPromptDialog(webViewProvider(), title, message, defaultText, validator, callbackId)
         }
     }
 
+    private fun showPromptDialog(
+        webView: WebView,
+        title: String,
+        message: String,
+        defaultText: String,
+        validator: String,
+        callbackId: String,
+    ) {
+        val input = EditText(webView.context).apply { setText(defaultText ?: "") }
+        AlertDialog.Builder(webView.context)
+            .setTitle(title ?: "")
+            .setMessage(message ?: "")
+            .setView(input)
+            .setPositiveButton("确定") { _, _ ->
+                val value = input.text.toString()
+                if (validator.isBlank() || validator == "null") {
+                    resolve(callbackId, JSONObject.quote(value))
+                } else {
+                    validate(webView, validator, value) { ok ->
+                        if (ok) {
+                            resolve(callbackId, JSONObject.quote(value))
+                        } else {
+                            showPromptDialog(webView, title, message, value, validator, callbackId)
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
+            .setOnCancelListener { resolve(callbackId, "null") }
+            .show()
+    }
+
+    /** 调用页面内校验函数:不存在 / 抛异常时按通过处理,避免误拦。 */
+    private fun validate(webView: WebView, validator: String, value: String, onResult: (Boolean) -> Unit) {
+        val js = "(function(){try{var f=window[" + JSONObject.quote(validator) + "];" +
+            "if(typeof f!=='function')return true;return f(" + JSONObject.quote(value) + ")!==false;" +
+            "}catch(e){return true;}})()"
+        webView.post {
+            runCatching {
+                webView.evaluateJavascript(js) { result ->
+                    mainHandler.post { onResult(result != "false") }
+                }
+            }.onFailure { mainHandler.post { onResult(true) } }
+        }
+    }
+
+    /** 单选列表:defaultIndex 预选(之前被忽略),取消返回 null。 */
     @JavascriptInterface
     fun showSingleSelection(title: String, itemsJson: String, defaultIndex: Int, callbackId: String) {
         mainHandler.post {
@@ -106,9 +160,13 @@ class ImportBridge(
                 resolve(callbackId, if (defaultIndex >= 0) defaultIndex.toString() else "null")
                 return@post
             }
+            val checked = if (defaultIndex in items.indices) defaultIndex else 0
+            var selected = checked
             val dialog = AlertDialog.Builder(webViewProvider().context)
                 .setTitle(title ?: "")
-                .setItems(items.toTypedArray()) { _, which -> resolve(callbackId, which.toString()) }
+                .setSingleChoiceItems(items.toTypedArray(), checked) { _, which -> selected = which }
+                .setPositiveButton("确定") { _, _ -> resolve(callbackId, selected.toString()) }
+                .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
                 .setOnCancelListener { resolve(callbackId, "null") }
                 .create()
             dialog.show()
@@ -133,11 +191,20 @@ class ImportBridge(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-        /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由 unhandledrejection 兜底)。 */
+        /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由脚本自身 showToast 反馈)。 */
         fun wrapScript(script: String): String =
             "(function(){try{\n$script\n}catch(e){AndroidBridgeNative.reportError((e&&e.message)||String(e));}})();"
 
-        /** 桥垫片:定义 AndroidBridge / AndroidBridgePromise / shiguangBridge* / __resolve。 */
+        /**
+         * 桥垫片:定义 AndroidBridge / AndroidBridgePromise / shiguangBridge* / __resolve。
+         *
+         * 关键点:
+         * 1) 不劫持 window.onerror / unhandledrejection —— 曾把**教务网页自身**的脚本报错
+         *    当成「适配脚本错误」弹给用户(表现为莫名其妙的报错 Toast),现改为只上报适配脚本
+         *    自身抛出的异常。
+         * 2) 每个方法先把实参补齐到固定个数,再追加 callbackId,解决各适配器
+         *    showAlert 3 参 / 4 参等写法差异造成的形参错位(错位会让 Promise 一直挂到超时)。
+         */
         const val SHIM_JS = """
             (function(){
               window.__resolvers = {};
@@ -149,44 +216,43 @@ class ImportBridge(
                   entry.resolve(value);
                 }
               };
-              function report(message){
-                try { AndroidBridgeNative.reportError(String(message)); } catch(e) {}
-              }
-              window.onerror = function(message){ report(message); };
-              window.addEventListener('unhandledrejection', function(ev){
-                var r = ev && ev.reason;
-                report(r && r.message ? r.message : r);
-              });
-              function wrap(method){
-                return function(){
-                  var args = Array.prototype.slice.call(arguments);
-                  return new Promise(function(resolve){
-                    var id = 'cb_' + (Math.random() * 1e9 | 0);
-                    // 超时兜底:页面切换 / 原生未回调时不再永久挂起(60s)
-                    var timer = setTimeout(function(){
-                      if (window.__resolvers[id]) {
-                        delete window.__resolvers[id];
-                        resolve(null);
-                      }
-                    }, 60000);
-                    window.__resolvers[id] = { resolve: resolve, timer: timer };
-                    args.push(id);
-                    try { AndroidBridgeNative[method].apply(null, args); }
-                    catch(e) { delete window.__resolvers[id]; clearTimeout(timer); resolve(null); }
-                  });
-                };
+              function arg(a, i){ var v = a[i]; return (v === undefined || v === null) ? '' : v; }
+              function callNative(method, args){
+                return new Promise(function(resolve){
+                  var id = 'cb_' + (Math.random() * 1e9 | 0);
+                  var timer = setTimeout(function(){
+                    if (window.__resolvers[id]) { delete window.__resolvers[id]; resolve(null); }
+                  }, 60000);
+                  window.__resolvers[id] = { resolve: resolve, timer: timer };
+                  try { AndroidBridgeNative[method].apply(null, args.concat([id])); }
+                  catch(e) { delete window.__resolvers[id]; clearTimeout(timer); resolve(null); }
+                });
               }
               window.AndroidBridge = {
-                showToast: function(m){ AndroidBridgeNative.showToast(String(m)); },
-                notifyTaskCompletion: function(){ AndroidBridgeNative.notifyTaskCompletion(); }
+                showToast: function(m){ try { AndroidBridgeNative.showToast(String(m)); } catch(e) {} },
+                notifyTaskCompletion: function(){ try { AndroidBridgeNative.notifyTaskCompletion(); } catch(e) {} }
               };
               window.AndroidBridgePromise = {
-                showAlert: wrap('showAlert'),
-                showPrompt: wrap('showPrompt'),
-                showSingleSelection: wrap('showSingleSelection'),
-                saveImportedCourses: wrap('saveImportedCourses'),
-                savePresetTimeSlots: wrap('savePresetTimeSlots'),
-                saveCourseConfig: wrap('saveCourseConfig')
+                showAlert: function(){
+                  var a = arguments;
+                  return callNative('showAlert', [arg(a,0), arg(a,1), arg(a,2), arg(a,3)]);
+                },
+                showConfirmDialog: function(){
+                  var a = arguments;
+                  return callNative('showConfirmDialog', [arg(a,0), arg(a,1), arg(a,2), arg(a,3)]);
+                },
+                showPrompt: function(){
+                  var a = arguments;
+                  return callNative('showPrompt', [arg(a,0), arg(a,1), arg(a,2), arg(a,3)]);
+                },
+                showSingleSelection: function(){
+                  var a = arguments;
+                  var idx = (typeof a[2] === 'number') ? a[2] : -1;
+                  return callNative('showSingleSelection', [arg(a,0), arg(a,1), idx]);
+                },
+                saveImportedCourses: function(){ return callNative('saveImportedCourses', [arg(arguments,0)]); },
+                savePresetTimeSlots: function(){ return callNative('savePresetTimeSlots', [arg(arguments,0)]); },
+                saveCourseConfig: function(){ return callNative('saveCourseConfig', [arg(arguments,0)]); }
               };
               window.shiguangBridge = window.AndroidBridge;
               window.shiguangBridgePromise = window.AndroidBridgePromise;

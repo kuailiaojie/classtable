@@ -42,13 +42,48 @@ function parseKV(s) {
   const idx = s.indexOf(':');
   if (idx < 0) return null;
   const key = s.slice(0, idx).trim();
-  let value = s.slice(idx + 1).trim();
-  // 带引号值:取到闭合引号为止(容忍行内注释,如 "X" # 注释)
-  if (value.startsWith('"')) {
-    const close = value.indexOf('"', 1);
-    if (close > 0) value = value.slice(1, close).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  return [key, parseScalar(s.slice(idx + 1).trim())];
+}
+
+/**
+ * 解析标量值。此前用 indexOf('"', 1) 找闭合引号,**不识别转义 \"**,
+ * 于是遇到 `"…点击\"执行导入\"…"` 这类描述会在第一个转义引号处被截断。
+ * 现在改为逐字符扫描,支持双引号(含 \" \\ 等转义)、单引号(YAML 的 '' 转义)与裸值。
+ */
+function parseScalar(raw) {
+  if (raw.startsWith('"')) {
+    let out = '';
+    for (let i = 1; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '\\' && i + 1 < raw.length) { out += unescapeChar(raw[++i]); continue; }
+      if (ch === '"') return out;
+      out += ch;
+    }
+    return out; // 未闭合:按到行尾处理
   }
-  return [key, value];
+  if (raw.startsWith("'")) {
+    let out = '';
+    for (let i = 1; i < raw.length; i++) {
+      if (raw[i] === "'" && raw[i + 1] === "'") { out += "'"; i++; continue; }
+      if (raw[i] === "'") return out;
+      out += raw[i];
+    }
+    return out;
+  }
+  // 裸值:去掉行内注释
+  const hash = raw.search(/\s#/);
+  return (hash >= 0 ? raw.slice(0, hash) : raw).trim();
+}
+
+function unescapeChar(c) {
+  switch (c) {
+    case 'n': return '\n';
+    case 't': return '\t';
+    case 'r': return '\r';
+    case '"': return '"';
+    case '\\': return '\\';
+    default: return c;
+  }
 }
 
 // 1) root_index.yaml → index.json

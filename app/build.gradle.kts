@@ -18,8 +18,11 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
+
+        // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
+        resourceConfigurations += listOf("zh", "zh-rCN", "en")
 
         // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
         buildConfigField(
@@ -50,12 +53,31 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 安装包瘦身:R8 混淆 + 资源压缩 + 只打手机常用 ABI。
+            // 注意:JavascriptInterface 方法是按名字反射调用的,keep 规则见 proguard-rules.pro。
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            ndk {
+                // x86/x86_64 只有模拟器用得到,砍掉可省下 4 份 native 库的复制
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += listOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/*.version",
+                "DebugProbesKt.bin",
+                "kotlin/**",
+                "kotlin-tooling-metadata.json",
+            )
         }
     }
 
@@ -82,7 +104,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -107,4 +128,5 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.tooling.preview)
 }

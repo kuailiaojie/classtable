@@ -11,3 +11,5 @@ captures/
 *.aab
 app/release/
 netlify/static/
+# 字体子集化的源字体(14MB,按需下载,见 tools/subset-font.py)
+tools/fonts/
