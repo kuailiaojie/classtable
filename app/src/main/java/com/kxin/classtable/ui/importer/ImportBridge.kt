@@ -60,13 +60,6 @@ class ImportBridge(
         mainHandler.post { onDone() }
     }
 
-    /** 适配脚本自身抛出的异常上报(wrapScript 捕获同步异常,异步异常由脚本自己 showToast)。 */
-    @JavascriptInterface
-    fun reportError(message: String) {
-        val text = (message ?: "").trim().take(200).ifBlank { "未知错误" }
-        mainHandler.post { onToast("适配脚本错误:$text") }
-    }
-
     @JavascriptInterface
     fun saveImportedCourses(json: String, callbackId: String) {
         mainHandler.post {
@@ -250,9 +243,20 @@ class ImportBridge(
             return "Mozilla/5.0 (X11; Linux x86_64) $webKit (KHTML, like Gecko) $chromium $safari"
         }
 
-        /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由脚本自身 showToast 反馈)。 */
-        fun wrapScript(script: String): String =
-            "(function(){try{\n$script\n}catch(e){AndroidBridgeNative.reportError((e&&e.message)||String(e));}})();"
+        /**
+         * 把「垫片 + 适配脚本」拼成一次注入的脚本。
+         *
+         * 适配器脚本必须**原样执行,不能包 IIFE**:适配器普遍用裸函数声明写校验函数
+         * (全库 72 个,如 NEU 的 `function validateYearInput(input){...}`),而 showPrompt 的
+         * 校验按名字在**全局作用域**求值 —— 一旦被包进函数作用域就全部 `is not defined`,
+         * 校验永远不通过,输入框反复重弹,用户只能点取消,脚本拿到 null 后提示「已取消导入」
+         * (77 个带校验的 prompt 调用点里有 62 个中招)。
+         *
+         * 官方也是原样执行:`ShiguangWarehouse.resolveScript` 只读文件,
+         * `EduImportBrowserUi.runOriginalImportScript` 直接 `evaluateJavascript(script, null)`,
+         * 因此顶层 `function` / `var` / `const` / `let` 都能被后续脚本看到。
+         */
+        fun buildInjection(script: String): String = SHIM_JS + "\n" + script
 
         /**
          * showPrompt 校验函数的调用脚本:`__NAME__` 换成函数名、`__VALUE__` 换成用户输入。

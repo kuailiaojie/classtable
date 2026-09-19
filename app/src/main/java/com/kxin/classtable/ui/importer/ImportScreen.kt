@@ -381,9 +381,10 @@ fun ImportScreen(
                             // 桥的回调/resolve 必须回到脚本所在的文档,否则 Promise 永远等不到结果。
                             val target = holder.active
                             bridge.bindWebView(target)
-                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败
+                            // 垫片 + 适配脚本原样注入(脚本不能被 IIFE 包裹,否则它的顶层
+                            // 校验函数等声明进不了全局作用域,showPrompt 按名调用会 not defined)
                             target.evaluateJavascript(
-                                ImportBridge.SHIM_JS + "\n" + ImportBridge.wrapScript(script),
+                                ImportBridge.buildInjection(script),
                             ) { }
                         }
                     },

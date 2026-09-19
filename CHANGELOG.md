@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.12 (2026-09-19)
+
+**「点执行导入就提示已取消导入」的真正根因,找到了。**
+
+### 修复
+- **适配脚本被 IIFE 包裹,导致它的顶层声明进不了全局作用域**:我们一直把脚本包成 `(function(){ try{...}catch(e){...} })();` 注入(本意是让同步异常能上报)。但适配器普遍用**裸函数声明**写 `showPrompt` 的校验函数(全库 72 个,例如东北大学 `function validateYearInput(input){...}`),而校验是按名字在**全局作用域**求值的 —— 被包进函数作用域后全部 `is not defined`:
+  - 校验永远不通过 → 输入框反复重弹 → 用户只能点取消 → 脚本拿到 `null` → `if (year === null) return` → **提示「已取消导入」**。
+  - 受影响面:77 个带校验函数的 prompt 调用点里 **62 个**是这种写法。
+  官方实现是**原样执行**(`ShiguangWarehouse.resolveScript` 只读文件,`EduImportBrowserUi.runOriginalImportScript` 直接 `evaluateJavascript(script, null)`),顶层 `function` / `var` / `const` / `let` 都能被后续脚本看到。现在改为原样注入(垫片 + 脚本)。
+- 随之移除只为包装脚本而存在的 `reportError`,并把控制台输出留在 logcat(`ImportWebView` tag)以便排查。
+
+### 测试
+- 新增 A/B 对照回归测试:取**东北大学真实的 `validateYearInput`**,分别按「原样执行」与「旧的 IIFE 包裹」注入,断言前者是全局函数且合法输入通过、后者为 `undefined` 且合法输入被判 `not defined`(即复现本缺陷)。桥契约测试共 41 项,全部通过。
+
 ## 0.1.11 (2026-09-19)
 
 对照上游实现(拾光仓库配套 App),把导入桥这一层按官方行为重写了一遍,补齐三处偏差:
