@@ -98,6 +98,15 @@ kapt {
     correctErrorTypes = true
 }
 
+// CI / 本地无外网时,Crashlytics 的符号上传会连不上 firebasecrashlyticssymbols.googleapis.com
+// 而让整个 assembleRelease 失败(实测插件自身对 -PfirebaseCrashlyticsMappingFileUploadEnabled
+// 不生效)。这里显式按该属性关掉上传任务,保证没有外网也能产出 release APK。
+if (providers.gradleProperty("firebaseCrashlyticsMappingFileUploadEnabled").orNull == "false") {
+    tasks.matching { it.name.startsWith("uploadCrashlyticsMappingFile") }.configureEach {
+        enabled = false
+    }
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
