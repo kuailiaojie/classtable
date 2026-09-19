@@ -10,6 +10,7 @@ import android.webkit.WebView
 import android.widget.EditText
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 
 /**
  * WebView ⇄ 适配脚本桥(实现 shiguang_warehouse 的 AndroidBridge* 契约)。
@@ -122,11 +123,12 @@ class ImportBridge(
                 if (validator.isBlank() || validator == "null") {
                     resolve(callbackId, JSONObject.quote(value))
                 } else {
-                    validate(webView, validator, value) { ok ->
-                        if (ok) {
+                    validate(webView, validator, value) { error ->
+                        if (error == null) {
                             resolve(callbackId, JSONObject.quote(value))
                         } else {
-                            showPromptDialog(webView, title, message, value, validator, callbackId)
+                            // 重弹时把适配器给出的错误文案显示出来(它返回文案就是为了展示)
+                            showPromptDialog(webView, title, error, value, validator, callbackId)
                         }
                     }
                 }
@@ -136,17 +138,31 @@ class ImportBridge(
             .show()
     }
 
-    /** 调用页面内校验函数:不存在 / 抛异常时按通过处理,避免误拦。 */
-    private fun validate(webView: WebView, validator: String, value: String, onResult: (Boolean) -> Unit) {
-        val js = "(function(){try{var f=window[" + JSONObject.quote(validator) + "];" +
-            "if(typeof f!=='function')return true;return f(" + JSONObject.quote(value) + ")!==false;" +
-            "}catch(e){return true;}})()"
+    /**
+     * 调用适配器页面里的校验函数(showPrompt 的第 4 个参数,如 validateYearInput)。
+     *
+     * 适配器统一遵循拾光 Bridge 规范:**校验通过返回 `false`,不通过返回错误文案**。
+     * 依据见 BTBU 的注释「规范要求:验证通过返回 false,失败返回错误文案」,以及
+     * GXDLXY / HNVCC / CCIT / CQRK / CQIE 等脚本里 validate* 函数的实现。
+     *
+     * 之前这里判反了(把 `false` 当失败):输入**合法**反而判定失败 → 反复重弹 →
+     * 用户只能点取消 → 脚本拿到 null → 「已取消导入」,也就是用户永远导入不成功。
+     *
+     * 现在只把「返回非空字符串」判为不通过(并展示该文案),其余
+     * (`false` / `true` / `undefined` / `null` / 空串)都算通过;函数不存在或抛异常时
+     * 按通过处理,避免误拦。
+     */
+    private fun validate(webView: WebView, validator: String, value: String, onResult: (String?) -> Unit) {
+        val js = VALIDATE_JS
+            .replace("__NAME__", JSONObject.quote(validator))
+            .replace("__VALUE__", JSONObject.quote(value))
         webView.post {
             runCatching {
                 webView.evaluateJavascript(js) { result ->
-                    mainHandler.post { onResult(result != "false") }
+                    val error = runCatching { JSONTokener(result).nextValue() as? String }.getOrNull()
+                    mainHandler.post { onResult(error?.takeIf { it.isNotBlank() }) }
                 }
-            }.onFailure { mainHandler.post { onResult(true) } }
+            }.onFailure { mainHandler.post { onResult(null) } }
         }
     }
 
@@ -210,6 +226,24 @@ class ImportBridge(
         /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由脚本自身 showToast 反馈)。 */
         fun wrapScript(script: String): String =
             "(function(){try{\n$script\n}catch(e){AndroidBridgeNative.reportError((e&&e.message)||String(e));}})();"
+
+        /**
+         * showPrompt 校验函数的调用脚本:`__NAME__` 换成函数名、`__VALUE__` 换成用户输入。
+         * 约定:通过返回 `null`,不通过返回错误文案字符串。
+         *
+         * 抽成常量是因为这条契约极易写反(已经写反过一次,导致合法输入被反复重弹),
+         * 需要能被独立测试(见 verify-bridge 测试)。
+         */
+        const val VALIDATE_JS = """
+            (function(){
+              try {
+                var f = window[__NAME__];
+                if (typeof f !== 'function') return null;
+                var r = f(__VALUE__);
+                return (typeof r === 'string' && r.trim() !== '') ? r : null;
+              } catch (e) { return null; }
+            })()
+        """
 
         /**
          * 桥垫片:定义 AndroidBridge / AndroidBridgePromise / shiguangBridge* / __resolve。
