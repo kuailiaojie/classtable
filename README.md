@@ -62,7 +62,7 @@ Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表�
 
 ### 课程导入
 
-- **教务系统导入**:接入开源教务适配仓库 shiguang_warehouse,覆盖正方、强智、青果、URP、超星等系统的 146 所学校 / 156 个适配器。选校后先阅读适配器说明(描述 / 作者 / 操作提示)再确认导入;WebView 登录(账号密码仅存于本机会话)后注入适配脚本,脚本识别到的**作息时间与开学日期**会在确认页列出,由你决定是否覆盖本地设置,课程按周次自动归类(每周 / 单周 / 双周 / 自定义)。
+- **教务系统导入**:接入开源教务适配仓库 shiguang_warehouse(索引协议 v2),覆盖正方、强智、青果、URP、超星等系统的 218 所学校 / 242 个适配器。选校后先阅读适配器说明(描述 / 作者 / 操作提示)再确认导入;WebView 登录(账号密码仅存于本机会话)后注入适配脚本,脚本识别到的**作息时间与开学日期**会在确认页列出,由你决定是否覆盖本地设置,课程按周次自动归类(每周 / 单周 / 双周 / 自定义)。
 - **手动导入**:粘贴 CSV / TSV 表格数据,或直接导入 Excel 文件(.xlsx / .csv / .tsv),自动识别表头与 UTF-8 / GBK 编码;表格第 8、9 列可填开始 / 结束时间(HH:MM),生成自定义时间课程。
 - **AI 图片导入**:多供应商——Google Gemini 或任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等),在设置页配置供应商、密钥、Base URL 与模型后,上传课表图片即可识别课程与作息并自动应用。
 - **作息一键同步**:教务 / AI 图片 / 手动表格导入识别到作息时,会在确认页展示并等你确认后写入;手动导入可直接粘贴「08:00-08:50」格式行同步作息。
@@ -153,8 +153,8 @@ warehouse/                 # 上游仓库快照(源:保留 YAML,便于比对与�
         │  node tools/yaml2json.mjs   → 预编译为下方 JSON,App 运行时不解析 YAML
         ▼
 assets/warehouse/
-  index.json       # 146 所学校索引
-  adapters.json    # 156 个适配器配置
+  index.json       # 218 所学校索引
+  adapters.json    # 242 个适配器配置
   resources/<SCHOOL>/<script>.js   # 适配脚本(注入 WebView 执行)
 ```
 
@@ -169,7 +169,23 @@ assets/warehouse/
 
 ### 更新仓库
 
-重新下载 shiguang_warehouse 到 `warehouse/` 后运行 `node tools/yaml2json.mjs` 重新生成 assets 索引,`node tools/build-netlify.mjs` 再把 assets 打包为 `netlify/static/warehouse/bundle.json`(Netlify 部署时自动执行)。App 端「设置 → 适配器同步」即可拉取该 bundle 覆盖内置数据。
+上游仓库(GitHub `XingHeYuZhuan/shiguang_warehouse`,国内镜像 `gitee.com/XingHeYuZhuan-gh/shiguang_warehouse`):
+
+```bash
+git clone --depth 1 https://gitee.com/XingHeYuZhuan-gh/shiguang_warehouse /tmp/shiguang
+cp -r /tmp/shiguang/resources/* warehouse/resources/     # 适配脚本 + adapters.yaml
+cp /tmp/shiguang/index/root_index.yaml warehouse/index/
+cp /tmp/shiguang/README.md /tmp/shiguang/LICENSE warehouse/
+node tools/yaml2json.mjs        # 重新生成 assets/warehouse/{index,adapters}.json
+node tools/build-netlify.mjs    # 打包 netlify/static/warehouse/bundle.json(Netlify 构建时也会自动执行)
+```
+
+`assets/warehouse/resources/**` 只需放 `.js`(运行时只读脚本);YAML 只留在 `warehouse/` 源目录用于比对。
+
+> 上游索引已升级到 **协议 v2**(官方 App 改用 protobuf 索引),但 `root_index.yaml` / `adapters.yaml` 的**字段与我们一致**(`id`/`name`/`initial`/`resource_folder` 与 `adapter_id`/`adapter_name`/`asset_js_path`/`import_url`/`category`/`maintainer`/`description`),所以 `tools/yaml2json.mjs` 可直接预编译,App 端无需改动。
+> 注意各校 YAML 的**列表项缩进不一致**(有的写在第 0 列),预编译器已按任意缩进解析——早期实现会因此丢掉整所学校的适配器。
+
+App 端「设置 → 适配器同步」可拉取线上 bundle 覆盖内置数据,无需等待发版。
 
 ## 数据模型与同步
 

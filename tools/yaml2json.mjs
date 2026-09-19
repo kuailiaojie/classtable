@@ -10,29 +10,51 @@ const warehouseDir = path.join(root, 'warehouse');
 const outDir = path.join(root, 'app/src/main/assets/warehouse');
 
 // 只支持本仓库 YAML 的子集:顶层 key + 一层列表项 + 键值对(值可为带引号字符串)
+//
+// 注意列表项的缩进**不固定**:多数文件是
+//     adapters:
+//       - adapter_id: "X"
+// 但也有学校把条目写在**第 0 列**(adapters: 后跟空行,再 `- adapter_id:`),
+// 旧实现遇到 indent===0 直接 continue,会把整所学校的适配器全部丢掉。
 function parseSimpleYaml(text) {
   const items = [];
   let current = null;
-  for (const raw of text.split(/\r?\n/)) {
+  let itemIndent = -1;
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
     const trimmed = line.trim();
     if (trimmed === '' || trimmed.startsWith('#')) continue;
-    const m = line.match(/^(\s*)(\S.*)$/);
-    if (!m) continue;
-    const indent = m[1].length;
-    const content = m[2];
-    if (indent === 0) { current = null; continue; }
+    const indent = line.length - line.trimStart().length;
+    const content = line.trimStart();
+
+    // 列表项:任意缩进(`- key: value` 或单 `-`)
     const listMatch = content.match(/^-\s*(.*)$/);
     if (listMatch) {
       current = {};
       items.push(current);
+      itemIndent = indent;
       const kv = parseKV(listMatch[1]);
       if (kv) current[kv[0]] = kv[1];
       continue;
     }
-    if (current) {
-      const kv = parseKV(content);
-      if (kv) current[kv[0]] = kv[1];
+
+    const kv = parseKV(content);
+    if (!kv) continue;
+    // 顶层空值键(schools: / adapters:)结束上一个条目
+    if (indent === 0 && kv[1] === '') {
+      current = null;
+      itemIndent = -1;
+      continue;
+    }
+    // 条目内的后续键(缩进深于条目起始行)
+    if (current && indent > itemIndent) {
+      current[kv[0]] = kv[1];
+      continue;
+    }
+    if (indent === 0) {
+      current = null;
+      itemIndent = -1;
     }
   }
   return items;

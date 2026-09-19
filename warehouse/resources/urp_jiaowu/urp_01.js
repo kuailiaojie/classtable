@@ -90,7 +90,7 @@ function parseTimeSlots() {
  */
 async function fetchAndParseJwData() {
     try {
-        AndroidBridge.showToast("正在解析网页课表...");
+        window.shiguangBridge.showToast("正在解析网页课表...");
         
         let courses = [];
         
@@ -111,11 +111,24 @@ async function fetchAndParseJwData() {
             classDivs.forEach(div => {
                 const pTags = div.querySelectorAll('p');
                 if (pTags.length < 5) return; // 格式不健全的格子直接跳过
+                
+                // 兼容两种结构：
+                // p[1]=教师,p[2]=周次,p[3]=节次,p[4]=地点
+                // p[2]=教师,p[3]=周次,p[4]=节次,p[5]=地点
+                let teacherIdx = 2, weekIdx = 3, sectionIdx = 4, posIdx = 5;
+                const p1Text = pTags[1] ? pTags[1].textContent.trim() : '';
+                if (p1Text && !/\d/.test(p1Text) && !p1Text.includes('周') && p1Text.length < 10) {
+                    teacherIdx = 1;
+                    weekIdx = 2;
+                    sectionIdx = 3;
+                    posIdx = 4;
+                }
+                
                 const name = pTags[0].textContent.trim();
-                const teacher = pTags[2].textContent.replace(/^[\s*]+|[\s*]+$/g, '').replace(/\*/g, ' ').replace(/\s+/g, ' ');
-                const weekStr = pTags[3].textContent.trim();
-                const sectionStr = pTags[4].textContent.trim();
-                const position = pTags[5] ? pTags[5].textContent.trim() : "未知地点";
+                const teacher = pTags[teacherIdx].textContent.replace(/^[\s*]+|[\s*]+$/g, '').replace(/\*/g, ' ').replace(/\s+/g, ' ');
+                const weekStr = pTags[weekIdx].textContent.trim();
+                const sectionStr = pTags[sectionIdx].textContent.trim();
+                const position = pTags[posIdx] ? pTags[posIdx].textContent.trim() : "未知地点";
                 
                 // 解析周次与真实的开始/结束节次
                 const weeks = parseWeekText(weekStr);
@@ -145,7 +158,7 @@ async function fetchAndParseJwData() {
         return { courses, timeSlots };
     } catch (e) {
         console.error("HTML解析失败详情:", e);
-        AndroidBridge.showToast("同步失败: " + e.message);
+        window.shiguangBridge.showToast("同步失败: " + e.message);
         return null;
     }
 }
@@ -154,11 +167,11 @@ async function fetchAndParseJwData() {
  * 辅助：保存数据到外部 APP
  */
 async function saveToApp(result) {
-    const courseSuccess = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
+    const courseSuccess = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
     if (!courseSuccess) return false;
 
     if (result.timeSlots && result.timeSlots.length > 0) {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
     }
     return true;
 }
@@ -167,7 +180,7 @@ async function saveToApp(result) {
  * 流程控制流程
  */
 async function runImportFlow() {
-    const alertResult = await window.AndroidBridgePromise.showAlert(
+    const alertResult = await window.shiguangBridgePromise.showAlert(
         "教务网页课表导入",
         "请确保您当前的网页已加载出课表视图后再开始导入",
         "开始同步"
@@ -178,8 +191,8 @@ async function runImportFlow() {
     if (!result || result.courses.length === 0) return;
 
     if (await saveToApp(result)) {
-        AndroidBridge.showToast(`成功从网页导入 ${result.courses.length} 个课程时段`);
-        AndroidBridge.notifyTaskCompletion(); 
+        window.shiguangBridge.showToast(`成功从网页导入 ${result.courses.length} 个课程时段`);
+        window.shiguangBridge.notifyTaskCompletion(); 
     }
 }
 
