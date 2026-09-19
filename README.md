@@ -178,6 +178,7 @@ cp /tmp/shiguang/index/root_index.yaml warehouse/index/
 cp /tmp/shiguang/README.md /tmp/shiguang/LICENSE warehouse/
 node tools/yaml2json.mjs        # 重新生成 assets/warehouse/{index,adapters}.json
 node tools/build-netlify.mjs    # 打包 netlify/static/warehouse/bundle.json(Netlify 构建时也会自动执行)
+node tools/verify-warehouse.mjs # 校验数据自洽(每校必有适配器 / 脚本存在 / id 唯一 / 无未引用脚本)
 ```
 
 `assets/warehouse/resources/**` 只需放 `.js`(运行时只读脚本);YAML 只留在 `warehouse/` 源目录用于比对。
