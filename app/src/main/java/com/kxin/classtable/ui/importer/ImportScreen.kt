@@ -380,6 +380,9 @@ fun ImportScreen(
                             // (bindWebView)再注入脚本 —— 弹窗与主页面是两个独立的 JS 文档,
                             // 桥的回调/resolve 必须回到脚本所在的文档,否则 Promise 永远等不到结果。
                             val target = holder.active
+                            // 注入脚本前先刷新桥对象:SSO 页面可能已经在本上下文里重写过文档,
+                            // 旧对象会被判为「非注入」,导致脚本里所有桥调用失败。
+                            target.addJavascriptInterface(bridge, "AndroidBridgeNative")
                             bridge.bindWebView(target)
                             // 垫片 + 适配脚本原样注入(脚本不能被 IIFE 包裹,否则它的顶层
                             // 校验函数等声明进不了全局作用域,showPrompt 按名调用会 not defined)
@@ -857,13 +860,24 @@ private fun configureImportWebView(
         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
             super.onPageStarted(view, url, favicon)
             onPageStart()
-            // 页面一开始就注入垫片,保证适配脚本执行前 AndroidBridge* 已就绪
+            // 重新注册注入对象再注入垫片(顺序不能反)。
+            //
+            // 教务系统普遍走 CAS / 深信服 aTrust 这类 SSO:页面会在**同一个 JS 上下文里重写文档**
+            // (document.write / 前端路由),WebView 随之把旧的注入对象标记为「非注入」,
+            // 之后该文档上的每一次桥调用都会抛
+            //   "Java bridge method can't be invoked on a non-injected object"。
+            // 我们原来只在创建 WebView 时注册一次,于是 SSO 跳转过的页面里桥整个失效:
+            // 垫片把异常吞成 null → 适配器判成「用户取消」→ 弹「已取消导入」。
+            // addJavascriptInterface 可重复调用,会为当前上下文换上一个新的可用对象;
+            // 垫片是实时取 window.AndroidBridgeNative 的,因此旧垫片也会立刻恢复。
+            view?.addJavascriptInterface(bridge, "AndroidBridgeNative")
             view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            // 有些页面加载完才动态改 DOM,再补一次(垫片幂等)
+            // 有些页面加载完才动态改 DOM,再补一次(垫片幂等;注入对象同样需要刷新)
+            view?.addJavascriptInterface(bridge, "AndroidBridgeNative")
             view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
             onNavState(view)
         }

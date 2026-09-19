@@ -339,7 +339,7 @@ class ImportBridge(
               };
               function arg(a, i){ var v = a[i]; return (v === undefined || v === null) ? '' : v; }
               function callNative(method, args){
-                return new Promise(function(resolve){
+                return new Promise(function(resolve, reject){
                   var id = 'cb_' + (Math.random() * 1e9 | 0);
                   var timer = setTimeout(function(){
                     if (window.__resolvers[id]) {
@@ -354,9 +354,14 @@ class ImportBridge(
                   catch(e) {
                     delete window.__resolvers[id];
                     clearTimeout(timer);
-                    // 同理:调用失败会被吞成 null,适配器只会说「已取消导入」,这里必须报出来
-                    try { console.error('[桥] ' + method + ' 调用失败: ' + ((e && e.message) || e)); } catch(e2) {}
-                    resolve(null);
+                    var detail = (e && e.message) ? String(e.message) : String(e);
+                    try { console.error('[桥] ' + method + ' 调用失败: ' + detail); } catch(e2) {}
+                    // 调用失败必须 reject,不能 resolve(null):
+                    // resolve(null) 会让适配器误判成「用户取消」,把真实错误
+                    // (如 "Java bridge method can't be invoked on a non-injected object")
+                    // 整个藏起来 —— 「点执行导入就提示已取消导入」就是这么被掩盖的。
+                    // 官方在原生处理失败时同样是 reject。
+                    reject(new Error(detail));
                   }
                 });
               }
