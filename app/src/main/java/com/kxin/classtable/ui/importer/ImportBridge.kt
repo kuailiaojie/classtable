@@ -30,6 +30,26 @@ class ImportBridge(
     private val onDone: () -> Unit,
 ) {
 
+    /**
+     * 正在执行适配脚本的那个 WebView。所有弹窗回调与 Promise 解析都发到这里。
+     *
+     * 官方实现同样在开始导入时绑定(`EduImportBrowserUi.runOriginalImportScript`:
+     * `bridge.bindWebView(target)` 之后才 `evaluateJavascript(script)`)。
+     *
+     * 为什么必须绑定:主页面与 window.open 出来的弹窗页是**两个独立的 JS 文档**,
+     * 各自的 `__resolvers` 相互隔离。脚本注入在哪个文档,Promise 的解析器就在哪个文档;
+     * 若把 resolve 发到另一个 WebView,解析器找不到 → Promise 一直挂到 60 秒超时 →
+     * 适配器拿到 null → 判定「用户取消」→ 提示「已取消导入」。
+     */
+    @Volatile
+    private var bound: WebView? = null
+
+    fun bindWebView(webView: WebView?) {
+        bound = webView
+    }
+
+    private fun target(): WebView = bound ?: webViewProvider()
+
     @JavascriptInterface
     fun showToast(message: String) {
         mainHandler.post { onToast(message ?: "") }
@@ -83,7 +103,7 @@ class ImportBridge(
     @JavascriptInterface
     fun showAlert(title: String, message: String, confirmText: String, callbackId: String) {
         mainHandler.post {
-            AlertDialog.Builder(webViewProvider().context)
+            AlertDialog.Builder(target().context)
                 .setTitle(title.ifBlank { "提示" })
                 .setMessage(message ?: "")
                 .setPositiveButton(confirmText.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
@@ -101,7 +121,7 @@ class ImportBridge(
     @JavascriptInterface
     fun showPrompt(title: String, message: String, defaultText: String, validator: String, callbackId: String) {
         mainHandler.post {
-            showPromptDialog(webViewProvider(), title, message, defaultText, validator, callbackId)
+            showPromptDialog(target(), title, message, defaultText, validator, callbackId)
         }
     }
 
@@ -147,14 +167,17 @@ class ImportBridge(
      *
      * 之前这里判反了(把 `false` 当失败):输入**合法**反而判定失败 → 反复重弹 →
      * 用户只能点取消 → 脚本拿到 null → 「已取消导入」,也就是用户永远导入不成功。
-     *
-     * 现在只把「返回非空字符串」判为不通过(并展示该文案),其余
-     * (`false` / `true` / `undefined` / `null` / 空串)都算通过;函数不存在或抛异常时
-     * 按通过处理,避免误拦。
+     * 现在判定与官方 `validateEduBridgePrompt` 完全一致。
      */
     private fun validate(webView: WebView, validator: String, value: String, onResult: (String?) -> Unit) {
+        // 函数名直接内联成调用(与官方一致),因此必须是合法的标识符/属性路径,
+        // 否则一律放行,避免把适配器传来的字符串拼进脚本。
+        if (!ValidatorName.matches(validator)) {
+            onResult(null)
+            return
+        }
         val js = VALIDATE_JS
-            .replace("__NAME__", JSONObject.quote(validator))
+            .replace("__NAME__", validator)
             .replace("__VALUE__", JSONObject.quote(value))
         webView.post {
             runCatching {
@@ -166,7 +189,9 @@ class ImportBridge(
         }
     }
 
-    /** 单选列表:defaultIndex 预选(之前被忽略),取消返回 null。 */
+    private val ValidatorName = Regex("^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$")
+
+    /** 单选列表:defaultIndex 预选,取消返回 null;无可选项时直接返回 null(与官方一致)。 */
     @JavascriptInterface
     fun showSingleSelection(title: String, itemsJson: String, defaultIndex: Int, callbackId: String) {
         mainHandler.post {
@@ -174,25 +199,27 @@ class ImportBridge(
                 val arr = JSONArray(itemsJson ?: "[]")
                 (0 until arr.length()).map { arr.optString(it) }
             }.getOrDefault(emptyList())
+            // 官方:EduSchoolSelectionUi 里 options 为空 → 弹「没有可选项」并 resolve null。
+            // 这里不返回任何序号:适配器普遍会校验 `idx >= list.length`(如 HPU、WUST),
+            // 返回一个不存在的序号会被判成「已取消导入」。
             if (items.isEmpty()) {
-                resolve(callbackId, if (defaultIndex >= 0) defaultIndex.toString() else "null")
+                resolve(callbackId, "null")
                 return@post
             }
-            val checked = if (defaultIndex in items.indices) defaultIndex else 0
+            val checked = defaultIndex.coerceIn(items.indices)
             var selected = checked
-            val dialog = AlertDialog.Builder(webViewProvider().context)
+            AlertDialog.Builder(target().context)
                 .setTitle(title ?: "")
                 .setSingleChoiceItems(items.toTypedArray(), checked) { _, which -> selected = which }
                 .setPositiveButton("确定") { _, _ -> resolve(callbackId, selected.toString()) }
                 .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
                 .setOnCancelListener { resolve(callbackId, "null") }
-                .create()
-            dialog.show()
+                .show()
         }
     }
 
     private fun resolve(callbackId: String, jsValue: String) {
-        val webView = webViewProvider()
+        val webView = target()
         webView.post {
             runCatching {
                 webView.evaluateJavascript("window.__resolve(${JSONObject.quote(callbackId)}, $jsValue);", null)
@@ -229,19 +256,23 @@ class ImportBridge(
 
         /**
          * showPrompt 校验函数的调用脚本:`__NAME__` 换成函数名、`__VALUE__` 换成用户输入。
-         * 约定:通过返回 `null`,不通过返回错误文案字符串。
          *
-         * 抽成常量是因为这条契约极易写反(已经写反过一次,导致合法输入被反复重弹),
-         * 需要能被独立测试(见 verify-bridge 测试)。
+         * 判定与官方逐字一致(`EduSchoolSelectionUi.validateEduBridgePrompt`):
+         * `false` / `null` / `undefined` / 空串 → **通过**(返回 null);
+         * 其它值 **String() 后作为错误文案**;校验函数抛异常时把异常信息当错误文案。
+         *
+         * 这条契约此前写反过(把 `false` 当失败),会让合法输入被反复重弹、用户只能取消,
+         * 因此抽成常量并单独测试。
          */
         const val VALIDATE_JS = """
             (function(){
               try {
-                var f = window[__NAME__];
-                if (typeof f !== 'function') return null;
-                var r = f(__VALUE__);
-                return (typeof r === 'string' && r.trim() !== '') ? r : null;
-              } catch (e) { return null; }
+                var r = __NAME__(__VALUE__);
+                if (r === false || r === null || r === undefined || r === '') return null;
+                return String(r);
+              } catch (error) {
+                return (error && error.message) ? String(error.message) : String(error);
+              }
             })()
         """
 
@@ -257,7 +288,14 @@ class ImportBridge(
          */
         const val SHIM_JS = """
             (function(){
-              window.__resolvers = {};
+              // 幂等:官方垫片同样有 `if (window._shiguangBridgeInjected) return;`。
+              // __resolvers 是「进行中的 Promise」的唯一索引,重复执行会把正在等待的
+              // 弹窗回调一起清掉 —— 那个 Promise 再也无法 resolve,只能挂到 60 秒超时
+              // 返回 null,适配器就会误判成「用户取消」。我们在落地与 onPageFinished
+              // 各注入一次,所以这个守卫是必需的。
+              if (window.__shiguangShimReady) { return; }
+              window.__shiguangShimReady = true;
+              if (!window.__resolvers) { window.__resolvers = {}; }
               window.__resolve = function(id, value){
                 var entry = window.__resolvers[id];
                 if (entry) {

@@ -375,9 +375,14 @@ fun ImportScreen(
                         if (script == null) {
                             viewModel.onToast("适配脚本缺失: ${adapter.jsPath},请到设置页「适配器同步」更新")
                         } else {
-                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败。
                             // 目标取「当前可见页面」:课表在 window.open 出来的新窗口里时,必须注入到那里。
-                            holder.active.evaluateJavascript(
+                            // 官方同样如此(popupWebView ?: webView),并且**先把桥绑定到这一页**
+                            // (bindWebView)再注入脚本 —— 弹窗与主页面是两个独立的 JS 文档,
+                            // 桥的回调/resolve 必须回到脚本所在的文档,否则 Promise 永远等不到结果。
+                            val target = holder.active
+                            bridge.bindWebView(target)
+                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败
+                            target.evaluateJavascript(
                                 ImportBridge.SHIM_JS + "\n" + ImportBridge.wrapScript(script),
                             ) { }
                         }
@@ -669,6 +674,8 @@ private fun StepLogin(
                             restoreUrl = null
                             holder.webView = created
                             holder.adapterKey = adapter.adapterId
+                            // 桥默认指向主页面;点「执行导入」时会再绑定到当时的可见页(可能是弹窗)
+                            bridge.bindWebView(created)
                             created
                         }
                     },
