@@ -2,8 +2,10 @@ package com.kxin.classtable.ui.importer
 
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.Context
 import android.os.Handler
 import android.webkit.JavascriptInterface
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.EditText
 import org.json.JSONArray
@@ -186,10 +188,24 @@ class ImportBridge(
         /**
          * 桌面 Chrome UA:多数教务系统按 UA 分发页面,适配脚本按桌面 DOM 编写,
          * 用 WebView 默认(移动)UA 会拿到移动版页面导致解析不到课表。
+         *
+         * 关键点:**版本号必须取自当前 WebView 的真实内核**(`WebSettings.getDefaultUserAgent`),
+         * 只把平台标识换成桌面。硬编码某个版本(如以前写死的 Chrome/120)会让网站按那个版本
+         * 下发新语法 JS,而本机内核跑不了 → 页面直接白屏。
          */
-        const val DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        fun desktopUserAgent(context: Context): String {
+            val current = WebSettings.getDefaultUserAgent(context)
+            val webKit = Regex("AppleWebKit/[^\\s]+", RegexOption.IGNORE_CASE).find(current)?.value
+            val chromium = Regex("(?:Chrome|Chromium)/[0-9.]+", RegexOption.IGNORE_CASE).find(current)?.value
+            val safari = Regex("Safari/[^\\s]+", RegexOption.IGNORE_CASE).find(current)?.value
+            if (webKit == null || chromium == null || safari == null) {
+                return current
+                    .replaceFirst(Regex("\\([^)]*\\)"), "(X11; Linux x86_64)")
+                    .replace("; wv", "")
+                    .replace(" Mobile ", " ")
+            }
+            return "Mozilla/5.0 (X11; Linux x86_64) $webKit (KHTML, like Gecko) $chromium $safari"
+        }
 
         /** 把适配脚本包进 try/catch,同步异常经桥上报(异步异常由脚本自身 showToast 反馈)。 */
         fun wrapScript(script: String): String =

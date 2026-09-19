@@ -102,6 +102,15 @@ class ImportViewModel @Inject constructor(
 class WebViewHolder {
     lateinit var webView: WebView
 
+    /**
+     * `window.open` / `target=_blank` 打开的新窗口页面。
+     * 很多教务系统把课表放在新窗口里,不接管的话点下去什么都不会发生(看起来像白屏)。
+     */
+    var popup: WebView? = null
+
     /** 当前 WebView 对应的适配器 id:一致则复用(不丢登录态),不同才重建。 */
     var adapterKey: String? = null
+
+    /** 适配脚本与弹窗应作用于用户此刻看到的页面(有弹窗时就是弹窗)。 */
+    val active: WebView get() = popup ?: webView
 }

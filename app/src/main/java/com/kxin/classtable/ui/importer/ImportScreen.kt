@@ -1,7 +1,21 @@
 package com.kxin.classtable.ui.importer
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.net.http.SslError
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -31,8 +45,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +81,7 @@ import com.kxin.classtable.ui.navigateToTab
 import kotlinx.coroutines.launch
 import java.net.URL
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * 教务导入(3 步):选学校(首字母索引,已隐藏开发者自检工具)
@@ -112,7 +129,8 @@ fun ImportScreen(
     val holder = remember { WebViewHolder() }
     val bridge = remember {
         ImportBridge(
-            webViewProvider = { holder.webView },
+            // 弹窗(新窗口)里也会跑适配脚本,回调要落在用户当前看到的那个 WebView 上
+            webViewProvider = { holder.active },
             mainHandler = Handler(Looper.getMainLooper()),
             onToast = { viewModel.onToast(it) },
             onCoursesJson = { viewModel.onCoursesJson(it) },
@@ -344,11 +362,12 @@ fun ImportScreen(
                     holder = holder,
                     bridge = bridge,
                     onReload = {
-                        // 刷新当前页;尚未加载出 URL 时回到入口地址
-                        if (holder.webView.url.isNullOrBlank()) {
-                            holder.webView.loadUrl(importUrl)
+                        // 刷新当前页(含新窗口页面);尚未加载出 URL 时回到入口地址
+                        val active = holder.active
+                        if (active.url.isNullOrBlank()) {
+                            active.loadUrl(importUrl)
                         } else {
-                            holder.webView.reload()
+                            active.reload()
                         }
                     },
                     onRun = {
@@ -356,8 +375,9 @@ fun ImportScreen(
                         if (script == null) {
                             viewModel.onToast("适配脚本缺失: ${adapter.jsPath},请到设置页「适配器同步」更新")
                         } else {
-                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败
-                            holder.webView.evaluateJavascript(
+                            // 垫片 + 包裹后的脚本一次注入:同步异常经桥上报,不再无声失败。
+                            // 目标取「当前可见页面」:课表在 window.open 出来的新窗口里时,必须注入到那里。
+                            holder.active.evaluateJavascript(
                                 ImportBridge.SHIM_JS + "\n" + ImportBridge.wrapScript(script),
                             ) { }
                         }
@@ -536,6 +556,33 @@ private fun StepLogin(
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    // 渲染进程被系统回收(内存紧张/内核崩溃)时必须重建 WebView,否则页面会永久白屏
+    var webViewGeneration by remember { mutableIntStateOf(0) }
+    var restoreUrl by remember { mutableStateOf<String?>(null) }
+    // window.open / target=_blank 打开的页面
+    var popup by remember { mutableStateOf<WebView?>(null) }
+
+    fun syncNavState(view: WebView?) {
+        canGoBack = view?.canGoBack() == true
+        canGoForward = view?.canGoForward() == true
+    }
+
+    /** 关闭新窗口页面。以 holder.popup 为准,避免闭包读到过期的 compose 值。 */
+    fun closePopup() {
+        val view = holder.popup ?: return
+        (view.parent as? ViewGroup)?.removeView(view)
+        runCatching { view.destroy() }
+        holder.popup = null
+        popup = null
+        syncNavState(holder.webView)
+    }
+
+    // 离开本步时收掉弹窗 WebView,不留下占内存的页面
+    DisposableEffect(Unit) { onDispose { closePopup() } }
+
+    if (popup != null) {
+        BackHandler { closePopup() }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // 压缩头部:适配器名 + 网址一行,提示一行,把更多空间留给网页
@@ -576,70 +623,90 @@ private fun StepLogin(
                 .fillMaxWidth()
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    // 同一适配器复用 WebView(返回上一步再进入不丢登录态),换适配器才重建。
-                    // adapterKey 与 webView 始终成对赋值,故用 key 判定即可。
-                    if (holder.adapterKey == adapter.adapterId) {
-                        holder.webView
-                    } else {
-                        val created = WebView(ctx)
-                        created.settings.javaScriptEnabled = true
-                        created.settings.domStorageEnabled = true
-                        created.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        // 桌面 UA:适配脚本按桌面 DOM 编写,移动 UA 会拿到移动版页面
-                        created.settings.userAgentString = ImportBridge.DESKTOP_UA
-                        created.webViewClient = object : WebViewClient() {
-                            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
-                                super.doUpdateVisitedHistory(view, url, isReload)
-                                canGoBack = view?.canGoBack() == true
-                                canGoForward = view?.canGoForward() == true
-                            }
-
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                super.onPageStarted(view, url, favicon)
-                                loadError = null
-                                // 页面一开始就注入垫片,保证适配脚本执行前 AndroidBridge* 已就绪
-                                view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
-                            }
-
-                            @Suppress("DEPRECATION")
-                            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
-                                super.onReceivedError(view, errorCode, description, failingUrl)
-                                loadError = friendlyLoadError(errorCode, description)
-                            }
-
-                            override fun onReceivedError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                error: WebResourceError?,
-                            ) {
-                                super.onReceivedError(view, request, error)
-                                if (request?.isForMainFrame == true) {
-                                    loadError = friendlyLoadError(error?.errorCode ?: -1, error?.description?.toString())
-                                }
-                            }
-
-                            override fun onReceivedHttpError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                errorResponse: WebResourceResponse?,
-                            ) {
-                                super.onReceivedHttpError(view, request, errorResponse)
-                                if (request?.isForMainFrame == true) {
-                                    loadError = "服务器返回错误 ${errorResponse?.statusCode ?: "未知"}"
-                                }
-                            }
+            // 渲染进程回收后 webViewGeneration 自增,AndroidView 会重新执行 factory 建新页面
+            key(webViewGeneration) {
+                AndroidView(
+                    factory = { ctx ->
+                        // 同一适配器复用 WebView(返回上一步再进入不丢登录态),换适配器才重建。
+                        // 渲染进程回收时 adapterKey 已被清空,同样会走到重建分支。
+                        if (holder.adapterKey == adapter.adapterId) {
+                            holder.webView
+                        } else {
+                            val created = WebView(ctx)
+                            configureImportWebView(
+                                webView = created,
+                                context = ctx,
+                                isPopup = false,
+                                bridge = bridge,
+                                desktopUa = ImportBridge.desktopUserAgent(ctx),
+                                onPageStart = { loadError = null },
+                                onError = { loadError = it },
+                                onNavState = { view ->
+                                    if (view === holder.popup || holder.popup == null) syncNavState(view)
+                                },
+                                onCreatePopup = { child ->
+                                    holder.popup = child
+                                    popup = child
+                                    syncNavState(child)
+                                },
+                                onClosePopup = { closePopup() },
+                                onRendererGone = { dead ->
+                                    restoreUrl = restoreUrl ?: dead.url
+                                    (dead.parent as? ViewGroup)?.removeView(dead)
+                                    runCatching { dead.destroy() }
+                                    holder.popup?.let { p ->
+                                        (p.parent as? ViewGroup)?.removeView(p)
+                                        runCatching { p.destroy() }
+                                    }
+                                    holder.popup = null
+                                    popup = null
+                                    // 清掉适配器标记:强制下面重新建一个 WebView
+                                    holder.adapterKey = null
+                                    webViewGeneration++
+                                },
+                            )
+                            created.loadUrl(restoreUrl ?: importUrl)
+                            restoreUrl = null
+                            holder.webView = created
+                            holder.adapterKey = adapter.adapterId
+                            created
                         }
-                        created.addJavascriptInterface(bridge, "AndroidBridgeNative")
-                        created.loadUrl(importUrl)
-                        holder.webView = created
-                        holder.adapterKey = adapter.adapterId
-                        created
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // 新窗口页面覆盖层:多数教务系统把课表开在 window.open 出来的窗口里
+            popup?.let { popupView ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.paper),
+                ) {
+                    AndroidView(factory = { popupView }, modifier = Modifier.fillMaxSize())
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "新窗口",
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "关闭",
+                            style = YohakuType.copy13,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .clickable { closePopup() }
+                                .padding(8.dp),
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+                }
+            }
             // 加载失败覆盖层:白屏时给出原因,而不是无声空白
             loadError?.let { message ->
                 Column(
@@ -683,7 +750,7 @@ private fun StepLogin(
                 style = YohakuType.title20,
                 color = if (canGoBack) colors.neutral9 else colors.neutral5,
                 modifier = Modifier
-                    .clickable(enabled = canGoBack) { holder.webView.goBack() }
+                    .clickable(enabled = canGoBack) { holder.active.goBack() }
                     .padding(horizontal = 6.dp),
             )
             Text(
@@ -691,7 +758,7 @@ private fun StepLogin(
                 style = YohakuType.title20,
                 color = if (canGoForward) colors.neutral9 else colors.neutral5,
                 modifier = Modifier
-                    .clickable(enabled = canGoForward) { holder.webView.goForward() }
+                    .clickable(enabled = canGoForward) { holder.active.goForward() }
                     .padding(horizontal = 6.dp),
             )
             Text(
@@ -710,6 +777,196 @@ private fun StepLogin(
             )
         }
     }
+}
+
+/**
+ * 教务 WebView 的统一配置。这里的每一项都对应一类「白屏」成因:
+ * - `setSupportMultipleWindows` + `onCreateWindow`:很多教务系统用 window.open 打开课表,
+ *   不接管的话点下去毫无反应(看起来像白屏);新窗口用子 WebView 承载并覆盖显示。
+ * - `setAcceptThirdPartyCookies`:统一身份认证(CAS)跨域跳转,不放开第三方 Cookie 会在空白页之间打转。
+ * - `databaseEnabled`:老教务页面用 WebSQL 存会话,不开脚本会抛异常。
+ * - `useWideViewPort` / `loadWithOverviewMode` / `setInitialScale`:固定宽度页面否则只渲染左上角。
+ * - `onRenderProcessGone`:渲染进程被系统回收后必须重建,否则永久白屏(只能杀 App)。
+ * - `onReceivedSslError`:默认实现静默取消,页面就是白的,这里取消并明确告知原因。
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Suppress("DEPRECATION")
+private fun configureImportWebView(
+    webView: WebView,
+    context: Context,
+    isPopup: Boolean,
+    bridge: ImportBridge,
+    desktopUa: String,
+    onPageStart: () -> Unit,
+    onError: (String) -> Unit,
+    onNavState: (WebView?) -> Unit,
+    onCreatePopup: (WebView) -> Unit,
+    onClosePopup: () -> Unit,
+    onRendererGone: (WebView) -> Unit,
+) {
+    webView.layoutParams = ViewGroup.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT,
+    )
+    webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    webView.settings.apply {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        databaseEnabled = true
+        userAgentString = desktopUa
+        useWideViewPort = true
+        loadWithOverviewMode = true
+        layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
+        textZoom = 100
+        setSupportZoom(true)
+        builtInZoomControls = true
+        displayZoomControls = false
+        javaScriptCanOpenWindowsAutomatically = true
+        setSupportMultipleWindows(!isPopup)
+        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        cacheMode = WebSettings.LOAD_DEFAULT
+        allowFileAccess = false
+        allowContentAccess = false
+    }
+    webView.setInitialScale(0)
+    CookieManager.getInstance().apply {
+        setAcceptCookie(true)
+        setAcceptThirdPartyCookies(webView, true)
+    }
+    webView.addJavascriptInterface(bridge, "AndroidBridgeNative")
+    webView.webViewClient = object : WebViewClient() {
+        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean =
+            handleExternalNavigation(context, request.url, onError)
+
+        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+            super.doUpdateVisitedHistory(view, url, isReload)
+            onNavState(view)
+        }
+
+        override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+            super.onPageStarted(view, url, favicon)
+            onPageStart()
+            // 页面一开始就注入垫片,保证适配脚本执行前 AndroidBridge* 已就绪
+            view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
+        }
+
+        override fun onPageFinished(view: WebView?, url: String?) {
+            super.onPageFinished(view, url)
+            // 有些页面加载完才动态改 DOM,再补一次(垫片幂等)
+            view?.evaluateJavascript(ImportBridge.SHIM_JS, null)
+            onNavState(view)
+        }
+
+        @Suppress("DEPRECATION")
+        override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+            super.onReceivedError(view, errorCode, description, failingUrl)
+            // 只有主文档失败才覆盖页面:子资源(图片/统计脚本)失败不该遮挡整页
+            if (failingUrl == null || view?.url == null || failingUrl == view.url) {
+                onError(friendlyLoadError(errorCode, description))
+            }
+        }
+
+        override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: WebResourceError?,
+        ) {
+            super.onReceivedError(view, request, error)
+            if (request?.isForMainFrame == true) {
+                onError(friendlyLoadError(error?.errorCode ?: -1, error?.description?.toString()))
+            }
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            errorResponse: WebResourceResponse?,
+        ) {
+            super.onReceivedHttpError(view, request, errorResponse)
+            if (request?.isForMainFrame == true) {
+                onError("服务器返回错误 ${errorResponse?.statusCode ?: "未知"}")
+            }
+        }
+
+        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+            handler?.cancel()
+            val failing = error?.url
+            // 子资源证书问题不该遮挡整个页面;主文档证书失败才会白屏,必须说明
+            if (failing != null && view?.url != null && failing != view.url) return
+            val reason = when (error?.primaryError) {
+                SslError.SSL_UNTRUSTED -> "证书不受信任(学校自签证书常见)"
+                SslError.SSL_EXPIRED -> "证书已过期"
+                SslError.SSL_NOTYETVALID -> "证书尚未生效"
+                SslError.SSL_DATE_INVALID -> "证书日期无效"
+                SslError.SSL_IDMISMATCH -> "证书与域名不匹配"
+                else -> "证书校验失败"
+            }
+            onError(reason + (failing?.let { ":$it" } ?: ""))
+        }
+
+        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+            // 返回 true 表示由我们处理;否则系统可能直接杀掉整个应用
+            view?.let(onRendererGone)
+            return true
+        }
+    }
+    webView.webChromeClient = object : WebChromeClient() {
+        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+            // 页面白屏多半是它自己的 JS 抛了错,落到 logcat 便于用户反馈时定位
+            consoleMessage?.let {
+                Log.d("ImportWebView", "console=${it.message()} @${it.sourceId()}:${it.lineNumber()}")
+            }
+            return super.onConsoleMessage(consoleMessage)
+        }
+
+        override fun onCreateWindow(
+            view: WebView?,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: Message?,
+        ): Boolean {
+            if (isPopup) return false
+            val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+            val child = WebView(context)
+            configureImportWebView(
+                webView = child,
+                context = context,
+                isPopup = true,
+                bridge = bridge,
+                desktopUa = desktopUa,
+                onPageStart = onPageStart,
+                onError = onError,
+                onNavState = onNavState,
+                onCreatePopup = onCreatePopup,
+                onClosePopup = onClosePopup,
+                onRendererGone = onRendererGone,
+            )
+            transport.webView = child
+            resultMsg.sendToTarget()
+            onCreatePopup(child)
+            return true
+        }
+
+        override fun onCloseWindow(window: WebView?) {
+            if (isPopup) onClosePopup()
+        }
+    }
+}
+
+/** 非 http(s) 链接交给系统处理(WebView 自己加载会留下空白页);返回 true 表示已拦截。 */
+private fun handleExternalNavigation(context: Context, uri: Uri, onError: (String) -> Unit): Boolean {
+    val scheme = uri.scheme?.lowercase(Locale.ROOT).orEmpty()
+    if (scheme.isEmpty() || scheme == "http" || scheme == "https") return false
+    val intent = runCatching {
+        if (scheme == "intent") Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
+        else Intent(Intent.ACTION_VIEW, uri)
+    }.getOrNull() ?: return true
+    intent.component = null
+    intent.selector = null
+    if (intent.resolveActivity(context.packageManager) == null) return true
+    runCatching { context.startActivity(intent) }
+        .onFailure { onError("无法打开外部链接") }
+    return true
 }
 
 @Composable
