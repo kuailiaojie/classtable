@@ -937,8 +937,13 @@ private fun configureImportWebView(
     }
     webView.webChromeClient = object : WebChromeClient() {
         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-            // 页面白屏/导入中止多半是它自己的 JS 抛了错;桥的失败也会以 console.error 报出来,
-            // 统一落到 logcat(tag: ImportWebView),用 Log.i 以免被部分 ROM 过滤掉。
+            val text = consoleMessage?.message()
+            // 桥的备用通道:垫片直连注入对象失败时(SSO 重写文档后对象被判成「非注入」),
+            // 会把调用以固定前缀写到控制台。这类消息属于桥流量,交给桥处理 —— 既不写
+            // logcat(负载可能很大),也不要当普通页面日志刷屏。
+            if (text != null && bridge.dispatchConsoleCall(text)) return true
+            // 其余控制台输出(含白屏、导入中止的真实 JS 报错)统一落到 logcat(tag: ImportWebView),
+            // 用 Log.i 以免被部分 ROM 过滤掉。
             consoleMessage?.let {
                 Log.i("ImportWebView", "console=${it.message()} @${it.sourceId()}:${it.lineNumber()}")
             }

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.16 (2026-09-19)
+
+**「点执行导入就弹已取消导入」的真正根因:调用注入方法时把 `this` 丢了(`apply(null, ...)`)。**
+
+0.1.15 的诊断只说对了一半 —— 对象确实被判成「非注入」,但**触发条件在垫片自己的调用方式**,与 SSO 页面重写文档无关。
+
+### 根因
+垫片里所有 Promise 化的方法都经过 `callNative`,而它是这样调的:
+
+```js
+AndroidBridgeNative[method].apply(null, args.concat([id]));
+```
+
+WebView 的注入方法要求 `this` **就是那个注入对象本身**。`apply(null, ...)` 在非严格模式下会把 `this` 换成全局对象,Chromium 检查后直接抛:
+
+```
+Error invoking showSingleSelection: Java bridge method can't be invoked on a non-injected object
+```
+
+而 `showToast` 是**直接调用**(`AndroidBridgeNative.showToast(...)`),`this` 天然正确,所以它一直正常 —— 这正是长期误导排查的地方(看起来像「桥是好的」)。凡是走 `callNative` 的 `showAlert` / `showPrompt` / `showSingleSelection` / `saveImportedCourses` / `savePresetTimeSlots` / `saveCourseConfig` 全部失败,垫片又把异常吞成 `resolve(null)`,适配器把 `null` 当成「用户取消」,于是弹出「已取消导入」。官方桥只有一个 `postMessage` 直调入口、从不使用 `apply`,所以同一个适配器在官方 App 里是好的。
+
+### 修复
+- `callNative` 改为 `AndroidBridgeNative[method].apply(AndroidBridgeNative, fullArgs)`。
+- 保留一个**兜底通道**:万一直连仍然失败,垫片改用 `console.log('__SHIGUANG_BRIDGE__' + JSON)` 把调用送到原生 —— 网页控制台与 `evaluateJavascript` 都不依赖注入对象。原生在 `onConsoleMessage` 里解析分发,回填仍走 `window.__resolve`。
+- 0.1.15 的「每次页面加载重新注册桥对象」保留(无害且对个别机型有用)。
+- 版本号 0.1.15(16) → 0.1.16(17)。
+
+### 验证
+- `verify-bridge` 新增 2 项回归:①调用注入方法时 `this` 必须是注入对象本身(**直接钉死本次根因**);②直连失败时能经 console 通道送达并回填。
+
 ## 0.1.15 (2026-09-19)
 
 **「点执行导入就弹已取消导入」的真正根因,已在真机上抓到了。**

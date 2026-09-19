@@ -249,7 +249,48 @@ class ImportBridge(
         }
     }
 
+    /**
+     * 备用通道:垫片直连注入对象失败时(SSO 页面在同一个 JS 上下文里重写文档后,WebView
+     * 会把先前的注入对象判成「非注入对象」,此后调用一律抛异常),改用网页控制台把调用送过来。
+     *
+     * 为什么可靠:这两个方向在真机上都始终可用 —— 网页 console 一定送达 onConsoleMessage
+     * (本次事故的真实错误就是这么抓到的),回填本来就走 evaluateJavascript,两者都不依赖
+     * 注入对象是否有效。
+     *
+     * @return true 表示这条消息是桥的调用(调用方不要按普通控制台日志处理)
+     */
+    fun dispatchConsoleCall(message: String): Boolean {
+        if (!message.startsWith(CONSOLE_CALL_PREFIX)) return false
+        return runCatching {
+            val json = JSONObject(message.removePrefix(CONSOLE_CALL_PREFIX))
+            val method = json.optString("method")
+            val args = json.optJSONArray("args") ?: JSONArray()
+            val a = (0 until args.length()).map { args.optString(it) }
+            fun at(i: Int) = a.getOrElse(i) { "" }
+            trace("console 通道 ← $method(${a.dropLast(1).joinToString(", ") { brief(it, 30) }})")
+            when (method) {
+                "showToast" -> { showToast(at(0)); true }
+                "notifyTaskCompletion" -> { notifyTaskCompletion(); true }
+                "showAlert" -> { showAlert(at(0), at(1), at(2), at(3)); true }
+                "showPrompt" -> { showPrompt(at(0), at(1), at(2), at(3), at(4)); true }
+                "showSingleSelection" -> {
+                    showSingleSelection(at(0), at(1), at(2).toIntOrNull() ?: -1, at(3)); true
+                }
+                "saveImportedCourses" -> { saveImportedCourses(at(0), at(1)); true }
+                "savePresetTimeSlots" -> { savePresetTimeSlots(at(0), at(1)); true }
+                "saveCourseConfig" -> { saveCourseConfig(at(0), at(1)); true }
+                else -> { trace("console 通道:未知方法 $method"); false }
+            }
+        }.getOrElse {
+            trace("console 通道解析失败: $it")
+            false
+        }
+    }
+
     companion object {
+        /** 垫片走 console 通道时的前缀,必须与 SHIM_JS 里的同名常量保持一致。 */
+        const val CONSOLE_CALL_PREFIX = "__SHIGUANG_BRIDGE__"
+
         /**
          * 桌面 Chrome UA:多数教务系统按 UA 分发页面,适配脚本按桌面 DOM 编写,
          * 用 WebView 默认(移动)UA 会拿到移动版页面导致解析不到课表。
@@ -350,18 +391,30 @@ class ImportBridge(
                     }
                   }, 60000);
                   window.__resolvers[id] = { resolve: resolve, timer: timer };
-                  try { AndroidBridgeNative[method].apply(null, args.concat([id])); }
+                  var fullArgs = args.concat([id]);
+                  // **必须把注入对象本身作为 this 传进去**。
+                  // WebView 的注入方法要求 this 就是那个注入对象;写成 apply(null, ...) 时,
+                  // 非严格模式下 this 会变成全局 window,Chromium 检查后直接抛
+                  //   "Java bridge method can't be invoked on a non-injected object"
+                  // —— 这正是「点执行导入就弹已取消导入」的根因(showToast 是直接调用,
+                  //   所以一直正常;走 callNative 的方法全部失效)。
+                  try { AndroidBridgeNative[method].apply(AndroidBridgeNative, fullArgs); }
                   catch(e) {
-                    delete window.__resolvers[id];
-                    clearTimeout(timer);
                     var detail = (e && e.message) ? String(e.message) : String(e);
-                    try { console.error('[桥] ' + method + ' 调用失败: ' + detail); } catch(e2) {}
-                    // 调用失败必须 reject,不能 resolve(null):
-                    // resolve(null) 会让适配器误判成「用户取消」,把真实错误
-                    // (如 "Java bridge method can't be invoked on a non-injected object")
-                    // 整个藏起来 —— 「点执行导入就提示已取消导入」就是这么被掩盖的。
-                    // 官方在原生处理失败时同样是 reject。
-                    reject(new Error(detail));
+                    // 直连注入对象失败(最常见的两类:SSO 页面在同一 JS 上下文里重写文档后
+                    // 变成 "non-injected object";个别机型上接口未暴露)。这两种情况都不影响
+                    // 网页 console 与 evaluateJavascript,所以退回 console 通道 —— 原生侧
+                    // 在 onConsoleMessage 里解析并分发,再用 evaluateJavascript 回填。
+                    // 注意:这里**保留** resolver 与超时,等控制台通道的结果。
+                    try {
+                      console.log('__SHIGUANG_BRIDGE__' + JSON.stringify({ method: method, args: fullArgs }));
+                      try { console.warn('[桥] ' + method + ' 直连失败,已改用控制台通道: ' + detail); } catch(e3) {}
+                    } catch(e4) {
+                      delete window.__resolvers[id];
+                      clearTimeout(timer);
+                      try { console.error('[桥] ' + method + ' 两条通道都不可用: ' + detail); } catch(e5) {}
+                      reject(new Error(detail));
+                    }
                   }
                 });
               }
