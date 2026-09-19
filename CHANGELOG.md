@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.13 (2026-09-19)
+
+这一版只加**诊断埋点**,用来一次定位「点执行导入就提示已取消导入」:适配器只用 showToast 反馈结果,出问题时「哪一次桥调用、回填了什么」才是关键证据。
+
+### 变更
+- 桥的每次调用都打到 logcat(`tag: ImportBridge`):方法名 + 关键参数(`showAlert` 标题/按钮、`showPrompt` 默认值/校验函数名、`showSingleSelection` 选项数与默认项、`save*` 的字符数)、以及**回填给脚本的值**(`→ resolve(id) = ...`)。
+- 弹窗创建失败、回填注入失败都会记录原因;`showSingleSelection` 选项为空时会明确记下「回填 null(适配器多半会判成用户取消)」。
+- 垫片侧:`callNative` 现在把**调用失败**与**60 秒超时**用 `console.error('[桥] …')` 报出来(以前被静默吞成 `null`,适配器只会说「已取消导入」)。
+- 网页控制台输出改用 `Log.i`(tag: `ImportWebView`),避免被部分 ROM 过滤掉 `Log.d`。
+- 日志取值:`adb logcat -s ImportBridge:I ImportWebView:I`
+
 ## 0.1.12 (2026-09-19)
 
 **「点执行导入就提示已取消导入」的真正根因,找到了。**

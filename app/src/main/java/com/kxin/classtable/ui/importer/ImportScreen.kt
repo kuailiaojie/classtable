@@ -920,9 +920,10 @@ private fun configureImportWebView(
     }
     webView.webChromeClient = object : WebChromeClient() {
         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-            // 页面白屏多半是它自己的 JS 抛了错,落到 logcat 便于用户反馈时定位
+            // 页面白屏/导入中止多半是它自己的 JS 抛了错;桥的失败也会以 console.error 报出来,
+            // 统一落到 logcat(tag: ImportWebView),用 Log.i 以免被部分 ROM 过滤掉。
             consoleMessage?.let {
-                Log.d("ImportWebView", "console=${it.message()} @${it.sourceId()}:${it.lineNumber()}")
+                Log.i("ImportWebView", "console=${it.message()} @${it.sourceId()}:${it.lineNumber()}")
             }
             return super.onConsoleMessage(consoleMessage)
         }

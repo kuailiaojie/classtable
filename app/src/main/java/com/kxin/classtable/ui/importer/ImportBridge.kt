@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.os.Handler
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -50,18 +51,33 @@ class ImportBridge(
 
     private fun target(): WebView = bound ?: webViewProvider()
 
+    /**
+     * 桥调用轨迹,全部打到 logcat(tag: ImportBridge)。
+     * 适配器只会用 showToast 反馈结果,出问题时「哪一次调用、回了什么」才是关键证据,
+     * 因此每次调用、参数、回填值、异常都留痕。
+     */
+    private fun trace(message: String) {
+        Log.i("ImportBridge", message)
+    }
+
+    private fun brief(value: String?, limit: Int = 80): String =
+        (value ?: "").replace('\n', ' ').take(limit)
+
     @JavascriptInterface
     fun showToast(message: String) {
+        trace("showToast: ${brief(message, 160)}")
         mainHandler.post { onToast(message ?: "") }
     }
 
     @JavascriptInterface
     fun notifyTaskCompletion() {
+        trace("notifyTaskCompletion")
         mainHandler.post { onDone() }
     }
 
     @JavascriptInterface
     fun saveImportedCourses(json: String, callbackId: String) {
+        trace("saveImportedCourses: ${brief(json, 100)}…(共 ${(json ?: "").length} 字符)")
         mainHandler.post {
             onCoursesJson(json ?: "")
             resolve(callbackId, "true")
@@ -70,6 +86,7 @@ class ImportBridge(
 
     @JavascriptInterface
     fun savePresetTimeSlots(json: String, callbackId: String) {
+        trace("savePresetTimeSlots: ${brief(json, 100)}")
         mainHandler.post {
             onPresetTimeSlotsJson(json ?: "")
             resolve(callbackId, "true")
@@ -78,6 +95,7 @@ class ImportBridge(
 
     @JavascriptInterface
     fun saveCourseConfig(json: String, callbackId: String) {
+        trace("saveCourseConfig: ${brief(json, 100)}")
         mainHandler.post {
             onCourseConfigJson(json ?: "")
             resolve(callbackId, "true")
@@ -95,15 +113,18 @@ class ImportBridge(
      */
     @JavascriptInterface
     fun showAlert(title: String, message: String, confirmText: String, callbackId: String) {
+        trace("showAlert(title=${brief(title, 40)}, confirm=${brief(confirmText, 20)}, id=$callbackId)")
         mainHandler.post {
-            AlertDialog.Builder(target().context)
-                .setTitle(title.ifBlank { "提示" })
-                .setMessage(message ?: "")
-                .setPositiveButton(confirmText.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
-                // 协议里没有「取消」这条路径:禁止返回键 / 点击外部关闭,
-                // 否则脚本会拿到 false 直接 return,用户看不到任何失败原因
-                .setCancelable(false)
-                .show()
+            runCatching {
+                AlertDialog.Builder(target().context)
+                    .setTitle(title.ifBlank { "提示" })
+                    .setMessage(message ?: "")
+                    .setPositiveButton(confirmText.ifBlank { "确定" }) { _, _ -> resolve(callbackId, "true") }
+                    // 协议里没有「取消」这条路径:禁止返回键 / 点击外部关闭,
+                    // 否则脚本会拿到 false 直接 return,用户看不到任何失败原因
+                    .setCancelable(false)
+                    .show()
+            }.onFailure { trace("showAlert 弹窗失败: $it") }
         }
     }
 
@@ -113,8 +134,11 @@ class ImportBridge(
      */
     @JavascriptInterface
     fun showPrompt(title: String, message: String, defaultText: String, validator: String, callbackId: String) {
+        trace("showPrompt(title=${brief(title, 30)}, default=${brief(defaultText, 20)}, validator=${brief(validator, 30)}, id=$callbackId)")
         mainHandler.post {
-            showPromptDialog(target(), title, message, defaultText, validator, callbackId)
+            runCatching {
+                showPromptDialog(target(), title, message, defaultText, validator, callbackId)
+            }.onFailure { trace("showPrompt 弹窗失败: $it") }
         }
     }
 
@@ -187,36 +211,41 @@ class ImportBridge(
     /** 单选列表:defaultIndex 预选,取消返回 null;无可选项时直接返回 null(与官方一致)。 */
     @JavascriptInterface
     fun showSingleSelection(title: String, itemsJson: String, defaultIndex: Int, callbackId: String) {
+        val items = runCatching {
+            val arr = JSONArray(itemsJson ?: "[]")
+            (0 until arr.length()).map { arr.optString(it) }
+        }.getOrDefault(emptyList())
+        trace("showSingleSelection(title=${brief(title, 30)}, 选项数=${items.size}, default=$defaultIndex, id=$callbackId)")
         mainHandler.post {
-            val items = runCatching {
-                val arr = JSONArray(itemsJson ?: "[]")
-                (0 until arr.length()).map { arr.optString(it) }
-            }.getOrDefault(emptyList())
-            // 官方:EduSchoolSelectionUi 里 options 为空 → 弹「没有可选项」并 resolve null。
-            // 这里不返回任何序号:适配器普遍会校验 `idx >= list.length`(如 HPU、WUST),
-            // 返回一个不存在的序号会被判成「已取消导入」。
-            if (items.isEmpty()) {
-                resolve(callbackId, "null")
-                return@post
-            }
-            val checked = defaultIndex.coerceIn(items.indices)
-            var selected = checked
-            AlertDialog.Builder(target().context)
-                .setTitle(title ?: "")
-                .setSingleChoiceItems(items.toTypedArray(), checked) { _, which -> selected = which }
-                .setPositiveButton("确定") { _, _ -> resolve(callbackId, selected.toString()) }
-                .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
-                .setOnCancelListener { resolve(callbackId, "null") }
-                .show()
+            runCatching {
+                // 官方:EduSchoolSelectionUi 里 options 为空 → 弹「没有可选项」并 resolve null。
+                // 这里不返回任何序号:适配器普遍会校验 `idx >= list.length`(如 HPU、WUST),
+                // 返回一个不存在的序号会被判成「已取消导入」。
+                if (items.isEmpty()) {
+                    trace("showSingleSelection 选项为空 → 回填 null(适配器多半会判成「用户取消」)")
+                    resolve(callbackId, "null")
+                    return@runCatching
+                }
+                val checked = defaultIndex.coerceIn(items.indices)
+                var selected = checked
+                AlertDialog.Builder(target().context)
+                    .setTitle(title ?: "")
+                    .setSingleChoiceItems(items.toTypedArray(), checked) { _, which -> selected = which }
+                    .setPositiveButton("确定") { _, _ -> resolve(callbackId, selected.toString()) }
+                    .setNegativeButton("取消") { _, _ -> resolve(callbackId, "null") }
+                    .setOnCancelListener { resolve(callbackId, "null") }
+                    .show()
+            }.onFailure { trace("showSingleSelection 弹窗失败: $it") }
         }
     }
 
     private fun resolve(callbackId: String, jsValue: String) {
+        trace("→ resolve($callbackId) = $jsValue")
         val webView = target()
         webView.post {
             runCatching {
                 webView.evaluateJavascript("window.__resolve(${JSONObject.quote(callbackId)}, $jsValue);", null)
-            }
+            }.onFailure { trace("resolve 注入失败: $it") }
         }
     }
 
@@ -313,11 +342,22 @@ class ImportBridge(
                 return new Promise(function(resolve){
                   var id = 'cb_' + (Math.random() * 1e9 | 0);
                   var timer = setTimeout(function(){
-                    if (window.__resolvers[id]) { delete window.__resolvers[id]; resolve(null); }
+                    if (window.__resolvers[id]) {
+                      delete window.__resolvers[id];
+                      // 回填 null 会让适配器判成「用户取消」,必须留下痕迹
+                      try { console.error('[桥] ' + method + ' 60 秒无响应,回填 null'); } catch(e) {}
+                      resolve(null);
+                    }
                   }, 60000);
                   window.__resolvers[id] = { resolve: resolve, timer: timer };
                   try { AndroidBridgeNative[method].apply(null, args.concat([id])); }
-                  catch(e) { delete window.__resolvers[id]; clearTimeout(timer); resolve(null); }
+                  catch(e) {
+                    delete window.__resolvers[id];
+                    clearTimeout(timer);
+                    // 同理:调用失败会被吞成 null,适配器只会说「已取消导入」,这里必须报出来
+                    try { console.error('[桥] ' + method + ' 调用失败: ' + ((e && e.message) || e)); } catch(e2) {}
+                    resolve(null);
+                  }
                 });
               }
               window.AndroidBridge = {
