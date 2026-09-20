@@ -31,7 +31,6 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
-import com.kxin.classtable.design.YohakuBottomNav
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
@@ -39,7 +38,6 @@ import com.kxin.classtable.design.courseMark
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.ui.navigateToTab
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -198,7 +196,5 @@ fun CoursesScreen(
                 }
             }
         }
-
-        YohakuBottomNav(current = "courses", onNavigate = { nav.navigateToTab(it) })
     }
 }

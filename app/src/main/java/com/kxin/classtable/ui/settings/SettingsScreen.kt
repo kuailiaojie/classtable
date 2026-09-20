@@ -455,110 +455,116 @@ fun SettingsScreen(
             .background(colors.paper)
             .verticalScroll(rememberScrollState()),
     ) {
-        YohakuTopBar(title = "设置", onBack = { nav.popBackStack() })
+        // 设置是底部导航的根标签页,没有上一级可返回,因此这里不放返回箭头
+        YohakuTopBar(title = "设置")
 
-        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
-            Text(text = "主题", style = YohakuType.label12, color = colors.neutral7)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeMode.entries.forEach { mode ->
-                    YohakuChip(
-                        text = when (mode) {
-                            ThemeMode.SYSTEM -> "跟随系统"
-                            ThemeMode.LIGHT -> "浅色"
-                            ThemeMode.DARK -> "深色"
-                        },
-                        selected = settings.themeMode == mode,
-                        onClick = { viewModel.setTheme(mode) },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
-        }
-
-        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
-            Text(text = "强调色", style = YohakuType.label12, color = colors.neutral7)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                AccentOptions.forEach { (label, hex) ->
-                    val selected = settings.accentHex.equals(hex, ignoreCase = true)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(accentColor(hex))
-                                .then(
-                                    if (selected) {
-                                        Modifier.border(2.dp, colors.neutral10, CircleShape)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .clickable { viewModel.setAccent(hex) },
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = label,
-                            style = YohakuType.label12,
-                            color = if (selected) colors.neutral9 else colors.neutral7,
+        SettingsSection(title = "外观") {
+            SettingBlock(title = "主题") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeMode.entries.forEach { mode ->
+                        YohakuChip(
+                            text = when (mode) {
+                                ThemeMode.SYSTEM -> "跟随系统"
+                                ThemeMode.LIGHT -> "浅色"
+                                ThemeMode.DARK -> "深色"
+                            },
+                            selected = settings.themeMode == mode,
+                            onClick = { viewModel.setTheme(mode) },
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+            DividerLine()
+            SettingBlock(title = "强调色") {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    AccentOptions.forEach { (label, hex) ->
+                        val selected = settings.accentHex.equals(hex, ignoreCase = true)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor(hex))
+                                    .then(
+                                        if (selected) {
+                                            Modifier.border(2.dp, colors.neutral10, CircleShape)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .clickable { viewModel.setAccent(hex) },
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = label,
+                                style = YohakuType.label12,
+                                color = if (selected) colors.neutral9 else colors.neutral7,
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        SettingRow(title = "作息时间", value = firstPeriodText, onClick = { nav.navigate("schedule_times") })
-        DividerLine()
-        SettingRow(
-            title = "课程提醒",
-            value = when {
-                !settings.notificationsEnabled -> "已关闭"
-                settings.notifyMode == NotifyMode.LIVE.name && settings.notifyLeadMinutes <= 0 ->
-                    "准点 · 实时活动"
-                settings.notifyMode == NotifyMode.LIVE.name ->
-                    "课前 ${settings.notifyLeadMinutes} 分钟 · 实时活动"
-                settings.notifyLeadMinutes <= 0 -> "准点提醒"
-                else -> "课前 ${settings.notifyLeadMinutes} 分钟"
-            },
-            onClick = { showNotifyDialog = true },
-        )
-        // —— 提醒可靠性:收敛为单个入口,集中到独立权限页 ——
-        DividerLine()
-        SettingRow(title = "提醒可靠性", value = "通知/闹钟/自启动", onClick = { nav.navigate("permissions") })
-        DividerLine()
-        SettingRow(title = "学期周次", value = "当前第 $realWeek 周", onClick = { nav.navigate("semester") })
-        DividerLine()
-        SettingRow(
-            title = "AI 密钥",
-            value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
-            onClick = { showAiDialog = true },
-        )
-        DividerLine()
-        SettingRow(title = "教务导入", value = "3 步导入", onClick = { nav.navigate("import") })
-        DividerLine()
-        SettingRow(title = "适配器同步", value = "更新学校与脚本", onClick = { nav.navigate("adapter_sync") })
-        DividerLine()
-        SettingRow(title = "桌面小组件", value = "今日 / 下节课", onClick = { showWidgetDialog = true })
-        DividerLine()
-        SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
-        DividerLine()
-        SettingRow(title = "检查更新", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("update") })
-        DividerLine()
-        SettingRow(
-            title = "自动检查更新",
-            value = if (settings.autoCheckUpdate) {
-                if (settings.dismissedVersion.isNotBlank()) "每天一次 · 已忽略 v${settings.dismissedVersion}" else "每天一次"
-            } else {
-                "已关闭"
-            },
-            onClick = { showAutoCheckDialog = true },
-        )
-        DividerLine()
-        SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
+        SettingsSection(title = "课表") {
+            SettingRow(title = "作息时间", value = firstPeriodText, onClick = { nav.navigate("schedule_times") })
+            DividerLine()
+            SettingRow(title = "学期周次", value = "当前第 $realWeek 周", onClick = { nav.navigate("semester") })
+        }
 
-        Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+        SettingsSection(title = "导入与识别") {
+            SettingRow(title = "教务导入", value = "3 步导入", onClick = { nav.navigate("import") })
+            DividerLine()
+            SettingRow(
+                title = "AI 密钥",
+                value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
+                onClick = { showAiDialog = true },
+            )
+            DividerLine()
+            SettingRow(title = "适配器同步", value = "更新学校与脚本", onClick = { nav.navigate("adapter_sync") })
+        }
+
+        SettingsSection(title = "提醒") {
+            SettingRow(
+                title = "课程提醒",
+                value = when {
+                    !settings.notificationsEnabled -> "已关闭"
+                    settings.notifyMode == NotifyMode.LIVE.name && settings.notifyLeadMinutes <= 0 ->
+                        "准点 · 实时活动"
+                    settings.notifyMode == NotifyMode.LIVE.name ->
+                        "课前 ${settings.notifyLeadMinutes} 分钟 · 实时活动"
+                    settings.notifyLeadMinutes <= 0 -> "准点提醒"
+                    else -> "课前 ${settings.notifyLeadMinutes} 分钟"
+                },
+                onClick = { showNotifyDialog = true },
+            )
+            DividerLine()
+            SettingRow(title = "提醒可靠性", value = "通知 / 闹钟 / 自启动", onClick = { nav.navigate("permissions") })
+        }
+
+        SettingsSection(title = "桌面") {
+            SettingRow(title = "桌面小组件", value = "今日 / 下节课", onClick = { showWidgetDialog = true })
+        }
+
+        SettingsSection(title = "账号与数据") {
+            SettingRow(title = "账号", value = userEmail ?: "未登录", onClick = { nav.navigate("account") })
+        }
+
+        SettingsSection(title = "关于") {
+            SettingRow(title = "检查更新", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("update") })
+            DividerLine()
+            SettingRow(
+                title = "自动检查更新",
+                value = if (settings.autoCheckUpdate) {
+                    if (settings.dismissedVersion.isNotBlank()) "每天一次 · 已忽略 v${settings.dismissedVersion}" else "每天一次"
+                } else {
+                    "已关闭"
+                },
+                onClick = { showAutoCheckDialog = true },
+            )
+            DividerLine()
+            SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
+        }
     }
 }
 

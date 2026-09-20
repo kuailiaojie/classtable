@@ -102,6 +102,7 @@ function pickApk(rel) {
 }
 
 // GET /version → 最新版本信息(客户端据此判断是否更新)。
+// 同时给出安装包大小与 SHA-256:客户端据此显示进度、校验完整性(代理响应的长度不可靠)。
 async function handleVersion() {
   try {
     const rel = await latestRelease();
@@ -111,6 +112,8 @@ async function handleVersion() {
       notes: rel.body || "",
       releaseUrl: rel.html_url || `https://github.com/${GITHUB_REPO}/releases`,
       apkUrl: apk ? "/apk" : "",
+      apkSize: apk ? apk.size || 0 : 0,
+      apkSha256: apk ? String(apk.digest || "").replace(/^sha256:/, "") : "",
       publishedAt: rel.published_at || "",
     }, 600);
   } catch (e) {
@@ -118,28 +121,57 @@ async function handleVersion() {
   }
 }
 
-// GET /apk → 流式代理最新 release 的 APK(下载走 Netlify 域名,规避 GitHub 资产域名不稳)。
-async function handleApk() {
+// 单个响应的安全上限:Netlify 函数响应超过 ~6MB 会被边缘截断(Content-Length 还在,内容却少了),
+// 客户端会因此拿到损坏的安装包。因此:整体下载超出上限时,由客户端用 Range 分段拉取,这里透传。
+const MAX_INLINE_BYTES = 5 * 1024 * 1024;
+
+// GET /apk → 代理最新 release 的 APK。
+// - 带 Range 时透传 Range,并把上游的 206 / Content-Range 原样返回(每段都远小于响应上限);
+// - 不带 Range 且整包超过上限时明确报错,绝不返回半截文件。
+async function handleApk(req) {
   try {
     const rel = await latestRelease();
     const asset = pickApk(rel);
     if (!asset) {
       return json(404, { error: { code: 404, message: "最新版本没有可下载的 APK" } });
     }
+    const range = req.headers.get("range");
+    if (!range && (asset.size || 0) > MAX_INLINE_BYTES) {
+      return json(409, {
+        error: {
+          code: 409,
+          message: `安装包 ${asset.size} 字节超过单次响应上限,请带 Range 分段下载`,
+        },
+      });
+    }
+    const upstreamHeaders = {
+      "User-Agent": "classtable-proxy",
+      // 明确要求不压缩:压缩后长度与解压后不一致,客户端的完整性校验会误判
+      "Accept-Encoding": "identity",
+    };
+    if (range) upstreamHeaders.Range = range;
+
     const apkResp = await fetch(asset.browser_download_url, {
       redirect: "follow",
-      headers: { "User-Agent": "classtable-proxy" },
+      headers: upstreamHeaders,
     });
     if (!apkResp.ok || !apkResp.body) {
       return json(502, { error: { code: 502, message: `下载 APK 失败(HTTP ${apkResp.status})` } });
     }
     const headers = {
       "Content-Type": "application/vnd.android.package-archive",
-      "Cache-Control": "public, max-age=600",
+      "Accept-Ranges": "bytes",
+      // 分段响应不进缓存:边缘缓存住的内容可能已是被截断的
+      "Cache-Control": range ? "no-store" : "public, max-age=600",
     };
     const len = apkResp.headers.get("content-length");
     if (len) headers["Content-Length"] = len;
-    return new Response(apkResp.body, { status: 200, headers });
+    const contentRange = apkResp.headers.get("content-range");
+    if (contentRange) headers["Content-Range"] = contentRange;
+    return new Response(apkResp.body, {
+      status: apkResp.status === 206 ? 206 : 200,
+      headers,
+    });
   } catch (e) {
     return json(502, { error: { code: 502, message: "下载 APK 失败: " + e.message } });
   }
@@ -156,7 +188,7 @@ export default async (req) => {
     return handleVersion();
   }
   if (rest === "/apk") {
-    return handleApk();
+    return handleApk(req);
   }
 
   let upstream = null;
@@ -203,7 +235,7 @@ export default async (req) => {
 function json(status, obj) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json; charset=utf-8" },
   });
 }
 
@@ -211,7 +243,7 @@ function jsonWithCache(status, obj, maxAge) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": `public, max-age=${maxAge}`,
     },

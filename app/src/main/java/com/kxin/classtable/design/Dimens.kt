@@ -14,6 +14,13 @@ object YohakuDimens {
     val radiusControl = 6.dp
     val radiusCard = 8.dp
     val radiusSheet = 12.dp
+    /** 悬浮底部导航:比卡片更圆,但不到胶囊(胶囊会显得像按钮组) */
+    val radiusNav = 18.dp
+
+    /** 悬浮底部导航:单项宽度(四项目定宽,间距自然均匀) */
+    val navItemWidth = 64.dp
+    /** 悬浮底部导航给内容预留的高度(栏高 + 上下浮动余量) */
+    val navReservedHeight = 64.dp
 
     val accentBarWidth = 4.dp
 
