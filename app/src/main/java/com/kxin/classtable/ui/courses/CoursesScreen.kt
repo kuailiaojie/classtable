@@ -165,7 +165,7 @@ fun CoursesScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = if (course.hasCustomTime()) {
+                                    text = if (course.isCustomScheduled()) {
                                         "自定义"
                                     } else {
                                         "第 ${course.startPeriod}-${course.endPeriod} 节"

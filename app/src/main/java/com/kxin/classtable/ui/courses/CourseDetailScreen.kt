@@ -127,7 +127,7 @@ fun CourseDetailScreen(
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
 
                 InfoRow("星期", Course.weekdaysText(c))
-                if (c.hasCustomTime()) {
+                if (c.isCustomScheduled()) {
                     InfoRow("时间", "自定义 · ${Schedule.courseTimeText(c)}")
                 } else {
                     // 节次与时刻分开写:「第 3-4 节」和「10:10–12:00」各自独立,避免混读

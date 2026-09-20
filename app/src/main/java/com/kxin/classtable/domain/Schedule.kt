@@ -85,6 +85,20 @@ object Schedule {
     /** 分钟 → "HH:MM" */
     fun clockText(minute: Int): String = fmt(minute)
 
+    /**
+     * 把课程的「节次」按 [periods] 换算成具体时刻并钉住(custom*Minute)。
+     *
+     * 课程的时刻是**数据**,不是每次显示时现算的派生值:导入/新建时用当时的作息算一次就固定下来,
+     * 之后再改作息(或再导入别的学校)都不会把它带走 —— 想改只能编辑这门课本身。
+     * 自定时间课程(startPeriod <= 0)与节次不在表内的原样返回。
+     */
+    fun pinCourseTimes(course: Course, periods: List<Period>): Course {
+        if (course.startPeriod <= 0) return course
+        val start = periods.getOrNull(course.startPeriod - 1)?.start ?: return course
+        val end = periods.getOrNull(course.endPeriod - 1)?.end ?: return course
+        return course.copy(customStartMinute = start, customEndMinute = end)
+    }
+
     /** 课程时间文本:自定义时间优先,否则按作息节次。 */
     fun courseTimeText(course: Course, periods: List<Period> = defaultPeriods): String {
         val cs = course.customStartMinute

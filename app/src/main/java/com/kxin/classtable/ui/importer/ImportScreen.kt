@@ -125,15 +125,11 @@ fun ImportScreen(
     val detectedPeriods by viewModel.detectedPeriods.collectAsStateWithLifecycle()
     val detectedSemester by viewModel.detectedSemester.collectAsStateWithLifecycle()
     val currentPeriodTimes by viewModel.currentPeriodTimes.collectAsStateWithLifecycle()
-    // 脚本识别到的作息/学期默认应用,但由用户在这里确认(之前是静默覆盖本地作息)
-    var applyDetected by rememberSaveable { mutableStateOf(true) }
-    // 确认页里给课程算时间用的作息:勾选「应用脚本作息」时是脚本那张表,否则是当前生效的表。
-    // 关键:必须传进去算 —— 用 App 内置的默认表算,同一门课在课程行与作息行会显示两个时间
-    // (学校作息是大节/非 50 分钟一节时尤其明显)。
-    val previewPeriods = remember(detectedPeriods, applyDetected, currentPeriodTimes) {
-        Schedule.parsePeriods(
-            if (applyDetected) detectedPeriods ?: currentPeriodTimes else currentPeriodTimes,
-        )
+    // 脚本能给作息就**强制覆盖**当前作息(用户要求:适配器自带的时间就是这所学校的真相),
+    // 因此在确认页不再提供「要不要应用」的勾选,只把它写在明面上告知。
+    // 课程的时间点在写入时会被钉住,所以覆盖作息不会把已导入课程的时刻带跑。
+    val previewPeriods = remember(detectedPeriods, currentPeriodTimes) {
+        Schedule.parsePeriods(detectedPeriods ?: currentPeriodTimes)
     }
 
     val holder = remember { WebViewHolder() }
@@ -397,9 +393,7 @@ fun ImportScreen(
                 periods = previewPeriods,
                 detectedPeriods = detectedPeriods,
                 detectedSemester = detectedSemester,
-                applyDetected = applyDetected,
-                onApplyDetectedChange = { applyDetected = it },
-                onImport = { viewModel.importAll(applyDetected) },
+                onImport = { viewModel.importAll(applyDetectedConfig = true) },
                 onApplyDetectedOnly = { viewModel.applyDetectedOnly() },
                 onSkip = { nav.popBackStack() },
             )
@@ -979,8 +973,6 @@ private fun StepConfirm(
     periods: List<Schedule.Period>,
     detectedPeriods: String?,
     detectedSemester: Pair<Int, Long>?,
-    applyDetected: Boolean,
-    onApplyDetectedChange: (Boolean) -> Unit,
     onImport: () -> Unit,
     onApplyDetectedOnly: () -> Unit,
     onSkip: () -> Unit,
@@ -997,15 +989,15 @@ private fun StepConfirm(
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
             if (hasDetected) {
-                // 脚本给的作息/学期在这里显式确认,不再静默覆盖用户已设好的作息
+                // 不再给「要不要应用」的勾选:适配器带了作息就是这所学校的作息,直接覆盖。
+                // 这里只把「会覆盖什么」写在明面上,不静默。
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onApplyDetectedChange(!applyDetected) }
                         .padding(vertical = 4.dp),
                 ) {
                     Text(
-                        text = "${if (applyDetected) "☑" else "☐"} 一并应用脚本识别到的作息/学期",
+                        text = "将按脚本识别到的作息 / 学期覆盖当前设置",
                         style = YohakuType.copy13,
                         color = colors.accent,
                     )
@@ -1033,10 +1025,15 @@ private fun StepConfirm(
                             color = colors.neutral7,
                         )
                     }
+                    Text(
+                        text = "导入后课程的时刻会按这张作息固定,之后再改作息不会移动它们。",
+                        style = YohakuType.label12,
+                        color = colors.neutral6,
+                    )
                 }
             } else {
                 Text(
-                    text = "脚本未提供作息时间与开学日期。",
+                    text = "脚本未提供作息时间与开学日期,沿用当前设置。",
                     style = YohakuType.label12,
                     color = colors.neutral7,
                 )

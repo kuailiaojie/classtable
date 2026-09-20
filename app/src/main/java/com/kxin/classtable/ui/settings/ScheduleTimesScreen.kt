@@ -158,7 +158,7 @@ fun ScheduleTimesScreen(
                 color = colors.neutral7,
             )
             Text(
-                text = "改这里只调整每节几点上,不会移动课程所属的节次。",
+                text = "课程的时刻在导入 / 新建时已按当时的作息固定,改这张表不会再移动它们(要改请编辑那门课)。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )

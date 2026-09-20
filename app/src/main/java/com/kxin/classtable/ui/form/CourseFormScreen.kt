@@ -132,7 +132,7 @@ fun CourseFormScreen(
             weekTypeIdx = WeekType.entries.indexOf(c.weekType).coerceAtLeast(0)
             customStart = c.weekStart.toString()
             customEnd = c.weekEnd.toString()
-            if (c.hasCustomTime()) {
+            if (c.isCustomScheduled()) {
                 timeMode = 1
                 customTimeStart = Schedule.clockText(c.customStartMinute ?: 0)
                 customTimeEnd = Schedule.clockText(c.customEndMinute ?: 0)
@@ -211,6 +211,20 @@ fun CourseFormScreen(
             )
             viewModel.save(course)
         } else {
+            // 时刻钉住:节次没动就沿用原来的时刻(改个名字、改个地点不该把时间带走),
+            // 改了节次或新建时才按当前作息换算一次。
+            val sameSection = editing != null &&
+                editing.startPeriod == periodStart && editing.endPeriod == periodEnd
+            val pinnedStart = if (sameSection) {
+                editing?.customStartMinute
+            } else {
+                periods.getOrNull(periodStart - 1)?.start
+            }
+            val pinnedEnd = if (sameSection) {
+                editing?.customEndMinute
+            } else {
+                periods.getOrNull(periodEnd - 1)?.end
+            }
             val course = Course(
                 id = editing?.id ?: UUID.randomUUID().toString(),
                 name = trimmed,
@@ -224,6 +238,8 @@ fun CourseFormScreen(
                 weekEnd = we,
                 semesterId = editing?.semesterId ?: "default",
                 updatedAt = System.currentTimeMillis(),
+                customStartMinute = pinnedStart,
+                customEndMinute = pinnedEnd,
                 weekdays = weekdaysMask,
                 note = note.trim(),
             )

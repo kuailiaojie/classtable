@@ -27,8 +27,15 @@ data class Course(
     /** 备注(选填)。 */
     val note: String = "",
 ) {
-    /** 是否自定义时间课程(不随作息表,如临时讲座/晚间加课)。 */
+    /** 是否带具体时刻。导入/保存时会把时刻钉在课程上,所以「第几节」的课也会是 true。 */
     fun hasCustomTime(): Boolean = customStartMinute != null && customEndMinute != null
+
+    /**
+     * 是否为「自定时间」课程:没有节次号,时刻完全由自己给定(如晚间讲座)。
+     * 与 [hasCustomTime] 的区别:钉住时刻的普通课程仍属于某个节次,界面上要写「第 N 节」,
+     * 只有 startPeriod <= 0 的课才该标成「自定义」。
+     */
+    fun isCustomScheduled(): Boolean = startPeriod <= 0
 
     /** 该课程是否在星期 day(1=周一)上课。 */
     fun isOnWeekday(day: Int): Boolean = (weekdays and (1 shl (day - 1))) != 0

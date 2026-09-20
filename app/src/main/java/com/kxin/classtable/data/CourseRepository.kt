@@ -6,6 +6,7 @@ import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.CourseEntity
 import com.kxin.classtable.data.local.DeletedCourseDao
 import com.kxin.classtable.data.local.DeletedCourseEntity
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.notify.ReminderPlanner
 import com.kxin.classtable.widget.NextClassWidget
@@ -28,6 +29,7 @@ class CourseRepository @Inject constructor(
     private val deletedDao: DeletedCourseDao,
     private val sync: SyncRepository,
     private val reminderPlanner: ReminderPlanner,
+    private val settingsRepository: SettingsRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -67,7 +69,11 @@ class CourseRepository @Inject constructor(
 
     suspend fun importAll(courses: List<Course>) {
         val now = System.currentTimeMillis()
-        dao.upsertAll(courses.map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
+        // 导入即钉住时刻:按当前作息(导入前刚被脚本覆盖的那一张)把节次换算成具体时刻存下来,
+        // 之后改作息不会再把这些课程的时间点带跑。
+        val periods = Schedule.parsePeriods(settingsRepository.currentSettings().periodTimes)
+        dao.upsertAll(courses.map { Schedule.pinCourseTimes(it, periods) }
+            .map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
         postChangeSideEffects()
         Analytics.log("courses_imported", "count" to courses.size)
         scope.launch { sync.syncNow() }

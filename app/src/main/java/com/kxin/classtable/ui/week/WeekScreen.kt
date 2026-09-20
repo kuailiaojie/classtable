@@ -307,7 +307,13 @@ private fun WeekGrid(
                     )
                 }
 
-                // 节次留白列:节号 + 每个大节首行的开始时间
+                // 节次留白列:每行「节号 + 该节开始时间」。
+                //
+                // 以前这里只给**奇数行**打时间(if (idx % 2 == 0)),那是按「2 小节 = 1 大节」
+                // 的默认作息表来的;但作息现在可以是任意的(长江大学本身就是 8 个 95 分钟的大节,
+                // 不是 12 个小节),于是第 2/4/6/8 节整行没有时间,第 2 节的课(10:05)紧挨着的
+                // 标签是第 1 节的 08:00 —— 看起来就成了「课程时间对、跟左边节次对不上」。
+                // 每一节都标出开始时间,对任何作息表都成立。
                 Column(
                     modifier = Modifier
                         .width(gutter)
@@ -327,13 +333,11 @@ private fun WeekGrid(
                                 style = YohakuType.gridGutter,
                                 color = colors.neutral6,
                             )
-                            if (idx % 2 == 0) {
-                                Text(
-                                    text = Schedule.clockText(period.start),
-                                    style = YohakuType.gridGutterTime,
-                                    color = colors.neutral5,
-                                )
-                            }
+                            Text(
+                                text = Schedule.clockText(period.start),
+                                style = YohakuType.gridGutterTime,
+                                color = colors.neutral5,
+                            )
                         }
                     }
                 }

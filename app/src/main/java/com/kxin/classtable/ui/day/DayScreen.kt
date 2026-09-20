@@ -73,7 +73,6 @@ fun DayScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
-    val currentBig = Schedule.currentBigPeriodIndex(periods)
 
     Column(
         modifier = Modifier
@@ -156,9 +155,10 @@ fun DayScreen(
                     verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
                 ) {
                     items(courses, key = { it.id }) { course ->
-                        val current = Schedule.bigPeriods(periods.size).getOrNull(currentBig - 1)
-                        val isCurrent = current != null &&
-                            Schedule.courseOverlapsBigPeriod(course, current.first, current.second, periods)
+                        // 直接按课程自己的时间区间判断「正在上」。
+                        // 以前是按 bigPeriods 两行一组去配对(2 小节 = 1 大节),作息本身是大节时
+                        // (如长江大学 8 个 95 分钟的节)会配错:第 2 节上课时把第 1 节的课标成正在上。
+                        val isCurrent = Schedule.isCourseOngoing(course, periods)
                         YohakuCard(accentBar = isCurrent, containerColor = courseTint(course)) {
                             Row(verticalAlignment = Alignment.Top) {
                                 Text(
