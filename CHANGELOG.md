@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.1 (2026-09-19)
+
+**状态栏胶囊(实时活动)适配修复** —— 荣耀灵动胶囊、小米超级岛、OPPO 实况通知这类国产胶囊此前在
+本应用上都不会出现,原因是通知不满足 Android 16 Live Updates 规范里的一条硬条件。
+
+### 修复
+- **补上 `POST_PROMOTED_NOTIFICATIONS` 声明**(清单里的非运行时权限):它是「系统是否允许把通知
+  提升为实时活动」的前提,缺了它任何胶囊机型都不会提升本应用的通知。这一条是本次最关键的变化。
+- **实时活动改用平台 `Notification.Builder`**:`ProgressStyle`(API 36 的进度轨 + 进度点)、
+  `setShortCriticalText`、提升请求都只在平台 Builder 上可达,compat Builder 拿不到。
+- **主动请求提升**:按规范写入 `android.requestPromotedOngoing` 与 `android.shortCriticalText`,
+  并在方法存在的版本上补一次 `setShortCriticalText` 调用(签名有 String / CharSequence 两种,都试)。
+- **胶囊短文案改为纯文本且 ≤7 字**(如「10分钟」):状态栏胶囊宽 96dp,超长会退化成只显示图标;
+  带 span 的文案在部分机型上会被渲染器丢弃。
+- **上课中改用 `CATEGORY_PROGRESS` + 进度轨**,课前用 `CATEGORY_EVENT`;固定 `COLOR_DEFAULT`,
+  不使用自定义颜色(部分系统会把自定义色通知按普通通知渲染)。
+- **划掉通知 = 取消本节提醒**(delete intent 复用静音动作):规范要求被用户划掉的实时活动不得重新发布。
+- **前台服务类型 dataSync → specialUse**:实时活动是「持续展示进行中状态」,在 Android 15+ 上
+  dataSync 受每日时长上限约束;清单同时补 `FOREGROUND_SERVICE_SPECIAL_USE` 权限与服务子类型说明。
+- 新增小米「超级岛」参数:`miui.focus.param`(`param_v2`:交互能力 / 摘要态 / 焦点通知数据)+
+  `miui.focus.pics`,按官方《超级岛开发指南》客户端接入方式实现;**先查设备再补参数**
+  (是否小米系 / `persist.sys.feature.island` / `notification_focus_protocol` ≥ 3 / `canShowFocus`),
+  任一不满足就不动通知;参数内 `filterWhenNoPermission=false`,权限被关时退化为普通通知。
+- **诊断日志**:构建实时活动时打印 `promotable` / `requested` / `canPostPromoted` / 胶囊文案 /
+  小米岛状态,装到真机上直接看日志就能定位胶囊为什么不出现。
+
+### 设置
+- 「提醒可靠性」页新增「**实时活动胶囊**」一项(API 36+):显示系统是否允许提升,点击直达系统
+  「实时活动」设置页(没有该页面时退回应用通知设置)。
+
+### 版本
+- 0.2.0(21) → 0.2.1(22)。
+
 ## 0.2.0 (2026-09-19)
 
 界面与提醒的一次整体收束,也是文档的一次重写。

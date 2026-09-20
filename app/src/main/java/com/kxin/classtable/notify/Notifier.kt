@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -34,9 +35,6 @@ object Notifier {
     private const val NOTIFY_ID_TOMORROW = 99003
     private const val REQ_UPDATE_INTENT = 99002
     private const val REQ_LIVE_CONTENT = 99011
-
-    /** 进度轨最大刻度(与 ProgressStyle.Segment 长度同基准)。 */
-    const val LIVE_PROGRESS_MAX = 1000
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -134,11 +132,13 @@ object Notifier {
     }
 
     /**
-     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随分钟推进。
-     * 通知带「取消本节课提醒」按钮(静音到下课为止)。
+     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随分钟推进;
+     * 通知带「取消本节课提醒」按钮,划掉通知也等同于取消本节提醒(见 delete intent)。
      *
-     * API 36+ 额外走 ProgressStyle(进度分段 + 进度点)与 promoted 胶囊(反射调用,
-     * 失败只记日志——不同 ROM 对这两个 API 的支持不一致,不能让它把通知搞崩)。
+     * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊(荣耀灵动胶囊 /
+     * 小米超级岛 / OPPO 实况通知)认的是 Android 16 的 Live Updates 规范,
+     * 需要 `ProgressStyle`(平台 API)+ `setRequestPromotedOngoing` + `setShortCriticalText`,
+     * 这三者都只在平台 Builder 上可达。条件见 [CapsuleCompat] 的说明。
      */
     fun buildLiveCourse(
         context: Context,
@@ -156,72 +156,97 @@ object Notifier {
         val minutesToStart = minutesBetween(now, startAtMillis)
         val minutesToEnd = minutesBetween(now, endAtMillis)
         val inClass = now >= startAtMillis
-        val title = courseName
+        val finished = now >= endAtMillis
+        val timeText = "${clock(startAtMillis)}–${clock(endAtMillis)}"
+        val placeText = location.ifBlank { "未设置地点" }
+
         val statusLine = when {
             !inClass && minutesToStart > 0 -> "还有 $minutesToStart 分钟上课"
             !inClass -> "马上就要上课"
-            minutesToEnd > 0 -> "上课中 · 还有 $minutesToEnd 分钟下课"
+            !finished && minutesToEnd > 0 -> "上课中 · 还有 $minutesToEnd 分钟下课"
             else -> "已下课"
         }
+        // 胶囊短文案:纯文本、尽量 ≤7 字 —— 状态栏胶囊宽 96dp,放不下就只剩图标
         val chipText = when {
-            !inClass && minutesToStart > 0 -> "$minutesToStart 分钟"
-            !inClass -> "现在上课"
-            minutesToEnd > 0 -> "$minutesToEnd 分钟"
+            !inClass && minutesToStart > 0 -> "${minutesToStart}分钟"
+            !inClass -> "准备上课"
+            !finished && minutesToEnd > 0 -> "${minutesToEnd}分钟"
             else -> "已下课"
         }
-        val timeText = "${clock(startAtMillis)}–${clock(endAtMillis)}"
-        val place = location.ifBlank { "未设置地点" }
-        val body = "$statusLine · $timeText"
-        val expanded = "$body\n$place"
+        val bodyText = "$statusLine · $timeText"
+        val expandedText = if (location.isBlank()) bodyText else "$bodyText\n$placeText"
+        val progressing = inClass && !finished
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_COURSE_LIVE)
+        val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+            // contentTitle 是不可省的:没有它系统不会提升为实时活动
+            .setContentTitle(courseName)
+            .setContentText(bodyText)
             .setContentIntent(courseContentIntent(context, courseId))
+            .setDeleteIntent(cancelLivePendingIntent(context, muteKey, endAtMillis))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            // 固定用默认色:自定义颜色会让部分系统的胶囊强制按普通通知渲染
+            .setColor(Notification.COLOR_DEFAULT)
+            .setCategory(
+                if (progressing) Notification.CATEGORY_PROGRESS else Notification.CATEGORY_EVENT,
+            )
             .addAction(
                 R.drawable.ic_notify,
                 "取消本节课提醒",
                 cancelLivePendingIntent(context, muteKey, endAtMillis),
             )
 
-        val progress = progressFor(startAtMillis, endAtMillis, leadMinutes, now)
         if (Build.VERSION.SDK_INT >= 36) {
-            builder.setProgress(LIVE_PROGRESS_MAX, progress, false)
+            builder.setStyle(
+                if (progressing) {
+                    Notification.ProgressStyle()
+                        // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
+                        .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
+                        .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
+                        .setProgress(progressPercent(startAtMillis, endAtMillis, leadMinutes, now))
+                } else {
+                    Notification.BigTextStyle().bigText(expandedText)
+                },
+            )
         } else {
-            builder.setProgress(100, progress * 100 / LIVE_PROGRESS_MAX, false)
+            builder.setStyle(Notification.BigTextStyle().bigText(expandedText))
+            if (progressing) {
+                builder.setProgress(
+                    100,
+                    progressPercent(startAtMillis, endAtMillis, leadMinutes, now),
+                    false,
+                )
+            }
         }
 
-        val notification = builder.build()
-        if (Build.VERSION.SDK_INT >= 36) {
-            applyPromotedChip(notification, chipText)
+        CapsuleCompat.requestPromotion(builder, chipText)
+        XiaomiIsland.applyTo(
+            builder = builder,
+            context = context,
+            courseName = courseName,
+            placeText = placeText,
+            statusLabel = statusLine,
+            chipText = chipText,
+            timeoutMinutes = minutesBetween(now, endAtMillis).coerceAtLeast(1),
+        )
+
+        return builder.build().also { notification ->
+            CapsuleCompat.logPromotionState(context, notification)
         }
-        return notification
     }
 
-    /**
-     * API 36 的 promoted 胶囊:让通知以状态栏小字 + 进度形式常驻。
-     * 反射调用 + 多重兜底,任何一步失败都只是回落到普通常驻通知。
-     */
-    private fun applyPromotedChip(notification: Notification, chipText: String) {
-        runCatching {
-            val extras = notification.extras
-            extras.putBoolean("android.requestPromotedOngoing", true)
-            extras.putCharSequence("android.shortCriticalText", chipText)
-        }.onFailure { Log.w(TAG, "promoted chip extras 注入失败: ${it.javaClass.simpleName}") }
-    }
-
-    /** 进度:课前从 [leadMinutes] 前推进到上课,上课后满格。 */
-    private fun progressFor(startAt: Long, endAt: Long, leadMinutes: Int, now: Long): Int {
-        if (now >= startAt) return LIVE_PROGRESS_MAX
-        val from = startAt - leadMinutes.coerceAtLeast(0) * 60_000L
-        val span = (startAt - from).coerceAtLeast(1L)
-        return ((now - from).toFloat() / span * LIVE_PROGRESS_MAX).toInt().coerceIn(0, LIVE_PROGRESS_MAX - 1)
+    /** 进度百分比:课前从「提前量」那一刻推进到上课,上课后按本节课时长推进。 */
+    private fun progressPercent(startAt: Long, endAt: Long, leadMinutes: Int, now: Long): Int {
+        val from = if (now < startAt) {
+            startAt - leadMinutes.coerceAtLeast(0) * 60_000L
+        } else {
+            startAt
+        }
+        val to = if (now < startAt) startAt else endAt
+        val span = (to - from).coerceAtLeast(1L)
+        return (((now - from).toFloat() / span) * 100).toInt().coerceIn(0, 100)
     }
 
     private fun minutesBetween(from: Long, to: Long): Int =

@@ -1,6 +1,7 @@
 package com.kxin.classtable.ui.permissions
 
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.notify.CapsuleCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
@@ -50,12 +52,16 @@ fun PermissionsScreen(
     var notifOk by remember { mutableStateOf(RomHelper.notificationsEnabled(context)) }
     var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
     var batteryOk by remember { mutableStateOf(RomHelper.ignoreBatteryOptimizations(context)) }
+    // 状态栏胶囊(实时活动)只在 API 36+ 存在系统开关;更早的系统没有这一项
+    val capsuleSupported = Build.VERSION.SDK_INT >= 36
+    var capsuleOk by remember { mutableStateOf(CapsuleCompat.canPostPromoted(context)) }
 
     // 从系统设置页返回时刷新状态
     LifecycleResumeEffect(Unit) {
         notifOk = RomHelper.notificationsEnabled(context)
         alarmOk = RomHelper.exactAlarmGranted(context)
         batteryOk = RomHelper.ignoreBatteryOptimizations(context)
+        capsuleOk = CapsuleCompat.canPostPromoted(context)
         onPauseOrDispose { }
     }
 
@@ -107,6 +113,23 @@ fun PermissionsScreen(
             .padding(horizontal = YohakuDimens.screenPadding)
             .height(1.dp)
             .background(colors.neutral3))
+        if (capsuleSupported) {
+            PermissionRow(
+                title = "实时活动胶囊",
+                ok = capsuleOk,
+                hint = "让提醒出现在状态栏胶囊 / 灵动岛",
+                onClick = {
+                    runCatching {
+                        context.startActivity(CapsuleCompat.promotedSettingsIntent(context))
+                    }
+                },
+            )
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = YohakuDimens.screenPadding)
+                .height(1.dp)
+                .background(colors.neutral3))
+        }
         PermissionRow(
             title = "精确闹钟",
             ok = alarmOk,

@@ -24,6 +24,10 @@ import kotlinx.coroutines.launch
  * 课前倒计时 → 上课中(还有 N 分钟下课)→ 下课,下课 1 分钟后自动收掉。
  *
  * 与旧实现的差别:
+ * - **平台 Notification.Builder + ProgressStyle / 提升请求**:状态栏胶囊(荣耀灵动胶囊、
+ *   小米超级岛等)只提升符合 Android 16 Live Updates 规范的通知,细节见 [CapsuleCompat]。
+ * - **前台服务类型 specialUse**(而非 dataSync):实时活动是「持续展示进行中状态」,dataSync 在
+ *   Android 15+ 有每日时长上限,且胶囊机型按 specialUse 判定(清单里另有子类型说明)。
  * - **按分钟边界对齐刷新**(不用 chronometer:它会被系统替换掉状态栏胶囊的文案)。
  * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课。
  * - **静音检查**:点了「取消本节课提醒」立即收掉,并且不会因为重试闹钟又冒出来。
@@ -76,7 +80,7 @@ class CourseLiveUpdateService : Service() {
                 this,
                 Notifier.LIVE_NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
         }.onFailure {
             Log.w(TAG, "startForeground 失败: ${it.javaClass.simpleName}")

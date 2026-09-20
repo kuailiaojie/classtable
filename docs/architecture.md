@@ -56,6 +56,7 @@
 - **客户端**:本地优先。Room 持久化课程数据,未登录 = 访客本地模式;登录后 pull → 合并(updatedAt 后者胜)→ 应用墓碑 → push。
 - **反代中间层**:Android 的 Firebase Auth/Firestore 官方 SDK 硬编码 Google 域名,大陆无法直连。本项目移除 `firebase-auth` / `firebase-firestore` SDK 依赖,改用 REST 实现,全部请求经自建 Netlify Function 转发(方法 / query / body / Authorization ID token 原样透传)。`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留官方 SDK。同步由实时监听改为按需 pull / push(App 启动、登录、网络恢复时触发),对课程表场景无感知差异。
 - **提醒通道**:本地精确闹钟是准点提醒主力(离线可用),FCM 为实时增强通道。排程实现见 `notify/ReminderPlanner.kt`:按「排程签名 + 已排台账」管理 8 天滚动窗口,并排一个次日 00:05 的自续期闹钟;实时活动由前台服务持有,payload 持久化以便进程被杀后恢复。
+- **状态栏胶囊(实时活动)**:国产胶囊(荣耀灵动胶囊 / 小米超级岛 / OPPO 实况通知等)都按 Android 16 Live Updates 规范提升通知,条件是:清单声明 `POST_PROMOTED_NOTIFICATIONS`、通知 `ongoing` 且有 `contentTitle`、样式为 BigTextStyle / ProgressStyle 等且不用自定义 RemoteViews、并主动请求提升(`android.requestPromotedOngoing` + `android.shortCriticalText`)。实现见 `notify/CapsuleCompat.kt`(提升请求与系统设置入口)与其中的 `XiaomiIsland`(小米超级岛的 `miui.focus.param`,先查设备能力再补参数)。实时活动前台服务类型为 `specialUse`,需带 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 说明。
 
 ## 目录结构
 
