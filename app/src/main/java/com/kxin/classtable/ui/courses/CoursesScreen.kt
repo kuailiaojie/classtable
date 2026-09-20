@@ -1,6 +1,7 @@
 package com.kxin.classtable.ui.courses
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,17 +12,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -31,7 +37,9 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseMark
@@ -42,11 +50,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class CoursesViewModel @Inject constructor(
-    courseRepository: CourseRepository,
+    private val courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
     val courses: StateFlow<List<Course>> = courseRepository.observeAll()
@@ -54,6 +63,11 @@ class CoursesViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    /** 多选后的批量删除。 */
+    fun deleteCourses(ids: List<String>) = viewModelScope.launch {
+        courseRepository.deleteCourses(ids)
+    }
 }
 
 /**
@@ -70,12 +84,34 @@ fun CoursesScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
 
+    // 多选:顶栏「选择」进入。选中态下点行 = 勾选(不再进详情),底部换成批量操作。
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    val allIds = remember(courses) { courses.map { it.id }.toSet() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "课程")
+        YohakuTopBar(
+            title = if (selecting) "已选 ${selected.size} 门" else "课程",
+            actions = {
+                if (courses.isNotEmpty()) {
+                    Text(
+                        text = if (selecting) "取消" else "选择",
+                        style = YohakuType.copy13,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .clickable {
+                                selecting = !selecting
+                                if (!selecting) selected = emptySet()
+                            }
+                            .padding(vertical = 4.dp),
+                    )
+                }
+            },
+        )
 
         if (courses.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -132,13 +168,39 @@ fun CoursesScreen(
                     }
 
                     itemsIndexed(dayCourses, key = { _, c -> "$day-${c.id}" }) { index, course ->
+                        val isSelected = course.id in selected
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { nav.navigate("course_detail/${course.id}") }
+                                .background(if (isSelected) colors.neutral1 else Color.Transparent)
+                                .clickable {
+                                    if (selecting) {
+                                        selected = if (isSelected) {
+                                            selected - course.id
+                                        } else {
+                                            selected + course.id
+                                        }
+                                    } else {
+                                        nav.navigate("course_detail/${course.id}")
+                                    }
+                                }
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (selecting) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) colors.accent else Color.Transparent)
+                                        .border(
+                                            1.dp,
+                                            if (isSelected) colors.accent else colors.neutral5,
+                                            CircleShape,
+                                        ),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
                             Box(
                                 modifier = Modifier
                                     .width(3.dp)
@@ -179,12 +241,14 @@ fun CoursesScreen(
                                     color = colors.neutral6,
                                 )
                             }
-                            Text(
-                                text = "›",
-                                style = YohakuType.copy15,
-                                color = colors.neutral6,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
+                            if (!selecting) {
+                                Text(
+                                    text = "›",
+                                    style = YohakuType.copy15,
+                                    color = colors.neutral6,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
                         }
                         if (index < dayCourses.size - 1) {
                             Box(
@@ -196,6 +260,33 @@ fun CoursesScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (selecting) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(YohakuDimens.screenPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                YohakuOutlineButton(
+                    text = if (selected.size == allIds.size && allIds.isNotEmpty()) "取消全选" else "全选",
+                    onClick = {
+                        selected = if (selected.size == allIds.size && allIds.isNotEmpty()) emptySet() else allIds
+                    },
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                YohakuButton(
+                    text = "删除 ${selected.size} 门",
+                    enabled = selected.isNotEmpty(),
+                    onClick = {
+                        viewModel.deleteCourses(selected.toList())
+                        selected = emptySet()
+                        selecting = false
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }

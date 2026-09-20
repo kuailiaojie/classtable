@@ -60,6 +60,7 @@ import com.kxin.classtable.ui.importer.AiImportScreen
 import com.kxin.classtable.ui.importer.ImportScreen
 import com.kxin.classtable.ui.importer.ManualImportScreen
 import com.kxin.classtable.ui.settings.AdapterSyncScreen
+import com.kxin.classtable.ui.settings.AdjustmentsScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
 import com.kxin.classtable.ui.settings.SettingsScreen
@@ -171,6 +172,7 @@ fun ClasstableRoot(
                 composable("settings") { SettingsScreen(nav) }
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
+                composable("adjustments") { AdjustmentsScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
                 composable("adapter_sync") { AdapterSyncScreen(nav) }

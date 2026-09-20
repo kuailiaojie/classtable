@@ -42,6 +42,11 @@ data class AppSettings(
     val dismissedVersion: String = "",
     /** 首次启动权限引导是否已完成(完成/跳过后再也不弹,可随时在设置页重进)。 */
     val onboardingDone: Boolean = false,
+    /**
+     * 调休课表(JSON 数组):每条 = 某天停课,或某天补上另一天的课。
+     * 存 JSON 而不是结构化字段,是因为它是「若干条安排」的列表,与作息同属运行时数据。
+     */
+    val scheduleAdjustments: String = "",
 ) {
     fun provider(): AiProvider = runCatching { AiProvider.valueOf(aiProvider) }
         .getOrDefault(AiProvider.GEMINI)

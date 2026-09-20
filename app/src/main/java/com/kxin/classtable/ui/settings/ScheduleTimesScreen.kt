@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,6 +48,7 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTimePicker
 import com.kxin.classtable.design.YohakuTopBar
@@ -108,8 +108,8 @@ fun ScheduleTimesScreen(
     }
     LaunchedEffect(saved) { if (saved) nav.popBackStack() }
 
-    // 点方块 → 选择该节的开始时刻(课间方块选的是「课间结束」,即下一节的开始)
-    var picking by remember { mutableStateOf<StartTarget?>(null) }
+    // 正在改的那一刻时间(点时间片打开选择器)
+    var timeEdit by remember { mutableStateOf<TimeEdit?>(null) }
 
     // 自动生成(自动匹配模式):上午开始 + 单节时长 + 课间 + 节数
     var showGenerator by rememberSaveable { mutableStateOf(false) }
@@ -119,15 +119,15 @@ fun ScheduleTimesScreen(
     var genCount by rememberSaveable { mutableStateOf("12") }
     var editingGenStart by remember { mutableStateOf(false) }
 
-    picking?.let { target ->
+    timeEdit?.let { edit ->
         YohakuTimePicker(
-            title = target.title,
-            initial = Schedule.clockText(target.initial),
+            title = edit.title,
+            initial = Schedule.clockText(edit.initial),
             onConfirm = { value ->
-                Schedule.parseClock(value)?.let { timeline = timeline.withClassStart(target.classNumber, it) }
-                picking = null
+                Schedule.parseClock(value)?.let { minute -> timeline = edit.apply(timeline, minute) }
+                timeEdit = null
             },
-            onDismiss = { picking = null },
+            onDismiss = { timeEdit = null },
         )
     }
     if (editingGenStart) {
@@ -153,7 +153,12 @@ fun ScheduleTimesScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "点方块选时间,拖右下角改时长;课间由相邻两节自动得出。",
+                text = "点任意一个时间,改的就是那一刻;拖方块右下角可以拉长 / 缩短这一节。",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+            Text(
+                text = "每一节都能单独删;「添加一节」往末尾再加。课间是相邻两节之间的空隙,自动得出。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
@@ -267,38 +272,50 @@ fun ScheduleTimesScreen(
                     section = currentSection
                     SectionHeader(name = currentSection, startMinute = span.start)
                 }
+                // 每块的两个时刻各自可点,含义和「拖」一致:改结束 = 改这块自己的时长,
+                // 改开始 = 改它前面那块(首块改的是整条时间线的锚点),后面的块顺移。
+                val editEnd: () -> Unit = {
+                    timeEdit = TimeEdit("结束时间", span.end) { tl, minute ->
+                        tl.withMinutes(span.index, minute - span.start)
+                    }
+                }
+                val editStart: () -> Unit = start@{
+                    if (!span.block.isBreak) {
+                        timeEdit = TimeEdit("第 ${span.classNumber} 节 · 开始时间", span.start) { tl, minute ->
+                            tl.withClassStart(span.classNumber, minute)
+                        }
+                        return@start
+                    }
+                    // 课间的开始 = 前一节的结束,改它等同于改前一节的下课时间
+                    val prev = spans.getOrNull(span.index - 1) ?: return@start
+                    timeEdit = TimeEdit("课间开始时间", prev.end) { tl, minute ->
+                        tl.withMinutes(prev.index, minute - prev.start)
+                    }
+                }
                 if (span.block.isBreak) {
                     BreakBlock(
                         span = span,
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
-                        onTap = {
-                            // 课间的「时间」= 它结束、下一节开始的那一刻
-                            spans.getOrNull(span.index + 1)?.let { next ->
-                                picking = StartTarget(next.classNumber, "课间结束时间", next.start)
-                            }
-                        },
+                        onEditStart = editStart,
+                        onEditEnd = editEnd,
                     )
                 } else {
                     ClassBlock(
                         span = span,
                         canDelete = classCount > 1,
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
-                        onTap = {
-                            picking = StartTarget(span.classNumber, "第 ${span.classNumber} 节 · 开始时间", span.start)
-                        },
+                        onEditStart = editStart,
+                        onEditEnd = editEnd,
                         onDelete = { timeline = timeline.withoutClass(span.classNumber) },
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
+            Spacer(modifier = Modifier.height(12.dp))
+            YohakuOutlineButton(
                 text = "＋ 添加一节",
-                style = YohakuType.copy13,
-                color = colors.accent,
-                modifier = Modifier
-                    .clickable { timeline = timeline.plusClass() }
-                    .padding(vertical = 8.dp),
+                onClick = { timeline = timeline.plusClass() },
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }
@@ -389,8 +406,12 @@ private data class Span(
     val classNumber: Int,
 )
 
-/** 点方块要改的那一节:标题 + 初始值(classNumber 是「第几节」)。 */
-private data class StartTarget(val classNumber: Int, val title: String, val initial: Int)
+/** 正在编辑的那一刻:[title] 是弹层标题,[apply] 把选中的分钟数作用到时间线上。 */
+private data class TimeEdit(
+    val title: String,
+    val initial: Int,
+    val apply: (Timeline, Int) -> Timeline,
+)
 
 private const val DAY_END = 24 * 60 - 1
 private const val MIN_BLOCK_MINUTES = 1
@@ -400,8 +421,9 @@ private const val DEFAULT_BREAK_MINUTES = 10
 
 /** 方块高度 = 分钟数 × 每分高度(有下限,短课间才不会窄到看不清)。 */
 private val MINUTE_DP = 2.2.dp
-private val MIN_CLASS_DP = 72.dp
-private val MIN_BREAK_DP = 40.dp
+// 下限按「标题行 + 时间片行」的可读高度定,不只是为了不重叠
+private val MIN_CLASS_DP = 84.dp
+private val MIN_BREAK_DP = 44.dp
 
 private fun periodsToTimeline(periods: List<Schedule.Period>): Timeline {
     if (periods.isEmpty()) return Timeline(DEFAULT_START, listOf(TimeBlock(false, DEFAULT_CLASS_MINUTES)))
@@ -447,13 +469,19 @@ private fun SectionHeader(name: String, startMinute: Int) {
     }
 }
 
-/** 一节课:浮起卡片 + 左侧 accent 条,右下角拖拽手柄。点一下改开始时刻。 */
+/**
+ * 一节课:浮起卡片 + 左侧 accent 条。
+ *
+ * 两个时刻各自是**可点的时间片**,点哪个就改哪个;右下角还能直接拖。不给整张卡片绑点击 ——
+ * 之前「点卡片 = 改开始时间」是这一页最不直观的地方:看得见的目标(时间)才该是可点的目标。
+ */
 @Composable
 private fun ClassBlock(
     span: Span,
     canDelete: Boolean,
     onResize: (Int) -> Unit,
-    onTap: () -> Unit,
+    onEditStart: () -> Unit,
+    onEditEnd: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
@@ -464,8 +492,7 @@ private fun ClassBlock(
             .height(blockHeight(span.block.minutes, MIN_CLASS_DP))
             .clip(shape)
             .background(colors.raised)
-            .border(1.dp, colors.line, shape)
-            .clickable(onClick = onTap),
+            .border(1.dp, colors.line, shape),
     ) {
         // 左侧 accent 条:结构信号「这是一节课」,不承载状态
         Box(
@@ -491,25 +518,34 @@ private fun ClassBlock(
                     color = colors.neutral10,
                     modifier = Modifier.weight(1f),
                 )
-                if (canDelete) {
-                    Text(
-                        text = "删除",
-                        style = YohakuType.label12,
-                        color = colors.error,
-                        modifier = Modifier
-                            .clickable(onClick = onDelete)
-                            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
-                    )
-                }
+                Text(
+                    text = if (canDelete) "删除" else "",
+                    style = YohakuType.label12,
+                    color = colors.error,
+                    modifier = Modifier
+                        .clickable(enabled = canDelete, onClick = onDelete)
+                        .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+                )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = "${Schedule.clockText(span.start)} – ${Schedule.clockText(span.end)}",
-                    style = YohakuType.timeMono,
-                    color = colors.neutral7,
-                    modifier = Modifier.weight(1f),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TimeChip(
+                    value = Schedule.clockText(span.start),
+                    isError = false,
+                    onClick = onEditStart,
                 )
+                Text(
+                    text = "–",
+                    style = YohakuType.timeMono,
+                    color = colors.neutral6,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+                TimeChip(
+                    value = Schedule.clockText(span.end),
+                    isError = false,
+                    onClick = onEditEnd,
+                )
+                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "${span.block.minutes} 分钟",
                     style = YohakuType.title20,
@@ -527,12 +563,13 @@ private fun ClassBlock(
     }
 }
 
-/** 课间:相邻两节的空隙,不做成卡片(它是「之间」,不是一件东西),只留一行淡字。 */
+/** 课间:相邻两节之间的空隙,不做成卡片(它是「之间」,不是一件东西),只留一行淡字 + 两个时间片。 */
 @Composable
 private fun BreakBlock(
     span: Span,
     onResize: (Int) -> Unit,
-    onTap: () -> Unit,
+    onEditStart: () -> Unit,
+    onEditEnd: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
     Box(
@@ -543,21 +580,36 @@ private fun BreakBlock(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onTap)
                 .padding(start = YohakuDimens.accentBarWidth + 12.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = "课间", style = YohakuType.label12, color = colors.neutral6)
             Spacer(modifier = Modifier.width(10.dp))
+            TimeChip(
+                value = Schedule.clockText(span.start),
+                isError = false,
+                compact = true,
+                onClick = onEditStart,
+            )
             Text(
-                text = "${Schedule.clockText(span.start)} – ${Schedule.clockText(span.end)}",
+                text = "–",
                 style = YohakuType.timeMono,
                 color = colors.neutral5,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.padding(horizontal = 6.dp),
             )
-            Text(text = "${span.block.minutes} 分钟", style = YohakuType.copy13, color = colors.neutral6)
+            TimeChip(
+                value = Schedule.clockText(span.end),
+                isError = false,
+                compact = true,
+                onClick = onEditEnd,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${span.block.minutes} 分钟",
+                style = YohakuType.copy13,
+                color = colors.neutral6,
+                modifier = Modifier.padding(end = 16.dp),
+            )
         }
         ResizeHandle(
             minutes = span.block.minutes,
@@ -624,11 +676,15 @@ private fun ResizeHandle(
     }
 }
 
-/** 生成器里那个可点的时间片(与编辑页的时间片同形,用于「上午开始」)。 */
+/**
+ * 可点的时间片。编辑页里每个时刻都是一个,点它改那一刻;生成器里复用它做「上午开始」。
+ * [compact] 给课间那种矮行用(竖向内边距收紧)。
+ */
 @Composable
 private fun TimeChip(
     value: String,
     isError: Boolean,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -640,7 +696,7 @@ private fun TimeChip(
             .background(colors.raised)
             .border(1.dp, if (isError) colors.error else colors.line, shape)
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
+            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 6.dp else 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(

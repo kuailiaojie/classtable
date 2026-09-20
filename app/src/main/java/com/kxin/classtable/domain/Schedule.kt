@@ -244,6 +244,13 @@ object Schedule {
         return (0..6).map { monday.plusDays(it.toLong()).dayOfMonth }
     }
 
+    /** 第 N 周七天对应的日期(调休要按具体某天查);未设置开学日返回空表。 */
+    fun weekDates(startDay: Long, week: Int): List<LocalDate> {
+        if (startDay <= 0L) return emptyList()
+        val monday = LocalDate.ofEpochDay(mondayEpochDay(startDay) + (week - 1) * 7L)
+        return (0..6).map { monday.plusDays(it.toLong()) }
+    }
+
     /** "9月23日 周三" */
     fun todayDateText(): String {
         val d = LocalDate.now()

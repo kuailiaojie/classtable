@@ -37,6 +37,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
+import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -53,7 +54,11 @@ class DayViewModel @Inject constructor(
     courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    val courses: StateFlow<List<Course>> = courseRepository.observeByWeekday(Schedule.todayWeekday())
+    /**
+     * 订阅全部课程而不是「今天星期几」那一批:调休可能让今天去上**别的星期几**的课
+     * (周六补周四的课),按星期订阅就取不到了。
+     */
+    val courses: StateFlow<List<Course>> = courseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
@@ -73,6 +78,24 @@ fun DayScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val adjustments = remember(settings.scheduleAdjustments) {
+        Adjustments.decode(settings.scheduleAdjustments)
+    }
+    val today = LocalDate.now()
+    // 今天怎么过:停课 / 补课(按原课程日期那天上) / 正常
+    val todayPlan = remember(adjustments, today) { Adjustments.resolve(adjustments, today) }
+    val teachingDay = remember(adjustments, settings.semesterStartDay, settings.semesterWeekCount, today) {
+        Adjustments.teachingDay(adjustments, today, settings.semesterStartDay, settings.semesterWeekCount)
+    }
+    val todayCourses = remember(courses, teachingDay, periods) {
+        if (teachingDay == null) {
+            emptyList()
+        } else {
+            courses
+                .filter { it.isOnWeekday(teachingDay.second) && it.isActiveOnWeek(teachingDay.first) }
+                .sortedBy { Schedule.courseStartMinute(it, periods) ?: Int.MAX_VALUE }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -92,7 +115,7 @@ fun DayScreen(
             }
         }
         val nowMinute = (nowMillis / 60000).toInt() % 1440
-        val scheduled = courses.mapNotNull { course ->
+        val scheduled = todayCourses.mapNotNull { course ->
             val s = course.customStartMinute
                 ?: periods.getOrNull(course.startPeriod - 1)?.start
                 ?: return@mapNotNull null
@@ -110,6 +133,18 @@ fun DayScreen(
                 style = YohakuType.title20,
                 color = colors.neutral10,
             )
+            if (todayPlan.rest || todayPlan.makeup) {
+                Text(
+                    text = if (todayPlan.rest) {
+                        "调休 · 今天停课"
+                    } else {
+                        "调休 · 今天补 ${todayPlan.effectiveDate.monthValue}/${todayPlan.effectiveDate.dayOfMonth} 的课"
+                    },
+                    style = YohakuType.label12,
+                    color = colors.accent,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             when {
                 ongoing != null -> Text(
                     text = "正在上课:${ongoing.first.name} · 还有 ${ongoing.third - nowMinute} 分钟下课",
@@ -134,10 +169,10 @@ fun DayScreen(
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (courses.isEmpty()) {
+            if (todayCourses.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "今天没有课",
+                        text = if (todayPlan.rest) "今天停课（调休）" else "今天没有课",
                         style = YohakuType.copy14,
                         color = colors.neutral7,
                     )
@@ -154,7 +189,7 @@ fun DayScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
                 ) {
-                    items(courses, key = { it.id }) { course ->
+                    items(todayCourses, key = { it.id }) { course ->
                         // 直接按课程自己的时间区间判断「正在上」。
                         // 以前是按 bigPeriods 两行一组去配对(2 小节 = 1 大节),作息本身是大节时
                         // (如长江大学 8 个 95 分钟的节)会配错:第 2 节上课时把第 1 节的课标成正在上。

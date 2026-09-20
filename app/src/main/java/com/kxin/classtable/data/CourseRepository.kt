@@ -67,6 +67,24 @@ class CourseRepository @Inject constructor(
         postChangeSideEffects()
     }
 
+    /**
+     * 批量删除:墓碑、刷新、同步都只收尾一轮。
+     *
+     * 逐条调用 [delete] 也能对,但会触发 N 次小组件刷新与提醒重排 —— 一次删十门课就是十轮。
+     */
+    suspend fun deleteCourses(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val now = System.currentTimeMillis()
+        ids.forEach { id ->
+            dao.deleteById(id)
+            // 墓碑:向远端传播删除,防止下次 pull 时课程"复活"
+            deletedDao.upsert(DeletedCourseEntity(id, now))
+            Analytics.log("course_deleted", "course_id" to id)
+        }
+        postChangeSideEffects()
+        scope.launch { sync.syncNow() }
+    }
+
     suspend fun importAll(courses: List<Course>) {
         val now = System.currentTimeMillis()
         // 导入即钉住时刻:按当前作息(导入前刚被脚本覆盖的那一张)把节次换算成具体时刻存下来,

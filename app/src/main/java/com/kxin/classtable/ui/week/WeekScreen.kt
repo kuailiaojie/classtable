@@ -48,7 +48,9 @@ import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
+import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
@@ -94,6 +96,9 @@ fun WeekScreen(
     // 周次实时推算(以开学日所在周的周一为锚),不再依赖持久化旧值;跨天/回前台会自动重算。
     val realWeek = Schedule.currentWeek(settings.semesterStartDay, weekCount)
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val adjustments = remember(settings.scheduleAdjustments) {
+        Adjustments.decode(settings.scheduleAdjustments)
+    }
     val today = Schedule.todayWeekday()
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = (realWeek - 1).coerceIn(0, weekCount - 1)) {
@@ -205,8 +210,29 @@ fun WeekScreen(
             val dayNumbers = remember(settings.semesterStartDay, pageWeek) {
                 Schedule.weekDayNumbers(settings.semesterStartDay, pageWeek)
             }
+            val teachingDays = remember(
+                adjustments,
+                settings.semesterStartDay,
+                settings.semesterWeekCount,
+                pageWeek,
+            ) {
+                resolveTeachingDays(
+                    adjustments,
+                    settings.semesterStartDay,
+                    settings.semesterWeekCount,
+                    pageWeek,
+                )
+            }
+            // 「休」= 这天停课;「补」= 这天上的不是本来的星期(补别的日子的课)
+            val marks = teachingDays.mapIndexed { index, teaching ->
+                when {
+                    teaching == null -> "休"
+                    teaching.second != index + 1 -> "补"
+                    else -> null
+                }
+            }
             Column(modifier = Modifier.fillMaxSize()) {
-                WeekdayHeader(dayNumbers = dayNumbers, today = today)
+                WeekdayHeader(dayNumbers = dayNumbers, today = today, marks = marks)
                 WeekGrid(
                     courses = courses,
                     periods = periods,
@@ -214,6 +240,7 @@ fun WeekScreen(
                     today = today,
                     nowMinute = nowMinute,
                     showNowLine = pageWeek == realWeek,
+                    teachingDays = teachingDays,
                     onCourseClick = { detailCourse = it },
                     modifier = Modifier.weight(1f),
                 )
@@ -222,9 +249,9 @@ fun WeekScreen(
     }
 }
 
-/** 表头:一~日 + 该天日号;今天用 accent 标出。 */
+/** 表头:一~日 + 该天日号;今天用 accent 标出,调休日标「休 / 补」。 */
 @Composable
-private fun WeekdayHeader(dayNumbers: List<Int>, today: Int) {
+private fun WeekdayHeader(dayNumbers: List<Int>, today: Int, marks: List<String?>) {
     val colors = LocalYohakuColors.current
     Row(
         modifier = Modifier
@@ -235,6 +262,7 @@ private fun WeekdayHeader(dayNumbers: List<Int>, today: Int) {
         Spacer(modifier = Modifier.width(YohakuDimens.gridGutterWidth))
         (1..7).forEach { d ->
             val isToday = d == today
+            val mark = marks.getOrNull(d - 1)
             Column(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -249,16 +277,40 @@ private fun WeekdayHeader(dayNumbers: List<Int>, today: Int) {
                     style = YohakuType.gridDate,
                     color = if (isToday) colors.accent else colors.neutral6,
                 )
-                Box(
-                    modifier = Modifier
-                        .padding(top = 1.dp)
-                        .width(12.dp)
-                        .height(2.dp)
-                        .background(if (isToday) colors.accent else Color.Transparent),
-                )
+                if (mark != null) {
+                    Text(
+                        text = mark,
+                        style = YohakuType.gridMeta,
+                        color = colors.accent,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                            .width(12.dp)
+                            .height(2.dp)
+                            .background(if (isToday) colors.accent else Color.Transparent),
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * 这一周七天各按哪一天上课:返回 `(周次, 星期几)`,停课为 null。
+ *
+ * 没设开学日时拿不到具体日期,调休无从谈起,退化成「自然星期」。
+ */
+private fun resolveTeachingDays(
+    adjustments: List<ScheduleAdjustment>,
+    semesterStartDay: Long,
+    weekCount: Int,
+    week: Int,
+): List<Pair<Int, Int>?> {
+    val dates = Schedule.weekDates(semesterStartDay, week)
+    if (dates.isEmpty()) return (1..7).map { week to it }
+    return dates.map { Adjustments.teachingDay(adjustments, it, semesterStartDay, weekCount) }
 }
 
 /** 网格:左侧节次留白列 + 七列,课程块绝对定位。 */
@@ -270,6 +322,7 @@ private fun WeekGrid(
     today: Int,
     nowMinute: Int,
     showNowLine: Boolean,
+    teachingDays: List<Pair<Int, Int>?>,
     onCourseClick: (Course) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -281,8 +334,14 @@ private fun WeekGrid(
         val gridHeight = rowH * rowCount
         val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
         val gutter = YohakuDimens.gridGutterWidth
+        // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课
         val lanesPerDay = (1..7).map { d ->
-            val dayCourses = courses.filter { it.isOnWeekday(d) && it.isActiveOnWeek(week) }
+            val teaching = teachingDays.getOrNull(d - 1)
+            val dayCourses = if (teaching == null) {
+                emptyList()
+            } else {
+                courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
+            }
             layoutDay(dayCourses, periods)
         }
 

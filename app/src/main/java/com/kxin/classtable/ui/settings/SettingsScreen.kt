@@ -56,6 +56,7 @@ import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
+import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.notify.LiveCourse
 import com.kxin.classtable.notify.startLiveCourseService
@@ -136,6 +137,9 @@ fun SettingsScreen(
         "未设置"
     }
     val realWeek = Schedule.currentWeek(settings.semesterStartDay, settings.semesterWeekCount)
+    val adjustmentDays = remember(settings.scheduleAdjustments) {
+        Adjustments.decode(settings.scheduleAdjustments).size
+    }
 
     var showAiDialog by remember { mutableStateOf(false) }
     var showNotifyDialog by remember { mutableStateOf(false) }
@@ -510,6 +514,12 @@ fun SettingsScreen(
             SettingRow(title = "作息时间", value = firstPeriodText, onClick = { nav.navigate("schedule_times") })
             DividerLine()
             SettingRow(title = "学期周次", value = "当前第 $realWeek 周", onClick = { nav.navigate("semester") })
+            DividerLine()
+            SettingRow(
+                title = "调休课表",
+                value = if (adjustmentDays == 0) "未设置" else "$adjustmentDays 天",
+                onClick = { nav.navigate("adjustments") },
+            )
         }
 
         SettingsSection(title = "导入与识别") {

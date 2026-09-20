@@ -47,6 +47,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_AUTO_START_VISITED = booleanPreferencesKey("autostart_visited")
     /** 本机设置最后变更时间戳:配置同步(users/{uid}/settings)LWW 判断依据;0 = 从未改过。 */
     private val KEY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
+    /** 调休课表(JSON 数组):某天停课 / 某天补另一天的课。 */
+    private val KEY_ADJUSTMENTS = stringPreferencesKey("schedule_adjustments")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -73,6 +75,7 @@ class SettingsRepository @Inject constructor(
             lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
             dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
             onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
+            scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
         )
     }
 
@@ -161,6 +164,14 @@ class SettingsRepository @Inject constructor(
     /** 首次启动权限引导完成/跳过标记:仅本机,不同步。 */
     suspend fun setOnboardingDone() {
         context.settingsDataStore.edit { it[KEY_ONBOARDING_DONE] = true }
+    }
+
+    /**
+     * 调休课表(整表覆盖)。与 AI 密钥同理:属于本机课表数据,不打同步时间戳 ——
+     * 否则改一次调休就会把整包设置当成「本机更新」推上云,而远端并不处理这个字段。
+     */
+    suspend fun setScheduleAdjustments(json: String) {
+        context.settingsDataStore.edit { it[KEY_ADJUSTMENTS] = json }
     }
 
     /** 是否已进过 ROM「应用启动管理」页(引导标记,仅本机,不同步)。 */
