@@ -1,8 +1,10 @@
 package com.kxin.classtable.domain
 
 import com.kxin.classtable.domain.model.Course
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * 作息表 = 时间段列表:每节课都有独立的开始与结束时间,可任意增删,不限于 12 节。
@@ -222,6 +224,16 @@ object Schedule {
     }
 
     fun todayWeekday(): Int = LocalDate.now().dayOfWeek.value
+
+    /**
+     * 时间戳 → **本地**「自 0:00 起的分钟数」。
+     *
+     * 别写成 `millis / 60_000 % 1440` —— 那是 UTC 的分钟数,在东八区整整差 8 小时:
+     * 周视图的「当前时间线」会画到别的行上(甚至落不到任何一节课里、干脆不画),
+     * 日视图的「正在上课 / 距下一节还有多久」也会跟着错。
+     */
+    fun minuteOfDay(millis: Long): Int =
+        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).let { it.hour * 60 + it.minute }
 
     /**
      * 绝对分钟 → 周视图网格的行坐标(行高倍数),用于「当前时间线」。

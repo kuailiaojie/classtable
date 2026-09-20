@@ -267,7 +267,10 @@ fun CoursesScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(YohakuDimens.screenPadding),
+                    .padding(horizontal = YohakuDimens.screenPadding)
+                    // 悬浮导航浮在内容之上:这条批量操作条必须抬到它上面,
+                    // 否则「删除 N 门」会和底部导航栏叠在一起(点不到、也看不清)
+                    .padding(bottom = YohakuDimens.navReservedHeight),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 YohakuOutlineButton(

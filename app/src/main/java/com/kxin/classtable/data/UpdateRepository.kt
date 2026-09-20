@@ -347,23 +347,39 @@ class UpdateRepository @Inject constructor(
         }
     }
 
-    /** 语义化版本比较:逐段比数字,较大的段决定新旧。 */
+    /**
+     * 语义化版本比较:先逐段比数字,数字相同再比「预发布」。
+     *
+     * 预发布要单独处理,否则 `0.3.0-rc1` 与 `0.3.0` 会被当成同一个版本 —— 发过 RC 之后
+     * RC 用户永远收不到正式版。规则:正式版 > 同号预发布版;同为预发布版则比编号(rc2 > rc1)。
+     */
     private fun isNewer(current: String, latest: String): Boolean {
         val a = parseVersion(current)
         val b = parseVersion(latest)
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val cur = a.getOrElse(i) { 0 }
-            val lat = b.getOrElse(i) { 0 }
+        for (i in 0 until maxOf(a.numbers.size, b.numbers.size)) {
+            val cur = a.numbers.getOrElse(i) { 0 }
+            val lat = b.numbers.getOrElse(i) { 0 }
             if (lat != cur) return lat > cur
         }
-        return false
+        return when {
+            b.pre == null -> a.pre != null
+            a.pre == null -> false
+            else -> b.pre > a.pre
+        }
     }
 
-    private fun parseVersion(version: String): List<Int> = version
-        .trim()
-        .removePrefix("v")
-        .split('.')
-        .map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
+    /** [pre] 为 null 表示正式版;"0.3.0-rc1" → numbers=[0,3,0], pre=1。 */
+    private data class ParsedVersion(val numbers: List<Int>, val pre: Int?)
+
+    private fun parseVersion(version: String): ParsedVersion {
+        val text = version.trim().removePrefix("v")
+        val core = text.substringBefore('-')
+        val suffix = text.substringAfter('-', "")
+        return ParsedVersion(
+            numbers = core.split('.').map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 },
+            pre = if (suffix.isEmpty()) null else suffix.filter { it.isDigit() }.toIntOrNull() ?: 0,
+        )
+    }
 
     private companion object {
         const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000

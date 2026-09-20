@@ -117,7 +117,7 @@ fun WeekScreen(
             nowMillis = System.currentTimeMillis()
         }
     }
-    val nowMinute = ((nowMillis / 60_000).toInt() % 1440)
+    val nowMinute = Schedule.minuteOfDay(nowMillis)
 
     detailCourse?.let { course ->
         YohakuDialog(

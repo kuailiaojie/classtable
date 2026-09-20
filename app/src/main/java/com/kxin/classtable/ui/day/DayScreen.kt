@@ -114,7 +114,7 @@ fun DayScreen(
                 nowMillis = System.currentTimeMillis()
             }
         }
-        val nowMinute = (nowMillis / 60000).toInt() % 1440
+        val nowMinute = Schedule.minuteOfDay(nowMillis)
         val scheduled = todayCourses.mapNotNull { course ->
             val s = course.customStartMinute
                 ?: periods.getOrNull(course.startPeriod - 1)?.start
