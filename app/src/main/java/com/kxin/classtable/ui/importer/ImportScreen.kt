@@ -351,8 +351,6 @@ fun ImportScreen(
                         pendingSchool = school
                     }
                 },
-                onManual = { nav.navigate("import_manual") },
-                onAi = { nav.navigate("import_ai") },
             )
             2 -> selectedAdapter?.let { adapter ->
                 val importUrl = adapter.importUrl.ifBlank { normalizeImportUrl(customUrl) }
@@ -414,8 +412,6 @@ private fun StepSchool(
     query: String,
     onQueryChange: (String) -> Unit,
     onSelect: (SchoolEntry) -> Unit,
-    onManual: () -> Unit,
-    onAi: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
     val filtered = schools.filter {
@@ -447,31 +443,6 @@ private fun StepSchool(
                     onValueChange = onQueryChange,
                     placeholder = "搜索学校(名称 / 缩写)",
                 )
-                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-            }
-            if (query.isBlank()) {
-                Row(
-                    modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "手动表格导入",
-                        style = YohakuType.copy13,
-                        color = colors.accent,
-                        modifier = Modifier
-                            .clickable(onClick = onManual)
-                            .padding(vertical = 4.dp)
-                            .padding(end = 20.dp),
-                    )
-                    Text(
-                        text = "AI 图片导入",
-                        style = YohakuType.copy13,
-                        color = colors.accent,
-                        modifier = Modifier
-                            .clickable(onClick = onAi)
-                            .padding(vertical = 4.dp),
-                    )
-                }
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
             }
             LazyColumn(

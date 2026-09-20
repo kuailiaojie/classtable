@@ -27,7 +27,6 @@ fun YohakuBottomNav(
         "week" to "周视图",
         "day" to "日视图",
         "courses" to "课程",
-        "import" to "导入",
         "settings" to "设置",
     )
     Row(

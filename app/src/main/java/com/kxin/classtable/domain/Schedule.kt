@@ -10,8 +10,22 @@ import java.time.LocalTime
  * end 取下一节开始、末节 +50)。
  */
 object Schedule {
+    /**
+     * 默认作息:每节 50 分钟,含课间与午/晚餐间隔。
+     * 08:00 / 09:00 / 10:10 / 11:10 · 14:00 / 15:00 / 16:10 / 17:10 · 19:00 / 20:00 / 21:00 / 22:00
+     */
     const val DEFAULT_PERIODS =
+        "480-530,540-590,610-660,670-720,840-890,900-950,970-1020,1030-1080,1140-1190,1200-1250,1260-1310,1320-1370"
+
+    /**
+     * 0.1.16 及更早版本的默认作息(**错的**):它是由「只有开始时间」的旧格式序列化出来的,
+     * 偶数节的 end 被写成下一节/下一组的开始时间,于是第2节变 08:50–10:10、**第4节 11:00–14:00
+     * (横跨午饭)**、第8节 17:00–19:00,且整条时间线没有任何课间。
+     * 命中这个值的存量数据一律视为「没设置过」,交给 [DEFAULT_PERIODS]。
+     */
+    const val LEGACY_DEFAULT_PERIODS =
         "480-530,530-610,610-660,660-840,840-890,890-970,970-1020,1020-1140,1140-1190,1190-1240,1240-1290,1290-1340"
+
     const val PERIOD_LENGTH_MIN = 50
 
     /** 一节作息:开始/结束分钟(自 0:00),时长 = end - start。 */
@@ -194,6 +208,27 @@ object Schedule {
     }
 
     fun todayWeekday(): Int = LocalDate.now().dayOfWeek.value
+
+    /**
+     * 绝对分钟 → 周视图网格的行坐标(行高倍数),用于「当前时间线」。
+     * 落在节内按分钟比例;落在课间取下一行顶部;在第一节之前或末节之后返回 null(不画线)。
+     */
+    fun fractionalRow(minute: Int, periods: List<Period>): Float? {
+        if (periods.isEmpty()) return null
+        if (minute < periods.first().start || minute >= periods.last().end) return null
+        periods.forEachIndexed { i, p ->
+            if (minute in p.start until p.end) return i + (minute - p.start).toFloat() / p.duration
+            if (minute < p.start) return i.toFloat()
+        }
+        return null
+    }
+
+    /** 第 N 周七天的日号(周视图表头用);未设置开学日返回空表。 */
+    fun weekDayNumbers(startDay: Long, week: Int): List<Int> {
+        if (startDay <= 0L) return emptyList()
+        val monday = LocalDate.ofEpochDay(mondayEpochDay(startDay) + (week - 1) * 7L)
+        return (0..6).map { monday.plusDays(it.toLong()).dayOfMonth }
+    }
 
     /** "9月23日 周三" */
     fun todayDateText(): String {

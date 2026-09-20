@@ -46,7 +46,11 @@ class SettingsRepository @Inject constructor(
             themeMode = runCatching { ThemeMode.valueOf(p[KEY_THEME] ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
             accentHex = p[KEY_ACCENT] ?: "#C56473",
             currentWeek = p[KEY_WEEK] ?: 1,
-            periodTimes = p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS,
+            // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
+            // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。
+            periodTimes = (p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS).let {
+                if (it == Schedule.LEGACY_DEFAULT_PERIODS) Schedule.DEFAULT_PERIODS else it
+            },
             semesterStartDay = p[KEY_SEMESTER_START] ?: 0L,
             semesterWeekCount = p[KEY_SEMESTER_WEEKS] ?: 20,
             aiProvider = p[KEY_AI_PROVIDER] ?: AiProvider.GEMINI.name,

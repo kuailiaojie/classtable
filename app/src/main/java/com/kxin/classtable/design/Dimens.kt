@@ -17,8 +17,16 @@ object YohakuDimens {
 
     val accentBarWidth = 4.dp
 
-    /** 周视图单节行高(固定等高,整整齐齐;自定义时间课程跨多行) */
-    val gridRowHeight = 88.dp
-    /** 周视图左侧节次标签宽度(第 N 节 + 时间区间) */
-    val gridPeriodLabelWidth = 76.dp
+    /** 周视图网格:行高下限(实际行高 = 可用高度 ÷ 节数,放不下时整格纵向滚动) */
+    val gridMinRowHeight = 38.dp
+    /** 周视图网格水平内边距(七天同屏,比 screenPadding 窄,把宽度让给列) */
+    val gridPadding = 12.dp
+    /** 周视图左侧节次留白列宽(只放节号与起始时间) */
+    val gridGutterWidth = 28.dp
+    /** 周视图课程块之间的缝隙 */
+    val gridCellGap = 2.dp
+    /** 周视图课程块内边距 */
+    val gridBlockPadding = 3.dp
+    /** 周视图课程块左侧「当前正在上」的 accent 条宽 */
+    val gridAccentBarWidth = 2.dp
 }

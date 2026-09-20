@@ -37,6 +37,7 @@ import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.courseTint
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -157,7 +158,7 @@ fun DayScreen(
                         val current = Schedule.bigPeriods(periods.size).getOrNull(currentBig - 1)
                         val isCurrent = current != null &&
                             Schedule.courseOverlapsBigPeriod(course, current.first, current.second, periods)
-                        YohakuCard(accentBar = isCurrent) {
+                        YohakuCard(accentBar = isCurrent, containerColor = courseTint(course)) {
                             Row(verticalAlignment = Alignment.Top) {
                                 Text(
                                     text = Schedule.courseTimeText(course, periods),

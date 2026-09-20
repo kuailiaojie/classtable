@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +40,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.courseMark
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -79,6 +81,7 @@ fun CourseDetailScreen(
     val colors = LocalYohakuColors.current
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
 
     // 响应式:课程存在过之后一旦从列表消失(本页删除 / 编辑页删除),立即返回上一层。
     // hadCourse 用 rememberSaveable,保证「进编辑页删除后返回」也能识别。
@@ -112,6 +115,14 @@ fun CourseDetailScreen(
                     .padding(horizontal = YohakuDimens.screenPadding),
             ) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+                // 课程色标:与周视图/课程列表同一枚淡彩,方便对上号
+                Box(
+                    modifier = Modifier
+                        .width(28.dp)
+                        .height(4.dp)
+                        .background(courseMark(c)),
+                )
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(text = c.name, style = YohakuType.title24, color = colors.neutral10)
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
 
@@ -119,7 +130,9 @@ fun CourseDetailScreen(
                 if (c.hasCustomTime()) {
                     InfoRow("时间", "自定义 · ${Schedule.courseTimeText(c)}")
                 } else {
-                    InfoRow("节次", "${c.startPeriod}-${c.endPeriod} 节 · ${Schedule.periodRange(startPeriod = c.startPeriod, endPeriod = c.endPeriod)}")
+                    // 节次与时刻分开写:「第 3-4 节」和「10:10–12:00」各自独立,避免混读
+                    InfoRow("节次", "第 ${c.startPeriod}-${c.endPeriod} 节")
+                    InfoRow("时间", Schedule.periodRange(periods, c.startPeriod, c.endPeriod))
                 }
                 if (c.teacher.isNotBlank()) InfoRow("教师", c.teacher)
                 if (c.location.isNotBlank()) InfoRow("地点", c.location)
@@ -139,7 +152,7 @@ fun CourseDetailScreen(
                     )
                 } else {
                     Text(
-                        text = "共 ${scheduleDates.size} 次 · ${Schedule.courseTimeText(c)}",
+                        text = "共 ${scheduleDates.size} 次 · ${Schedule.courseTimeText(c, periods)}",
                         style = YohakuType.label12,
                         color = colors.neutral7,
                     )

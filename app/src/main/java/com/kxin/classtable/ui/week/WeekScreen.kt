@@ -3,31 +3,35 @@ package com.kxin.classtable.ui.week
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,19 +44,19 @@ import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuBottomNav
-import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.courseTint
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import com.kxin.classtable.ui.navigateToTab
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -68,10 +72,13 @@ class WeekViewModel @Inject constructor(
 }
 
 /**
- * 周视图:一屏一天,左右滑动切换周一到周日(不把七天挤在同一面)。
- * 每天 = 逐节网格:节行固定等高整整齐齐,左侧标「第 N 节 + 起止时间」;
- * 课程卡绝对定位横穿:普通课横穿其节次区间,自定义时间课程横穿其起止时间覆盖的所有节行。
- * 格子显示课程名 + 时间 + 地点,点按弹出完整信息。
+ * 周视图:一屏看全一周七天,不再左右翻页。
+ *
+ * 横向 = 周一…周日七列,纵向 = 按节次等高的行;行高由可用高度除以节数算出(不低于下限,
+ * 放不下时整格纵向滚动),所以「七天 + 全部节次」始终同屏。
+ * 课程块绝对定位横穿其节次区间(自定义时间课程按分钟比例精确定位);同一时段有多门课时
+ * 按车道并排。左侧只留 28dp 放节号与起始时间,把宽度还给列。
+ * 填充色是每门课的淡彩(便于扫读),accent 仍然只表示「此刻正在上」。
  */
 @Composable
 fun WeekScreen(
@@ -90,10 +97,22 @@ fun WeekScreen(
     val today = Schedule.todayWeekday()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
-    val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(initialPage = today - 1) { 7 }
-    val day = pagerState.currentPage + 1
+    val dayNumbers = remember(settings.semesterStartDay, week) {
+        Schedule.weekDayNumbers(settings.semesterStartDay, week)
+    }
     var detailCourse by remember { mutableStateOf<Course?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
+
+    // 当前时间线每分钟重算一次(只在浏览真实当前周时画)
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    val nowMinute = ((nowMillis / 60_000).toInt() % 1440)
+    val showNowLine = weekOffset == 0
 
     detailCourse?.let { course ->
         AlertDialog(
@@ -137,197 +156,395 @@ fun WeekScreen(
         )
     }
 
+    if (showAdd) {
+        AddDialog(
+            onDismiss = { showAdd = false },
+            onPick = { route ->
+                showAdd = false
+                nav.navigate(route)
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            // 顶部:今天日期星期 + 周信息 + 周导航 + 添加
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = YohakuDimens.screenPadding, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = Schedule.todayDateText(),
-                        style = YohakuType.title20,
-                        color = colors.neutral10,
-                    )
-                    Text(
-                        text = "第 $week 周" +
-                            (if (weekRange.isNotEmpty()) " · $weekRange" else "") +
-                            (if (settings.semesterStartDay <= 0L) " · 未设置开学日" else ""),
-                        style = YohakuType.copy13,
-                        color = colors.neutral7,
-                    )
-                }
+        // 顶部:今天日期星期 + 周信息 + 周导航 + 添加
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = YohakuDimens.screenPadding, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "‹",
-                    style = YohakuType.title24,
-                    color = if (week > 1) colors.neutral9 else colors.neutral5,
-                    modifier = Modifier
-                        .clickable(enabled = week > 1) { weekOffset -= 1 }
-                        .padding(8.dp),
+                    text = Schedule.todayDateText(),
+                    style = YohakuType.title20,
+                    color = colors.neutral10,
                 )
                 Text(
-                    text = "›",
-                    style = YohakuType.title24,
-                    color = if (week < weekCount) colors.neutral9 else colors.neutral5,
-                    modifier = Modifier
-                        .clickable(enabled = week < weekCount) { weekOffset += 1 }
-                        .padding(8.dp),
-                )
-                Text(
-                    text = "今天",
+                    text = "第 $week 周" +
+                        (if (weekRange.isNotEmpty()) " · $weekRange" else "") +
+                        (if (settings.semesterStartDay <= 0L) " · 未设置开学日" else ""),
                     style = YohakuType.copy13,
                     color = colors.neutral7,
-                    modifier = Modifier
-                        .clickable {
-                            weekOffset = 0
-                            scope.launch { pagerState.scrollToPage(today - 1) }
-                        }
-                        .padding(start = 8.dp),
-                )
-                Text(
-                    text = "添加",
-                    style = YohakuType.copy13,
-                    color = colors.accent,
-                    modifier = Modifier
-                        .clickable { nav.navigate("course_form") }
-                        .padding(start = 16.dp),
                 )
             }
-
-            // 星期切换胶囊(左右滑动可切换,点击直达)
-            Row(
+            Text(
+                text = "‹",
+                style = YohakuType.title24,
+                color = if (week > 1) colors.neutral9 else colors.neutral5,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = YohakuDimens.screenPadding, vertical = 4.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-            ) {
-                val weekNames = listOf("一", "二", "三", "四", "五", "六", "日")
-                weekNames.forEachIndexed { index, name ->
-                    val selected = day == index + 1
-                    Text(
-                        text = name,
-                        style = YohakuType.label12,
-                        color = if (selected) androidx.compose.ui.graphics.Color.White else colors.neutral7,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (selected) colors.accent else colors.neutral2,
-                                androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-                            )
-                            .clickable { scope.launch { pagerState.scrollToPage(index) } }
-                            .padding(vertical = 6.dp),
-                    )
-                }
-            }
-
-            // 单日分页:左右滑动看周一~周日
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f),
-            ) { page ->
-                val d = page + 1
-                val dayCourses = courses.filter { it.isOnWeekday(d) && it.isActiveOnWeek(week) }
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    // 日期标题
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = YohakuDimens.screenPadding, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "周${"一二三四五六日"[d - 1]}",
-                            style = YohakuType.title20,
-                            color = colors.neutral10,
-                        )
-                        Text(
-                            text = "  ${dayCourses.size} 门课 · 左滑看其他日期",
-                            style = YohakuType.label12,
-                            color = colors.neutral7,
-                        )
-                    }
-
-                    // 网格:底层/中层是横穿的课程卡(绝对定位),顶层是整整齐齐的节行。
-                    // 普通课横穿其节次区间;自定义时间课程横穿其起止时间覆盖的所有节行。
-                    val rowH = YohakuDimens.gridRowHeight
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        // 底层:自定义时间课程(按起止分钟精确横穿,未对齐节次也贴合)
-                        dayCourses.filter { it.hasCustomTime() }.forEach { c ->
-                            val (top, height) = Schedule.customCourseLayout(c, periods)
-                            if (height > 0f) {
-                                CourseOverlayCard(
-                                    course = c,
-                                    top = top,
-                                    height = height,
-                                    rowH = rowH,
-                                    isCurrent = d == today && Schedule.isCourseOngoing(c, periods),
-                                    periods = periods,
-                                    onClick = { detailCourse = it },
-                                )
-                            }
-                        }
-                        // 中层:按节次课程(横穿其节次区间)
-                        dayCourses.filter { !it.hasCustomTime() }.forEach { c ->
-                            CourseOverlayCard(
-                                course = c,
-                                top = (c.startPeriod - 1).toFloat(),
-                                height = (c.endPeriod - c.startPeriod + 1).toFloat(),
-                                rowH = rowH,
-                                isCurrent = d == today && Schedule.isCourseOngoing(c, periods),
-                                periods = periods,
-                                onClick = { detailCourse = it },
-                            )
-                        }
-                        // 顶层:整整齐齐的节行(左侧「第 N 节 + 起止时间」)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            periods.forEachIndexed { idx, period ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = YohakuDimens.screenPadding),
-                                ) {
-                                    Column(modifier = Modifier.width(YohakuDimens.gridPeriodLabelWidth)) {
-                                        Text(
-                                            text = "第${idx + 1}节",
-                                            style = YohakuType.label12,
-                                            color = colors.neutral6,
-                                            modifier = Modifier.padding(top = 8.dp),
-                                        )
-                                        Text(
-                                            text = Schedule.timeRangeText(period.start, period.end),
-                                            style = YohakuType.cellTime,
-                                            color = colors.neutral7,
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .padding(2.dp)
-                                            .height(rowH),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
-                }
-            }
+                    .clickable(enabled = week > 1) { weekOffset -= 1 }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+            Text(
+                text = "›",
+                style = YohakuType.title24,
+                color = if (week < weekCount) colors.neutral9 else colors.neutral5,
+                modifier = Modifier
+                    .clickable(enabled = week < weekCount) { weekOffset += 1 }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+            Text(
+                text = "今天",
+                style = YohakuType.copy13,
+                color = colors.neutral7,
+                modifier = Modifier
+                    .clickable { weekOffset = 0 }
+                    .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            )
+            Text(
+                text = "添加",
+                style = YohakuType.copy13,
+                color = colors.accent,
+                modifier = Modifier
+                    .clickable { showAdd = true }
+                    .padding(vertical = 4.dp),
+            )
         }
+
+        // 表头:星期 + 日号(与网格列严格对齐)
+        WeekdayHeader(dayNumbers = dayNumbers, today = today)
+
+        // 网格:七列 × 全部节次,一屏看完
+        WeekGrid(
+            courses = courses,
+            periods = periods,
+            week = week,
+            today = today,
+            nowMinute = nowMinute,
+            showNowLine = showNowLine,
+            onCourseClick = { detailCourse = it },
+            modifier = Modifier.weight(1f),
+        )
 
         YohakuBottomNav(current = "week", onNavigate = { nav.navigateToTab(it) })
     }
+}
+
+/** 表头:一~日 + 该天日号;今天用 accent 标出。 */
+@Composable
+private fun WeekdayHeader(dayNumbers: List<Int>, today: Int) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = YohakuDimens.gridPadding, vertical = 2.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Spacer(modifier = Modifier.width(YohakuDimens.gridGutterWidth))
+        (1..7).forEach { d ->
+            val isToday = d == today
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "一二三四五六日"[d - 1].toString(),
+                    style = YohakuType.gridWeekday,
+                    color = if (isToday) colors.accent else colors.neutral8,
+                )
+                Text(
+                    text = dayNumbers.getOrNull(d - 1)?.toString() ?: "",
+                    style = YohakuType.gridDate,
+                    color = if (isToday) colors.accent else colors.neutral6,
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .width(12.dp)
+                        .height(2.dp)
+                        .background(if (isToday) colors.accent else Color.Transparent),
+                )
+            }
+        }
+    }
+}
+
+/** 网格:左侧节次留白列 + 七列,课程块绝对定位。 */
+@Composable
+private fun WeekGrid(
+    courses: List<Course>,
+    periods: List<Schedule.Period>,
+    week: Int,
+    today: Int,
+    nowMinute: Int,
+    showNowLine: Boolean,
+    onCourseClick: (Course) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalYohakuColors.current
+    val rowCount = periods.size.coerceAtLeast(1)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        // 行高:优先铺满可用高度;低于下限(小屏或节次特别多)时整格纵向滚动
+        val rowH = maxOf(maxHeight / rowCount, YohakuDimens.gridMinRowHeight)
+        val gridHeight = rowH * rowCount
+        val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
+        val gutter = YohakuDimens.gridGutterWidth
+        val lanesPerDay = (1..7).map { d ->
+            val dayCourses = courses.filter { it.isOnWeekday(d) && it.isActiveOnWeek(week) }
+            layoutDay(dayCourses, periods)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(gridHeight),
+            ) {
+                // 今天整列淡淡的底色(只做方位提示,不喧哗)
+                if (today in 1..7) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = YohakuDimens.gridPadding + gutter + colW * (today - 1))
+                            .width(colW)
+                            .fillMaxHeight()
+                            .background(colors.neutral1),
+                    )
+                }
+
+                // 节次留白列:节号 + 每个大节首行的开始时间
+                Column(
+                    modifier = Modifier
+                        .width(gutter)
+                        .fillMaxHeight()
+                        .padding(end = 3.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    periods.forEachIndexed { idx, period ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rowH),
+                            horizontalAlignment = Alignment.End,
+                        ) {
+                            Text(
+                                text = "${idx + 1}",
+                                style = YohakuType.gridGutter,
+                                color = colors.neutral6,
+                            )
+                            if (idx % 2 == 0) {
+                                Text(
+                                    text = Schedule.clockText(period.start),
+                                    style = YohakuType.gridGutterTime,
+                                    color = colors.neutral5,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 课程块(按天分列,同一天内按车道并排)
+                lanesPerDay.forEachIndexed { dayIdx, (blocks, laneCount) ->
+                    val used = laneCount.coerceAtMost(3)
+                    val laneW = colW / used
+                    blocks.forEach { block ->
+                        val lane = block.lane.coerceAtMost(used - 1)
+                        CourseBlock(
+                            course = block.course,
+                            rowH = rowH,
+                            top = block.top,
+                            height = block.height,
+                            x = YohakuDimens.gridPadding + gutter + colW * dayIdx + laneW * lane,
+                            width = laneW,
+                            isCurrent = dayIdx + 1 == today &&
+                                Schedule.isCourseOngoing(block.course, periods),
+                            onClick = onCourseClick,
+                        )
+                    }
+                }
+
+                // 当前时间线:只画在「今天」那一列
+                if (showNowLine && today in 1..7) {
+                    Schedule.fractionalRow(nowMinute, periods)?.let { row ->
+                        Box(
+                            modifier = Modifier
+                                .offset(
+                                    x = YohakuDimens.gridPadding + gutter + colW * (today - 1),
+                                    y = rowH * row,
+                                )
+                                .width(colW)
+                                .height(1.5.dp)
+                                .background(colors.accent),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 网格中的一个课程块:淡彩底,当前正在上的课带 accent 左边条。 */
+@Composable
+private fun CourseBlock(
+    course: Course,
+    rowH: Dp,
+    top: Float,
+    height: Float,
+    x: Dp,
+    width: Dp,
+    isCurrent: Boolean,
+    onClick: (Course) -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val blockH = rowH * height
+    // 够高才放第二行(教室);只够一行时让课程名独占
+    val roomy = blockH >= 30.dp
+    Box(
+        modifier = Modifier
+            .offset(x = x, y = rowH * top)
+            .width(width)
+            .height((blockH - YohakuDimens.gridCellGap).coerceAtLeast(12.dp))
+            .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+            .background(courseTint(course))
+            .clickable { onClick(course) },
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isCurrent) {
+                Box(
+                    modifier = Modifier
+                        .width(YohakuDimens.gridAccentBarWidth)
+                        .fillMaxHeight()
+                        .background(colors.accent),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = YohakuDimens.gridBlockPadding, vertical = 2.dp),
+            ) {
+                Text(
+                    text = course.name,
+                    style = YohakuType.gridName,
+                    color = colors.neutral10,
+                    maxLines = if (roomy) 2 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (roomy && course.location.isNotEmpty()) {
+                    Text(
+                        text = course.location,
+                        style = YohakuType.gridMeta,
+                        color = colors.neutral7,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 一天内的课程块:换算成 (top, height) 行高倍数后,贪心分配并排车道。 */
+private data class GridBlock(
+    val course: Course,
+    val top: Float,
+    val height: Float,
+    val lane: Int = 0,
+)
+
+private fun layoutDay(
+    courses: List<Course>,
+    periods: List<Schedule.Period>,
+): Pair<List<GridBlock>, Int> {
+    val blocks = courses.mapNotNull { c ->
+        val (top, height) = if (c.hasCustomTime()) {
+            Schedule.customCourseLayout(c, periods)
+        } else {
+            (c.startPeriod - 1).toFloat() to (c.endPeriod - c.startPeriod + 1).toFloat()
+        }
+        if (height <= 0f) null else GridBlock(c, top, height)
+    }.sortedWith(compareBy({ it.top }, { -it.height }))
+
+    // 车道:每条车道记住已占据到的最底部,能塞就复用
+    val laneEnds = mutableListOf<Float>()
+    val placed = blocks.map { b ->
+        val free = laneEnds.indexOfFirst { it <= b.top + 0.01f }
+        val lane = if (free >= 0) free else laneEnds.size.also { laneEnds.add(0f) }
+        laneEnds[lane] = b.top + b.height
+        b.copy(lane = lane)
+    }
+    return placed to laneEnds.size.coerceAtLeast(1)
+}
+
+/** 「添加」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入。 */
+@Composable
+private fun AddDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val colors = LocalYohakuColors.current
+    val options = listOf(
+        Triple("教务导入", "3 步导入,选学校适配器", "import"),
+        Triple("手动添加", "自己填一门课", "course_form"),
+        Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
+        Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加", style = YohakuType.title20) },
+        text = {
+            Column {
+                options.forEachIndexed { index, (title, desc, route) ->
+                    if (index > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(colors.neutral3),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(route) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = title, style = YohakuType.copy15, color = colors.neutral10)
+                            Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+                        }
+                        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            Text(
+                text = "取消",
+                style = YohakuType.copy14,
+                color = colors.neutral7,
+                modifier = Modifier
+                    .clickable { onDismiss() }
+                    .padding(8.dp),
+            )
+        },
+    )
 }
 
 @Composable
@@ -341,49 +558,6 @@ private fun InfoLine(label: String, value: String) {
             modifier = Modifier.width(44.dp),
         )
         Text(text = value, style = YohakuType.copy14, color = colors.neutral9)
-    }
-}
-
-/** 横穿多节的课程卡:绝对定位在网格上,top/height 为行高倍数(自定义课按分钟比例精确)。 */
-@Composable
-private fun CourseOverlayCard(
-    course: Course,
-    top: Float,
-    height: Float,
-    rowH: Dp,
-    isCurrent: Boolean,
-    periods: List<Schedule.Period>,
-    onClick: (Course) -> Unit,
-) {
-    val colors = LocalYohakuColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                start = YohakuDimens.screenPadding + YohakuDimens.gridPeriodLabelWidth + 2.dp,
-                end = YohakuDimens.screenPadding + 2.dp,
-            )
-            .offset(y = rowH * top)
-            .height(rowH * height)
-            .clickable { onClick(course) },
-    ) {
-        YohakuCard(modifier = Modifier.fillMaxSize(), accentBar = isCurrent) {
-            Text(
-                text = course.name,
-                style = YohakuType.cellName,
-                color = colors.neutral10,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val time = Schedule.courseTimeText(course, periods)
-            Text(
-                text = if (course.location.isNotEmpty()) "$time ${course.location}" else time,
-                style = YohakuType.cellTime,
-                color = colors.neutral7,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
 }
 
