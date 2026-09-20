@@ -25,7 +25,7 @@ import javax.inject.Singleton
 /**
  * 课程提醒排程。
  *
- * 与旧实现的关键差别(照 [SleepDown-Schedule](https://github.com/xiaomanjun233/SleepDown-Schedule) 的提醒架构):
+ * 与旧实现的关键差别:
  * - **排程签名**:课程/作息/学期/通知设置的指纹,只有指纹变化(或强制)时才真正重排 —— 不再
  *   「课程或设置每次发射都全量取消+重排」。
  * - **已排台账**:把真正排出去的 `requestCode|action|key` 记在本地,取消时精确撤销,不再盲扫 120 天。

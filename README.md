@@ -1,306 +1,140 @@
-# Classtable · Yohaku 极简课程表
-
-> 面向中国在校大学生的 Android 极简效率型课程表应用。以 **Yohaku 设计哲学**为视觉核心——一抹 accent、三档中性、余者尽留为白——刻意避开多彩贴纸与液态玻璃等装饰性风格,回归纸质课表的秩序与留白。
-
-## 目录
-
-- [项目简介](#项目简介)
-- [设计理念](#设计理念)
-- [功能特性](#功能特性)
-- [技术栈](#技术栈)
-- [环境要求](#环境要求)
-- [快速开始](#快速开始)
-- [架构概览](#架构概览)
-- [教务导入系统](#教务导入系统)
-- [数据模型与同步](#数据模型与同步)
-- [目录结构](#目录结构)
-- [部署与配置](#部署与配置)
-- [已知限制](#已知限制)
-- [路线图](#路线图)
-- [许可](#许可)
-
----
-
-## 项目简介
-
-Classtable 是一款为国内大学生设计的课程表应用,覆盖「课表查看 → 课程导入 → 上课提醒 → 多端同步」的完整闭环:
-
-- **课表查看**:周视图与日视图两种形态,单日逐节网格、课程卡绝对定位,空堂留白。
-- **课程导入**:支持教务系统一键导入(146 所学校 / 156 个适配器)、手动表格粘贴、Excel 文件导入与 AI 图片识别。
-- **上课提醒**:本地精确闹钟为主、FCM 实时推送为辅的双通道提醒,并对国产 ROM 后台清理做了针对性防护。
-- **账号同步**:Firebase Email/Password 认证 + Firestore 云同步,未登录时以访客本地模式使用,登录后自动合并。
-
-后端面向中国大陆网络环境做了特殊设计:认证与同步请求全部经由自建 Netlify 反代中间层转发,客户端不再直连被墙的 Google 域名。
-
-## 设计理念
+# Classtable · 极简课程表
 
-应用遵循 **Yohaku(余白)设计哲学**:
-
-- **一抹 accent**:全应用仅使用单一强调色(默认梅色 `#C56473`,另有 5 色可选),用于当前课程、选中态等少量关键元素。
-- **三档中性**:浅色 / 深色两套中性暖纸面色板,层次靠明度而非颜色区分。
-- **课程淡彩**:每门课按课名派生一层极淡的和色(彩度压得很低),只为在一屏七天里便于扫读;它不承载语义(课程名始终在),也不与 accent 争角色——accent 仍然只表示「此刻正在上」。
-- **余者尽留为白**:空堂不渲染任何装饰,以留白本身表达「无课」。
-- **衬线纸感**:内置思源宋体 Medium 与 JetBrains Mono Regular,营造纸质课表的翻阅感。
-- **全部自绘**:弹窗、日期选择器、芯片、底部导航、顶栏都由项目自己的组件渲染(`YohakuDialog` / `YohakuDatePicker` / `YohakuChip` …);Material 只作为底层原语(Text/BasicTextField/Surface),其默认的容器色、28dp 圆角、24sp 标题与涟漪都被主题层显式覆盖——按下时是「纸被压深一层」,不是水波扩散。
-
-该定位面向「效率工具」人群,对标同类效率应用的克制美学,而非追求视觉热闹。
-
-## 功能特性
-
-### 课表核心
-
-- **周视图**:一屏看全一周七天,左右滑动翻周——横向七列(周一~周日,表头带日号、今天高亮),纵向按节次等高等分;「今天」跳回真实当前周。行高由可用高度除以节数动态算出,装不下时整格纵向滚动。
-- **逐节网格**:左侧只留 28dp 放节号与每大节起始时间;课程块绝对定位横穿其节次区间(自定义时间课程按分钟比例精确定位),同一时段多门课自动并排分栏;「当前时间线」只在今天那一列画出。
-- **日视图**:纯列表形态,卡片间距即空堂表达;每 30 秒动态刷新「正在上课 · 剩余 N 分钟 / 距下一节 N 分钟」。
-- **课程管理与详情**:底部导航「课程」入口,按星期分组列出全部课程(左侧色标 + 右侧节次与时刻),详情页展示节次、具体时间、本周次模式的排期日期(基于学期起始日推算),支持编辑与删除。
-- **添加入口**:周视图右上角「添加」一个入口收拢四种方式——教务导入(学校适配器)、手动添加单门课、手动表格导入(粘贴 / Excel)、AI 图片导入;底部导航不再单列「导入」。
-- **自动检查更新**:设置里可开关(默认开),后台每天最多检查一次(仅联网时),发现新版本发一条通知;启动提示可「忽略此版本」,同一版本不再打扰。只提示,不自动下载。
-- **课程表单**:整页表单,星期可多选(一周多天上课)、节次/周次以 chip 选择、支持自定义周次、备注选填;时间支持「按节次」与「自定义时间」两种模式,后者适用于晚间讲座、临时加课等非作息场景。
-
-### 提醒与可靠性
-
-- **上课提醒通知**:每节课开始前触发通知,可配置提前量(准点 / 5 / 10 / 15 / 30 / 60 分钟);通知内容触发时动态计算(课程名、剩余分钟、开始时间、地点、教师),点击直达课程详情。
-- **实时活动**:提醒形态可选「实时活动」——从提前量那一刻起常驻一条通知,按分钟推进「还有 N 分钟上课 → 上课中 → 还有 N 分钟下课」,下课自动收起;通知上可直接「取消本节课提醒」(静音到下课,重试与重启都不会再打扰)。Android 16 上会额外请求状态栏胶囊。
-- **明日课程预告**:可选,在前一天指定时刻提醒「明天有 N 门课 · 第一节几点、在哪」。
-- **精确闹钟预排**:按「排程签名 + 已排台账」管理 8 天滚动窗口,并排一个次日 00:05 的自续期闹钟,长期不打开应用也会把窗口往前滚;开机、改时区、应用更新与精确闹钟权限变化都会自动重排,Android 12+ 未授予精确闹钟权限时自动降级为窗口闹钟。
-- **国产 ROM 后台保护**:设置页「提醒可靠性」区块自动识别 ROM(小米 / OPPO / vivo / 华为 / 荣耀 / 魅族),一键引导开启通知权限、精确闹钟、电池白名单与自启动;WorkManager 每 12 小时自愈重排全部闹钟,FCM 消息到达时顺带重排,防止 ROM 清理导致提醒丢失。
-- **首次启动权限引导**:首次启动弹出权限清单(通知 / 精确闹钟 / 电池白名单 / 自启动),可逐个引导开启或选择「稍后再说」;设置页可随时重新进入。
-
-### 课程导入
-
-- **教务系统导入**:接入开源教务适配仓库 shiguang_warehouse(索引协议 v2),覆盖正方、强智、青果、URP、超星等系统的 218 所学校 / 242 个适配器。选校后先阅读适配器说明(描述 / 作者 / 操作提示)再确认导入;WebView 登录(账号密码仅存于本机会话)后注入适配脚本,脚本识别到的**作息时间与开学日期**会在确认页列出,由你决定是否覆盖本地设置,课程按周次自动归类(每周 / 单周 / 双周 / 自定义)。登录页按桌面 UA 渲染并放开第三方 Cookie(CAS 单点登录需要),课表若在新窗口打开会自动接管显示,渲染进程被系统回收时自动重建,证书/网络失败会明确提示而不是留下白屏。
-- **手动导入**:粘贴 CSV / TSV 表格数据,或直接导入 Excel 文件(.xlsx / .csv / .tsv),自动识别表头与 UTF-8 / GBK 编码;表格第 8、9 列可填开始 / 结束时间(HH:MM),生成自定义时间课程。
-- **AI 图片导入**:多供应商——Google Gemini 或任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等),在设置页配置供应商、密钥、Base URL 与模型后,上传课表图片即可识别课程与作息并自动应用。
-- **作息一键同步**:教务 / AI 图片 / 手动表格导入识别到作息时,会在确认页展示并等你确认后写入;手动导入可直接粘贴「08:00-08:50」格式行同步作息。
-
-### 账号、同步与稳定性
-
-- **账号**:Firebase Email/Password,支持密码重置邮件;未登录为访客本地模式。
-- **同步**:Room 本地优先 + Firestore,`updatedAt` 后者胜,删除墓碑传播防止数据复活。
-- **数据埋点与崩溃**:Firebase Analytics(课程增删 / 导入 / 登录 / 提醒等事件)+ Crashlytics(崩溃自动上报,携带版本自定义 key),崩溃报告走官方通道,大陆无网络时本地缓存、恢复后补传。
-- **实时推送(Live Updates)**:服务端经反代 `/push` 接口定向推送三类消息——`course_reminder` 上课提醒(与本地闹钟同一通知 id,双通道自动去重)、`course_changed` 课表变更(提示 + 自动同步 + 重排闹钟)、`marketing` 营销活动。
-- **桌面小组件**:Glance 实现的 1×1「下节课」与 4×2「今日课表」(当前课 accent 高亮,跟随动态作息)。
-- **边缘到边缘**:纸面底色铺满状态栏与导航栏区域,栏内图标深浅随主题切换。
-
-### 设置
-
-- 主题:浅色 / 深色 / 跟随系统。
-- 强调色:5 色可选。
-- 作息时间子页:每节独立设置开始 + 结束时间,可自由增删节次,不限于 12 节;支持按「开始时间 + 单节时长 + 课间 + 节数」自动生成,并在保存前校验节次顺序与时间重叠。
-- 学期周次子页:日期选择器设置学期起始日与总周数。
-- AI 密钥:多供应商配置。
-- 适配器同步:从自建站点拉取最新学校索引与教务适配脚本,落地后导入页优先用云端数据,失败自动回退内置。
-- 检查更新:检查新版本、应用内下载 APK 并拉起系统安装器;启动时按 24 小时节流静默检查。
-
-## 技术栈
-
-| 分类 | 选型 |
-|---|---|
-| 语言 | Kotlin 2.1.0 |
-| UI | Jetpack Compose(BOM 2024.12.01),自建 Yohaku 设计系统,不使用 Material3 默认外观 |
-| 构建 | AGP 8.7.3 / Gradle 8.11.1 / KSP |
-| 架构 | MVVM + Hilt 2.54(依赖注入) |
-| 本地存储 | Room 2.7.0、DataStore 1.1.1、SecurityCrypto 1.1.0 |
-| 后台任务 | WorkManager 2.10.0 |
-| 小组件 | Glance 1.1.1 |
-| 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM,BOM 33.7.0)经 Netlify Functions 反代 |
-| 网络 | HttpURLConnection + REST(认证与同步不依赖 Firebase SDK) |
+> 给国内大学生用的 Android 课程表:一屏看全一周、四种方式导入、提醒准点又不吵。
+> 界面只留必要的信息——一抹强调色、三档中性、余者尽留为白。
 
-## 环境要求
+## 它能帮上什么
 
-| 项 | 要求 |
-|---|---|
-| IDE | Android Studio(含 JDK 17+,SDK 可自动下载) |
-| SDK | compileSdk 35 / targetSdk 35 / minSdk 26(Android 8.0+) |
-| 网络 | 首次 Sync 需联网下载依赖 |
-
-## 快速开始
-
-```bash
-# 1. 使用 Android Studio 打开仓库根目录(File > Open),等待首次 Sync 完成
-# 2. 连接模拟器或真机,运行 app 模块
-# 或使用命令行构建(仓库已提交 Gradle Wrapper):
-./gradlew assembleDebug          # 调试版 APK(可直接安装)
-./gradlew assembleRelease        # 发布版 APK(未配置签名时产出未签名 APK)
-```
-
-> Release 签名配置(GitHub Actions Secrets / 本地构建)见 [`docs/release-signing.md`](docs/release-signing.md)。
-
-> Release 构建开启 R8 混淆 + 资源压缩,且只打 `arm64-v8a` / `armeabi-v7a`(x86 模拟器请用 debug 包);内置思源宋体已子集化到 GB2312 全字集(14.1MB → 3.3MB),需要重新生成时执行 `python tools/subset-font.py`。
-
-> 应用默认以访客本地模式运行,无需任何后端配置即可体验完整课表功能。账号同步与推送需按下文[部署与配置](#部署与配置)完成后端接入。
-
-## 架构概览
-
-```
-┌──────────────────────┐        ┌──────────────────────┐        ┌──────────────────┐
-│   Android App        │ HTTPS  │  Netlify Functions    │ HTTPS  │  Firebase        │
-│  ┌────────────────┐  │ ─────▶ │  proxy.mjs 反代中间层  │ ─────▶ │  Auth / Firestore│
-│  │ Room 本地优先   │  │        │  /auth/*  /firestore/*│        │  (安全规则照常评估)│
-│  │ (离线可用)      │  │        └──────────────────────┘        └──────────────────┘
-│  └────────────────┘  │
-│  Crashlytics/Analytics│ ─── 官方通道直连(不经反代)
-│  FCM Messaging        │ ◀── 服务端 /push 定向推送
-└──────────────────────┘
-```
-
-- **客户端**:本地优先。Room 持久化课程数据,未登录 = 访客本地模式;登录后 pull → 合并(updatedAt 后者胜)→ 应用墓碑 → push。
-- **反代中间层**:Android 的 Firebase Auth/Firestore 官方 SDK 硬编码 Google 域名,大陆无法直连。本项目移除 `firebase-auth` / `firebase-firestore` SDK 依赖,改用 REST 实现,全部请求经自建 Netlify Function 转发(方法 / query / body / Authorization ID token 原样透传)。`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留官方 SDK。同步由实时监听改为按需 pull / push(App 启动、登录、网络恢复时触发),对课程表场景无感知差异。
-- **推送通道**:本地精确闹钟是准点提醒主力(离线可用),FCM 为实时增强通道。
-
-## 教务导入系统
-
-### 数据流
-
-```
-warehouse/                 # 上游仓库快照(源:保留 YAML,便于比对与重新生成)
-  index/root_index.yaml
-  resources/<SCHOOL>/{adapters.yaml, <script>.js}
-        │  node tools/yaml2json.mjs   → 预编译为下方 JSON,App 运行时不解析 YAML
-        ▼
-assets/warehouse/
-  index.json       # 218 所学校索引
-  adapters.json    # 242 个适配器配置
-  resources/<SCHOOL>/<script>.js   # 适配脚本(注入 WebView 执行)
-```
-
-### 适配脚本契约
-
-脚本注入即自执行,通过 JS 桥与 App 交互:
-
-- `AndroidBridge.showToast` / `AndroidBridge.notifyTaskCompletion`
-- `AndroidBridgePromise.showAlert` / `showConfirmDialog` / `showPrompt` / `showSingleSelection` / `saveImportedCourses` / `savePresetTimeSlots` / `saveCourseConfig`(v2 别名 `shiguangBridge*`)
+- **一屏看全一周**。横看是周一到周日七列,竖看是当天所有节次,不需要来回翻页;左右滑动即换周,「今天」一键回到本周。
+- **四种导入方式**。教务系统一键导入、手动添加单门课、粘贴表格或导入 Excel、拍张课表截图交给 AI 识别——都在周视图右上角的「添加」里。
+- **提醒准点**。每节课开始前提醒(准点 / 5 / 10 / 15 / 30 / 60 分钟任选);也可以开着「实时活动」,让它在课前到下课之间一直告诉你还剩多久。
+- **一眼分辨**。每门课有一层极淡的专属色,扫一眼就知道哪节是哪门;此刻正在上的那节课会额外被标出来。
+- **不注册也能用**。课表默认只存在你自己的手机上;需要换机或备份时再登录账号同步。
+- **桌面小组件**。今日课表与下节课两块组件,不必打开应用就能看。
 
-桥垫片会把每个方法的实参**补齐到固定个数**再追加 callbackId,以兼容各适配器 3 参 / 4 参的不同写法(形参错位会让 Promise 一直挂到 60s 超时);`showPrompt` 的校验函数名会在确认后于页面内执行,`showSingleSelection` 会预选 `defaultIndex`。
-
-### 更新仓库
-
-上游仓库(GitHub `XingHeYuZhuan/shiguang_warehouse`,国内镜像 `gitee.com/XingHeYuZhuan-gh/shiguang_warehouse`):
-
-```bash
-git clone --depth 1 https://gitee.com/XingHeYuZhuan-gh/shiguang_warehouse /tmp/shiguang
-cp -r /tmp/shiguang/resources/* warehouse/resources/     # 适配脚本 + adapters.yaml
-cp /tmp/shiguang/index/root_index.yaml warehouse/index/
-cp /tmp/shiguang/README.md /tmp/shiguang/LICENSE warehouse/
-node tools/yaml2json.mjs        # 重新生成 assets/warehouse/{index,adapters}.json
-node tools/build-netlify.mjs    # 打包 netlify/static/warehouse/bundle.json(Netlify 构建时也会自动执行)
-node tools/verify-warehouse.mjs # 校验数据自洽(每校必有适配器 / 脚本存在 / id 唯一 / 无未引用脚本)
-```
-
-`assets/warehouse/resources/**` 只需放 `.js`(运行时只读脚本);YAML 只留在 `warehouse/` 源目录用于比对。
-
-> 上游索引已升级到 **协议 v2**(官方 App 改用 protobuf 索引),但 `root_index.yaml` / `adapters.yaml` 的**字段与我们一致**(`id`/`name`/`initial`/`resource_folder` 与 `adapter_id`/`adapter_name`/`asset_js_path`/`import_url`/`category`/`maintainer`/`description`),所以 `tools/yaml2json.mjs` 可直接预编译,App 端无需改动。
-> 注意各校 YAML 的**列表项缩进不一致**(有的写在第 0 列),预编译器已按任意缩进解析——早期实现会因此丢掉整所学校的适配器。
-
-App 端「设置 → 适配器同步」可拉取线上 bundle 覆盖内置数据,无需等待发版。
-
-## 数据模型与同步
-
-| 层 | 存储 | 说明 |
-|---|---|---|
-| 本地 | Room:`courses` + `deleted_courses`(墓碑)+ `semesters` | 离线优先,真相在本地 |
-| 本地 | DataStore `settings` | 主题 / accent / 当前周 / 作息 / 学期 |
-| 远端 | Firestore:`users/{uid}/courses/{courseId}` + `users/{uid}/deleted/{courseId}` | 云同步 |
-
-同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删课程在其它设备复活。
-
-## 目录结构
-
-```
-app/src/main/java/com/kxin/classtable/
-  design/      # Yohaku 设计系统(色板 / 字阶 / 间距 / 组件 / 内置字体)
-  domain/      # Course / Semester / Schedule(节次↔时间换算、学期周推导)
-  data/        # Room + DataStore + Firebase 同步 + import(WarehouseIndex / ImportParser)
-  di/          # Hilt 依赖注入模块
-  notify/      # 本地闹钟 / 提醒通知
-  ui/          # 周视图 日视图 表单 导入(3 步 + JS 桥) 设置(+ 子页) 账号
-  widget/      # Glance:1×1 下节课 + 4×2 今日课表
-netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送 / 版本 / APK)
-netlify/static/               # 构建期生成:warehouse/bundle.json(适配器同步源,CDN 分发)
-tools/yaml2json.mjs           # 教务仓库 YAML → assets JSON 预编译
-tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
-.github/workflows/build-apk.yml   # GitHub Actions:自动构建并上传 APK
-gradlew / gradlew.bat             # Gradle Wrapper 启动脚本
-```
-
-## 部署与配置
-
-### Firebase 项目
-
-- 项目 ID:`classtable-4a7d0`;Android 应用包名 `com.kxin.classtable`(google-services.json 已就位)。
-- 安全规则见 `firestore.rules`,`firebase.json` 已配置。
-
-```bash
-firebase login --no-localhost
-firebase use classtable-4a7d0
-firebase deploy --only auth          # 启用 Email/Password
-# 在 Console 创建 Firestore 数据库(建议 Standard,区域 asia-east1)
-firebase deploy --only firestore:rules
-```
-
-### Netlify 反代部署
-
-1. Netlify 控制台 → Add new site → 连接本仓库(或单独部署 `netlify/functions`)。
-2. 部署完成后得到站点地址 `https://<site>.netlify.app`(建议绑定自有域名,`netlify.app` 域名在大陆可达性一般)。
-3. 将站点地址写入 `app/build.gradle.kts`(均经 BuildConfig 注入,换站点只改这两处):
-   - `FIREBASE_PROXY_URL` — 反代地址(`https://<site>/.netlify/functions/proxy`);
-   - `SITE_BASE_URL` — 站点根(`https://<site>`,用于适配器 bundle 与更新接口)。
-4. 重新构建并安装 App。
-
-> 适配器同步依赖 Netlify 的静态发布目录:`netlify.toml` 已配置 `[build] command = "node tools/build-netlify.mjs"` 与 `publish = "netlify/static"`,部署时自动生成 `<site>/warehouse/bundle.json`。
-> 「检查更新」由反代 `/version` 服务端代查 GitHub Release、`/apk` 流式代理安装包(客户端不直连 GitHub);如需提升 GitHub API 限流额度,可在 Netlify 环境变量设置 `GITHUB_TOKEN`(可选)。
-
-免费额度为 12.5 万次请求 / 月,登录 + 同步场景绰有余裕。
-
-### Live Updates 推送配置
-
-服务端通过 `POST <site>/.netlify/functions/proxy/push` 向用户设备发送 FCM data 消息,客户端按 `messageType` 分发:
-
-| messageType | 用途 | 客户端行为 |
-|---|---|---|
-| `course_reminder` | 上课提醒(服务端补充通道) | 渲染提醒;通知 id 与本地闹钟相同(`courseId.hashCode()`)→ 双通道自动去重 |
-| `course_changed` | 调课 / 停课 / 换教室 | 提示 + 自动云同步 + 重排闹钟 |
-| `marketing` | 活动 / 宣传 | 通用通知 |
-
-一次性配置步骤:
-
-1. Firebase Console → 项目设置 → 服务账号 → 生成新私钥并下载 JSON。
-2. Netlify → Site settings → Environment variables 添加 `SERVICE_ACCOUNT`(JSON 完整内容)与 `PUSH_API_KEY`(自定义管理密钥)。两者均为机密信息,仅存放于 Netlify 环境变量,不得提交到代码库。
-3. 重新部署。
-
-调用示例(服务端):
-
-```bash
-curl -X POST "https://<site>/.netlify/functions/proxy/push" \
-  -H "X-Push-Key: <PUSH_API_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "uid": "<用户uid>",
-    "messageType": "course_changed",
-    "title": "课表已更新",
-    "body": "周一 10:00 高数换教室到 A203",
-    "data": { "courseId": "<courseId>" }
-  }'
-```
-
-> 如需服务端定时扫描课表自动推送上课提醒,可扩展 Cloud Functions 定时触发器(Pub/Sub schedule),作为后续增强项。
+## 设计取向
+
+应用遵循 **Yohaku(余白)** 的取向——把课表当纸看,不把界面当装饰:
+
+- **一抹强调色**。全局只有一个强调色(默认梅色,另有 5 色可选),只用于「此刻正在上」与选中态这类真正需要抢眼的地方。
+- **三档中性**。深浅两套暖纸面色板,层次靠明度而不是靠颜色堆叠。
+- **课程淡彩**。每门课按课名得到一层彩度极低的底色,方便扫读;它不承载语义,课程名始终写在上面。
+- **余者尽留为白**。没有课的位置什么都不画——留白本身就是「这里没课」。
+- **衬线纸感**。内置思源宋体与等宽字体,时间与节次对齐得像表格一样整齐。
+
+## 功能细节
+
+### 课表
+
+- **周视图**:七列一周,纵向按节次等高等分。行高会按屏幕高度自动算,装不下时可以整格上下滚动;左侧只留很窄一列放节号和每个大节的起始时间。
+- **日视图**:卡片式列表,卡片之间的距离就是空堂;每 30 秒刷新「正在上课 · 还有 N 分钟下课 / 距下一节还有 N 分钟」。
+- **课程页**:按星期分组列出全部课程,每条左边是课程色标、右边是「第几节 + 具体几点」。
+- **课程详情**:节次、具体时间、周次模式(每周 / 单周 / 双周 / 自定义)、教师、地点、备注,以及本学期每次课的具体日期。
+- **课程编辑**:整页表单,星期可多选(一周多天上课),节次与周次点选即可;时间支持「按节次」和「自定义时间」两种模式,后者适合晚间讲座、临时加课。
+
+### 导入
+
+- **教务系统导入**:选择你的学校,阅读适配说明后确认导入。用学校账号在应用内登录(账号密码只在这一次登录会话里使用),脚本会把课程、作息时间与开学日期读出来,再让你确认是否覆盖本地设置。课程会按单双周 / 自定义周次自动归类。
+- **手动添加**:自己填一门课,适合补录或临时调整。
+- **手动表格导入**:粘贴 CSV / TSV,或直接选 Excel 文件。自动识别表头与中文编码;第 8、9 列可以填开始 / 结束时间,生成自定义时间课程。
+- **AI 图片导入**:支持 Google Gemini 或任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等)。在设置里填好自己的密钥后,上传课表截图即可识别课程与作息。
+
+### 提醒
+
+- **课前提醒**:可设置提前量,通知内容在触发那一刻才算(课程名、剩余分钟、开始时间、地点、教师),点击直达课程详情。
+- **实时活动**:提醒形态可选。开启后,从提前量的那一刻起常驻一条通知,按分钟推进「还有 N 分钟上课 → 上课中 → 还有 N 分钟下课」,下课自动收起;通知上可以直接「取消本节课提醒」,这一节就不会再打扰你。
+- **明日课程预告**:可选,在前一天你指定的时间提醒「明天有 N 门课 · 第一节几点、在哪」。
+- **可靠性**:设置里有「提醒可靠性」页,会识别你的手机品牌,一步步引导打开通知、精确闹钟、电池白名单与自启动——国产系统上这一步是提醒能否准时的关键。应用还会定期自检并把提醒补排回来。
+
+### 桌面小组件
+
+- **今日课表**(4×2):今天的课程列表,正在上的那节会被标出。
+- **下节课**(1×1):下一节课的名称、时间与地点。
+
+### 个性化与设置
+
+- 主题:浅色 / 深色 / 跟随系统;强调色 5 色可选。
+- 作息时间:每节独立设置开始与结束时间,节次可增删(不限于 12 节),也支持按「开始时间 + 单节时长 + 课间 + 节数」自动生成,并在保存前校验重叠。
+- 学期周次:选开学日期与总周数,当前周次自动推算。
+- 适配器同步:不定期更新学校与适配脚本,不必等应用发版。
+- 自动检查更新:可开关(默认开),发现新版本会提示;可以「忽略此版本」,也可以随时手动检查。只提示,不自动下载。
+
+## 安装
+
+1. 到 [Releases](https://github.com/kuailiaojie/classtable/releases) 下载最新 `app-release.apk`,在手机上安装(首次需要在系统里允许「安装未知应用」)。
+2. 首次启动会引导你打开通知、精确闹钟、电池白名单与自启动权限。
+3. 打开周视图右上角的「添加」开始导入课表。
+
+**系统要求**:Android 8.0 及以上。发布包面向手机,只包含 `arm64-v8a` 与 `armeabi-v7a`。
+
+> 已经装过旧版本时,直接覆盖安装即可,课表与设置都会保留。应用内「设置 → 检查更新」也能直接下载新版本。
+
+## 隐私与数据
+
+- **默认只存在本机**。课表、设置、账号凭据之外的资料都保存在你自己的设备上,不注册也能完整使用。
+- **云同步是可选的**。注册账号后,课表和设置会在你的设备与云端之间同步;删除的课程会同步删除,不会在别的设备上复活。
+- **学校账号只用于当次登录**。教务系统登录在应用内的浏览器会话里完成,密码不会保存到应用数据库。
+- **AI 图片识别只在你自己配置后启用**。上传的图片会发送给你选择的服务商(如 Gemini / DeepSeek),我们不经手。
+- **没有广告**。应用不推送促销内容,也没有第三方广告 SDK。
+
+## 常见问题
+
+**提醒没响或不准?**
+先到「设置 → 提醒可靠性」逐项打开通知、精确闹钟、电池白名单与自启动。国产系统的省电策略会在后台清掉闹钟,这几项开齐之后通常就稳了。
+
+**我的学校不在列表里怎么办?**
+可以试「手动表格导入」或「AI 图片导入」;如果学校教务系统比较通用,也可以走教务导入里的通用入口,填上教务网址试试。
+
+**节次时间和我们学校不一样?**
+到「设置 → 作息时间」逐节改成你们学校的作息即可。从教务系统导入时,如果脚本读到了学校的作息,也会询问你是否一并应用。
+
+**课程是怎么排序的?**
+周视图按节次排,课程页按星期分组、组内按上课时间排。同一时段有多门课时会自动并排显示,不会互相遮住。
+
+**换手机后课表怎么带过去?**
+登录同一个账号即可同步。没有登录的话,数据只在本机,卸载或换机会丢失,建议先注册账号再迁移。
+
+**课程的颜色可以自己改吗?**
+目前是按课名自动分配的——同一门课在哪天都是同一个颜色,不用手动维护。
 
 ## 已知限制
 
-- 离散周次(如 1, 4, 7)近似为 `min..max` 的连续周处理。
-- 自定义时间课程(`isCustomTime`)暂不参与作息时间换算的起止对齐。
-- 首次构建如遇 IDE 报错,按提示修复即可(依赖均为稳定版本)。
+- 离散周次(如 1、4、7 周)目前按「第 1–7 周」的连续区间近似处理。
+- 自定义时间的课程不参与作息换算,按实际填写的起止时间显示。
+- 发布包不包含 x86 架构,模拟器请使用调试版。
 
 ## 路线图
 
-- [ ] 离散周次精确支持(课程模型增加 `weeks` 列表)。
-- [ ] 自定义时间课程起止时间精确对齐。
-- [ ] 服务端定时扫描课表并推送上课提醒(Cloud Functions 定时触发器)。
-- [ ] 自建后端方案(Cloudflare Workers + D1)评估与实施——见 `docs/workers-backend.md`。
+- [ ] 离散周次精确支持
+- [ ] 自定义时间课程与作息的对齐
+- [ ] 服务端定时扫描课表并推送提醒
+- [ ] 后端方案评估(降低对第三方服务的依赖)
 
 ## 许可
 
-本项目基于 MIT 协议开源(见 [LICENSE](LICENSE))。第三方教务适配数据(shiguang_warehouse 子模块)遵循其自有许可(见 `warehouse/LICENSE`)。
+本项目基于 MIT 协议开源(见 [LICENSE](LICENSE))。
+
+其中教务适配数据来自独立的适配仓库,遵循其自有许可(见 `warehouse/LICENSE`)。
+
+---
+
+## 开发者
+
+想自己构建或了解实现:
+
+```bash
+./gradlew assembleDebug      # 调试版
+./gradlew assembleRelease    # 发布版(未配置签名时产出未签名 APK)
+```
+
+详细文档:
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | 技术栈、整体架构、目录结构、数据模型与同步策略 |
+| [`docs/import-system.md`](docs/import-system.md) | 教务导入系统的数据流、适配脚本契约、适配仓库更新流程 |
+| [`docs/backend-setup.md`](docs/backend-setup.md) | 账号 / 同步 / 推送 / 更新接口的后端部署与配置 |
+| [`docs/release-signing.md`](docs/release-signing.md) | Release 签名配置(CI 与本地) |
 
 ---
 
