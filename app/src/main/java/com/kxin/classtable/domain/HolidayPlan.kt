@@ -1,12 +1,16 @@
 package com.kxin.classtable.domain
 
+import android.content.Context
+import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
@@ -37,15 +41,33 @@ data class HolidayMakeup(val date: LocalDate, val source: LocalDate?)
  * 再退到开源节假日数据(holiday-cn)的两个 CDN;任何一家能用就够。抓取只生成预览,不写课表数据。
  */
 object HolidayClient {
+    private const val PREFS = "holiday_cache"
+    private const val KEY_DAYS = "days_"
+    private const val KEY_FETCHED_AT = "fetched_at_"
+
+    /** 缓存新鲜期(天):节假日公告一年只动几次,30 天内不重复联网。 */
+    private const val FRESH_DAYS = 30L
+
     private val sources = listOf<(Int) -> String>(
         { year -> "https://timor.tech/api/holiday/year/$year/" },
         { year -> "https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/$year.json" },
         { year -> "https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/$year.json" },
     )
 
-    /** 抓取某年的节假日与调休安排。 */
-    suspend fun fetch(year: Int): List<HolidayDay> {
+    /**
+     * 取某年的节假日。
+     *
+     * 三级策略(与参考实现一致):
+     * 1) 缓存还新鲜(30 天内抓过)就直接用,不联网;
+     * 2) 否则依次试多个数据源,成功即写入缓存;
+     * 3) **全部失败就退回过期缓存** —— 这条是关键:节假日数据一年只变几次,拿上一次的结果
+     *    也远好过甩一个「服务不可用」;真的一点缓存都没有才报错。
+     */
+    suspend fun fetch(context: Context, year: Int): List<HolidayDay> {
         require(year in 2000..2100) { "年份需在 2000–2100 之间" }
+        val cached = readCache(context, year)
+        if (cached.days.isNotEmpty() && isFresh(cached.fetchedAt)) return cached.days
+
         val failures = mutableListOf<String>()
         for (build in sources) {
             val url = build(year)
@@ -55,9 +77,49 @@ object HolidayClient {
                 failures += "${url.substringAfter("//").substringBefore("/")}(${e.message})"
                 continue
             }
-            if (days.isNotEmpty()) return days
+            if (days.isNotEmpty()) {
+                writeCache(context, year, days)
+                return days
+            }
         }
-        error("节假日服务暂时不可用,请稍后重试。已尝试 ${sources.size} 个来源:" + failures.joinToString("、"))
+        if (cached.days.isNotEmpty()) return cached.days
+        error(
+            "节假日服务暂时不可用,请稍后重试(已尝试 ${sources.size} 个来源:" +
+                failures.joinToString("、") + ")",
+        )
+    }
+
+    private data class Cached(val days: List<HolidayDay>, val fetchedAt: Long)
+
+    private fun isFresh(fetchedAt: Long): Boolean =
+        fetchedAt > 0L && ChronoUnit.DAYS.between(
+            Instant.ofEpochMilli(fetchedAt).atZone(ZoneId.systemDefault()).toLocalDate(),
+            LocalDate.now(),
+        ) < FRESH_DAYS
+
+    private fun prefs(context: Context): SharedPreferences =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun readCache(context: Context, year: Int): Cached {
+        val p = prefs(context)
+        val raw = p.getString(KEY_DAYS + year, null).orEmpty()
+        val days = raw.split(';').mapNotNull { row ->
+            val parts = row.split('|')
+            if (parts.size < 4) return@mapNotNull null
+            val date = runCatching { LocalDate.parse(parts[0]) }.getOrNull() ?: return@mapNotNull null
+            HolidayDay(date, parts[1], parts[2] == "1", parts[3].toIntOrNull() ?: 2)
+        }
+        return Cached(days, p.getLong(KEY_FETCHED_AT + year, 0L))
+    }
+
+    private fun writeCache(context: Context, year: Int, days: List<HolidayDay>) {
+        prefs(context).edit()
+            .putString(
+                KEY_DAYS + year,
+                days.joinToString(";") { "${it.date}|${it.name}|${if (it.isRest) 1 else 0}|${it.wage}" },
+            )
+            .putLong(KEY_FETCHED_AT + year, System.currentTimeMillis())
+            .apply()
     }
 
     private suspend fun request(url: String, year: Int): List<HolidayDay> = withContext(Dispatchers.IO) {

@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.settings
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.planHolidays
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +72,7 @@ data class HolidayReview(
 @HiltViewModel
 class AdjustmentsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -96,7 +99,7 @@ class AdjustmentsViewModel @Inject constructor(
     fun fetchHolidays(year: Int, startDay: Long, weekCount: Int) = viewModelScope.launch {
         _loading.value = true
         _error.value = null
-        runCatching { planHolidays(HolidayClient.fetch(year)) }
+        runCatching { planHolidays(HolidayClient.fetch(context, year)) }
             .onSuccess { plans ->
                 val inTerm = plans.mapNotNull { plan ->
                     val rests = plan.restDates.filter {

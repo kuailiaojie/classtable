@@ -239,7 +239,15 @@
                 });
             }
         }
-        return mergeContiguousSections(courses);
+        // 不做「连续节次合并」。
+        //
+        // 原来这里会把同一门课、节次相邻的两条合成一块卡片,目的是让连堂看起来是一整段。
+        // 但这个适配器的节次号经过重排,「编号相邻」并不等于「时间上连续」:合并是链式的,
+        // 一旦某几节编号接上,就会把午休/晚休之间的空档也吃进去 —— 实际出现过一门课被并成
+        // 4-7 一大块(横跨整个下午加晚上)的结果。
+        //
+        // 教务里是几节就显示几节:每节各自一个卡片、各自一段时间,不会再有「莫名其妙变长」。
+        return courses;
     }
 
     // 当教师名为表达式时，尝试在附近代码中回溯真实教师名
@@ -272,62 +280,6 @@
         return "";
     }
 
-    /**
-     * 两个节次在**时间上**是否接得上。
-     *
-     * 节次号相邻 ≠ 时间上连续:删掉 12:00 那一节之后,上午最后一节(10:05–11:40)与下午第一节
-     * (14:00–15:35)的编号恰好接上了,只看编号会把它们并成一节(10:05–15:35)—— 表现就是
-     * 「某一节课莫名其妙变长了」。所以还要看时间:两节之间只隔一个课间才算连续,
-     * 隔了午休/晚休(这里按超过 60 分钟算)就不合并。
-     */
-    function isTimeAdjacent(prevEndSection, nextStartSection) {
-        const slots = getPresetTimeSlots();
-        const prev = slots.find((s) => s.number === prevEndSection);
-        const next = slots.find((s) => s.number === nextStartSection);
-        if (!prev || !next) return true; // 表里查不到,退回原来的编号规则
-        const toMin = (t) => {
-            const parts = String(t).split(":");
-            return Number(parts[0]) * 60 + Number(parts[1]);
-        };
-        return toMin(next.startTime) - toMin(prev.endTime) <= 60;
-    }
-
-    // 合并同一课程的连续节次
-    function mergeContiguousSections(courses) {
-        const list = (courses || [])
-            .filter((c) => c && c.name && Number.isInteger(c.day) && Number.isInteger(c.startSection) && Number.isInteger(c.endSection))
-            .map((c) => ({
-                ...c,
-                weeks: normalizeWeeks(c.weeks)
-            }));
-        list.sort((a, b) => {
-            const ak = `${a.name}|${a.teacher}|${a.position}|${a.day}|${a.weeks.join(",")}`;
-            const bk = `${b.name}|${b.teacher}|${b.position}|${b.day}|${b.weeks.join(",")}`;
-            if (ak < bk) return -1;
-            if (ak > bk) return 1;
-            return a.startSection - b.startSection;
-        });
-        const merged = [];
-        for (const item of list) {
-            const prev = merged[merged.length - 1];
-            const sameCourse = prev
-                && prev.name === item.name
-                && prev.teacher === item.teacher
-                && prev.position === item.position
-                && prev.day === item.day
-                && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
-            const isContiguous = sameCourse
-                && prev.endSection + 1 === item.startSection
-                && isTimeAdjacent(prev.endSection, item.startSection);
-
-            if (isContiguous) {
-                prev.endSection = Math.max(prev.endSection, item.endSection);
-            } else {
-                merged.push({ ...item });
-            }
-        }
-        return merged;
-    }
     function getPresetTimeSlots() {
         return [
             { number: 1, startTime: "08:00", endTime: "09:35" },
