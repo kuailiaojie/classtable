@@ -109,6 +109,21 @@
         return section;
     }
 
+    /**
+     * 把「页面行数 + 每行的映射结果」打进日志(会随 console 消息进 App 日志)。
+     * 映射对不对肉眼难判,留一条可核对的记录:页面共几行、第几行落到第几节、对应几点。
+     */
+    function logRowMapping(pageRows) {
+        const slots = getPresetTimeSlots();
+        const rows = [];
+        for (let row = 1; row <= Math.max(pageRows, 8); row++) {
+            const slot = mapSectionToTimeSlotNumber(row, pageRows);
+            const hit = slots.find((s) => s.number === slot);
+            rows.push(`行${row}→${slot === 0 ? "丢弃" : `第${slot}节` + (hit ? `(${hit.startTime})` : "(表外)")}`);
+        }
+        console.log(`[长江大学] 课表页共 ${pageRows} 行:${rows.join(" ")}`);
+    }
+
     // 反引号化 JavaScript 字面量字符串，处理转义字符
     function unquoteJsLiteral(token) {
         const text = String(token || "").trim();
@@ -198,6 +213,8 @@
         const unitCountMatch = text.match(/\bvar\s+unitCount\s*=\s*(\d+)\s*;/);
         const unitCount = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
         if (!Number.isInteger(unitCount) || unitCount <= 0) return [];
+        // 把「页面几行 + 每行落到第几节」记下来:映射对不对肉眼难判,留一条可核对的日志
+        logRowMapping(unitCount);
         const courses = [];
         const activities = [];
         const activityRe = /\bactivity\s*=\s*new\s+TaskActivity\s*\(/g;
