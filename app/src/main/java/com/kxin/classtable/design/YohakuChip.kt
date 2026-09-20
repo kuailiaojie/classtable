@@ -32,8 +32,8 @@ fun YohakuChip(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(if (selected) colors.accent else colors.neutral2)
-            .border(1.dp, if (selected) colors.accent else colors.neutral5, shape)
+            .background(if (selected) colors.accent else colors.raised)
+            .border(1.dp, if (selected) colors.accent else colors.line, shape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {

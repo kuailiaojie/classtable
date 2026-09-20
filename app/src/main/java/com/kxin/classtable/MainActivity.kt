@@ -188,7 +188,9 @@ fun ClasstableRoot(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(vertical = 10.dp),
+                        // 四周都要留白才是「悬浮」:左右由栏宽自带(只包标签、居中),
+                        // 这里补上下的浮动余量,投影才有地方落。
+                        .padding(vertical = 12.dp),
                 )
             }
             // 首次启动权限引导全屏覆盖层:置于最上层,完成后 Dismiss 露出主界面

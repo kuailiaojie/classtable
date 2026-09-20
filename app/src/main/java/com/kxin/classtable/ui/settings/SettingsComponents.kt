@@ -28,7 +28,8 @@ private val rowHPadding = 14.dp
 /**
  * 设置分组:小标题 + 一张纸面卡片。
  * 设置项按语义分组后,同组同卡、组间距大、组内行间距小 —— 层级靠留白表达,
- * 不靠底色块或分割线堆叠。
+ * 不靠底色块或分割线堆叠。卡片用浮起面 + 细边框:比纸面更白一档,
+ * 不再是以往那种「比纸面更暗的灰框」。
  */
 @Composable
 internal fun SettingsSection(
@@ -47,8 +48,8 @@ internal fun SettingsSection(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(YohakuDimens.radiusSheet),
-            color = colors.neutral2,
-            border = BorderStroke(1.dp, colors.neutral5),
+            color = colors.raised,
+            border = BorderStroke(1.dp, colors.line),
         ) {
             Column(modifier = Modifier.padding(vertical = 2.dp), content = content)
         }

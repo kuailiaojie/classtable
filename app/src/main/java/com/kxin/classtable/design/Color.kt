@@ -8,6 +8,10 @@ import androidx.compose.ui.graphics.Color
  */
 data class YohakuColors(
     val paper: Color,
+    /** 浮起面(卡片 / 弹窗 / 设置分组 / 悬浮导航):浅色下比纸面更白,深色下比纸面更亮。 */
+    val raised: Color,
+    /** 同档表面的**细边框**:只做「这里有一块内容」的暗示,不参与层级对比。 */
+    val line: Color,
     val neutral1: Color,
     val neutral2: Color,
     val neutral3: Color,
@@ -26,6 +30,10 @@ data class YohakuColors(
 
 val YohakuLightColors = YohakuColors(
     paper = Color(0xFFFEFEFB),
+    // 比纸面更白一档:卡片/弹窗/导航靠「更亮 + 细边框」浮起,而不是靠灰底压深
+    // —— 之前用 neutral2(#F0EFEB)当容器,在近白纸面上就是一个个发暗的灰框。
+    raised = Color(0xFFFFFFFF),
+    line = Color(0xFFE7E5DF),
     neutral1 = Color(0xFFF9F8F5),
     neutral2 = Color(0xFFF0EFEB),
     neutral3 = Color(0xFFE3E1DB),
@@ -44,6 +52,9 @@ val YohakuLightColors = YohakuColors(
 
 val YohakuDarkColors = YohakuColors(
     paper = Color(0xFF141414),
+    // 深色下「更亮 = 更靠前」,与浅色同一套直觉;line 只比 raised 亮一点点
+    raised = Color(0xFF262626),
+    line = Color(0xFF3A3A3A),
     neutral1 = Color(0xFF141414),
     neutral2 = Color(0xFF242424),
     neutral3 = Color(0xFF404040),

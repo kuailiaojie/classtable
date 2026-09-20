@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.importer
 
+import android.util.Log
 import android.webkit.WebView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -68,7 +69,15 @@ class ImportViewModel @Inject constructor(
     }
 
     fun onPresetTimeSlots(json: String) {
-        ImportParser.parseTimeSlots(json)?.let { _detectedPeriods.value = it }
+        val periods = ImportParser.parseTimeSlots(json)
+        if (periods == null) {
+            // 之前静默丢弃:适配器确实抓到了作息、只是格式没被识别时,用户只会看到
+            // 「脚本未提供作息时间」而无法判断原因。留痕并给出可操作的提示。
+            Log.w("ImportViewModel", "作息时间解析失败,原始数据: ${json.replace('\n', ' ').take(300)}")
+            onToast("脚本返回的作息时间无法识别,已保留原作息")
+            return
+        }
+        _detectedPeriods.value = periods
     }
 
     fun onCourseConfig(json: String) {

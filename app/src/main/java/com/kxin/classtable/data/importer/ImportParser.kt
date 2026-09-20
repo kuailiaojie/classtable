@@ -127,11 +127,18 @@ object ImportParser {
         else -> WeekType.CUSTOM
     }
 
+    /**
+     * "HH:MM" → 分钟(自 0:00)。
+     *
+     * 兼容教务接口常见的 "HH:MM:SS"(秒直接丢弃,如 BBGU 的 `startTime` 原样回传)与
+     * "H:MM"(如 "8:00")。此前严格要求恰好两段,带秒的时间一律解析失败 → 整个作息被丢弃,
+     * 表现为「课程导入成功但没有作息」。
+     */
     fun parseTimeMinutes(s: String): Int? {
         val p = s.trim().split(":")
-        if (p.size != 2) return null
-        val h = p[0].toIntOrNull() ?: return null
-        val m = p[1].toIntOrNull() ?: return null
+        if (p.size < 2) return null
+        val h = p[0].trim().toIntOrNull() ?: return null
+        val m = p[1].trim().toIntOrNull() ?: return null
         if (h !in 0..23 || m !in 0..59) return null
         return h * 60 + m
     }

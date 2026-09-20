@@ -24,8 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
 /**
- * 纸面弹窗:与卡片同一套纪律(neutral2 面 + neutral5 细边框 + radiusSheet 圆角),**不继承任何
+ * 纸面弹窗:与卡片同一套纪律(浮起面 + 细边框 + radiusSheet 圆角),**不继承任何
  * Material 默认值** —— 那一套是 surfaceContainerHigh 紫调底、28dp 圆角、24sp 标题、6dp tonal 提升。
+ *
+ * 浮起面比纸面更白(深色下更亮),弹窗在遮罩之上自然是「最靠前」的一层;
+ * 早先用 neutral2 灰底,浅色下弹窗反而是全屏最暗的一块。
  *
  * 按钮沿用项目风格:右下角一排纯文字动作(见 [YohakuDialogAction])。
  */
@@ -44,8 +47,8 @@ fun YohakuDialog(
             modifier = modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(colors.neutral2)
-                .border(1.dp, colors.neutral5, shape)
+                .background(colors.raised)
+                .border(1.dp, colors.line, shape)
                 .padding(horizontal = YohakuDimens.screenPadding, vertical = 16.dp),
         ) {
             Column {
