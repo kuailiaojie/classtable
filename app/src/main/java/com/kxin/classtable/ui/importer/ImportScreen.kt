@@ -124,8 +124,17 @@ fun ImportScreen(
     val toastMsg by viewModel.toast.collectAsStateWithLifecycle()
     val detectedPeriods by viewModel.detectedPeriods.collectAsStateWithLifecycle()
     val detectedSemester by viewModel.detectedSemester.collectAsStateWithLifecycle()
+    val currentPeriodTimes by viewModel.currentPeriodTimes.collectAsStateWithLifecycle()
     // 脚本识别到的作息/学期默认应用,但由用户在这里确认(之前是静默覆盖本地作息)
     var applyDetected by rememberSaveable { mutableStateOf(true) }
+    // 确认页里给课程算时间用的作息:勾选「应用脚本作息」时是脚本那张表,否则是当前生效的表。
+    // 关键:必须传进去算 —— 用 App 内置的默认表算,同一门课在课程行与作息行会显示两个时间
+    // (学校作息是大节/非 50 分钟一节时尤其明显)。
+    val previewPeriods = remember(detectedPeriods, applyDetected, currentPeriodTimes) {
+        Schedule.parsePeriods(
+            if (applyDetected) detectedPeriods ?: currentPeriodTimes else currentPeriodTimes,
+        )
+    }
 
     val holder = remember { WebViewHolder() }
     val bridge = remember {
@@ -385,6 +394,7 @@ fun ImportScreen(
             }
             3 -> StepConfirm(
                 courses = parsedCourses,
+                periods = previewPeriods,
                 detectedPeriods = detectedPeriods,
                 detectedSemester = detectedSemester,
                 applyDetected = applyDetected,
@@ -966,6 +976,7 @@ private fun handleExternalNavigation(context: Context, uri: Uri, onError: (Strin
 @Composable
 private fun StepConfirm(
     courses: List<Course>,
+    periods: List<Schedule.Period>,
     detectedPeriods: String?,
     detectedSemester: Pair<Int, Long>?,
     applyDetected: Boolean,
@@ -998,8 +1009,7 @@ private fun StepConfirm(
                         style = YohakuType.copy13,
                         color = colors.accent,
                     )
-                    detectedPeriods?.let { spec ->
-                        val periods = Schedule.parsePeriods(spec)
+                    if (detectedPeriods != null) {
                         Text(
                             text = "作息:${periods.size} 节 · " +
                                 periods.take(2).joinToString(" / ") {
@@ -1040,7 +1050,8 @@ private fun StepConfirm(
             items(courses, key = { it.id }) { course ->
                 Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Text(
-                        text = Schedule.courseTimeText(course),
+                        // 与上方作息行同一张表:否则同一门课会显示两个时间
+                        text = Schedule.courseTimeText(course, periods),
                         style = YohakuType.timeMono,
                         color = colors.neutral7,
                         modifier = Modifier.width(100.dp),

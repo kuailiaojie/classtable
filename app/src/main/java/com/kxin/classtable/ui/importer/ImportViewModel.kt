@@ -7,11 +7,15 @@ import androidx.lifecycle.viewModelScope
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.importer.ImportParser
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,6 +43,14 @@ class ImportViewModel @Inject constructor(
     /** 脚本识别到的学期配置:(周数, 开学日 epochDay)。 */
     private val _detectedSemester = MutableStateFlow<Pair<Int, Long>?>(null)
     val detectedSemester: StateFlow<Pair<Int, Long>?> = _detectedSemester.asStateFlow()
+
+    /**
+     * 当前生效的作息。确认页在「不应用脚本作息」时要用它算课程时间 ——
+     * 否则预览里的课程时间会用 App 内置的默认表算,和脚本识别的作息对不上。
+     */
+    val currentPeriodTimes: StateFlow<String> = settingsRepository.settings
+        .map { it.periodTimes }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Schedule.DEFAULT_PERIODS)
 
     fun onCoursesJson(json: String) {
         val result = ImportParser.parseCourses(json)
