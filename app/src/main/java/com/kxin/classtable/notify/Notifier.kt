@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.kxin.classtable.MainActivity
@@ -14,75 +15,91 @@ import com.kxin.classtable.R
 import com.kxin.classtable.domain.Schedule
 
 /**
- * 课程提醒通知:动态内容在触发时计算(课程名/开始时间/地点/教师/剩余分钟)。
- * 通知被点击 → 打开应用并直达课程详情。
+ * 通知构建:渠道、可达性检查、课程提醒与实时活动通知。
+ * 动态内容在**触发时**计算(课程名/开始时间/地点/教师/剩余分钟),点击直达课程详情。
  */
 object Notifier {
+    private const val TAG = "ClasstableNotify"
+
     const val CHANNEL_REMINDER = "course_reminder"
     const val CHANNEL_LIVE = "live_updates"
     const val CHANNEL_COURSE_LIVE = "course_live"
     const val CHANNEL_APP_UPDATE = "app_update"
     const val EXTRA_COURSE_ID = "notify_course_id"
     const val EXTRA_OPEN_UPDATE = "notify_open_update"
-    private const val NOTIFY_ID_UPDATE = 99001
-    private const val REQ_UPDATE_INTENT = 99002
 
-    private fun ensureChannels(context: Context) {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (nm.getNotificationChannel(CHANNEL_REMINDER) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_REMINDER,
-                        "课程提醒",
-                        NotificationManager.IMPORTANCE_HIGH,
-                    ).apply {
-                        description = "课程开始前的提醒"
-                    },
-                )
-            }
-            if (nm.getNotificationChannel(CHANNEL_LIVE) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_LIVE,
-                        "实时动态",
-                        NotificationManager.IMPORTANCE_DEFAULT,
-                    ).apply {
-                        description = "课表变更与活动通知(服务端推送)"
-                    },
-                )
-            }
-            if (nm.getNotificationChannel(CHANNEL_COURSE_LIVE) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_COURSE_LIVE,
-                        "课程开始提醒",
-                        NotificationManager.IMPORTANCE_HIGH,
-                    ).apply {
-                        description = "课前倒计时与上课状态(Android 16 Live Updates)"
-                    },
-                )
-            }
-            if (nm.getNotificationChannel(CHANNEL_APP_UPDATE) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_APP_UPDATE,
-                        "应用更新",
-                        NotificationManager.IMPORTANCE_DEFAULT,
-                    ).apply {
-                        description = "后台检查到新版本时的提示"
-                    },
-                )
-            }
+    /** 实时活动通知固定 id:同一时刻只会有一节课的实时活动。 */
+    const val LIVE_NOTIFICATION_ID = 99010
+    private const val NOTIFY_ID_UPDATE = 99001
+    private const val NOTIFY_ID_TOMORROW = 99003
+    private const val REQ_UPDATE_INTENT = 99002
+    private const val REQ_LIVE_CONTENT = 99011
+
+    /** 进度轨最大刻度(与 ProgressStyle.Segment 长度同基准)。 */
+    const val LIVE_PROGRESS_MAX = 1000
+
+    fun ensureChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < 26) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_REMINDER) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_REMINDER, "课程提醒", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "课程开始前的提醒" },
+            )
+        }
+        if (nm.getNotificationChannel(CHANNEL_LIVE) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_LIVE, "实时动态", NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = "课表变更与活动通知(服务端推送)" },
+            )
+        }
+        if (nm.getNotificationChannel(CHANNEL_COURSE_LIVE) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_COURSE_LIVE, "课程进行中", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "课前倒计时、上课中与课间状态(实时活动)" },
+            )
+        }
+        if (nm.getNotificationChannel(CHANNEL_APP_UPDATE) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_APP_UPDATE, "应用更新", NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = "后台检查到新版本时的提示" },
+            )
         }
     }
 
     /**
+     * 是否能把通知送到用户眼前:运行时权限 + 应用通知总开关 + **渠道未被关闭**。
+     * 后者以前没查,渠道被关掉时还会以为「发成功」。
+     */
+    fun canPost(context: Context, channelId: String = CHANNEL_REMINDER): Boolean {
+        val permitted = Build.VERSION.SDK_INT < 33 || ContextCompatCheck(context)
+        if (!permitted) return false
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= 26) {
+            val channel = context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(channelId)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return false
+        }
+        return true
+    }
+
+    private fun ContextCompatCheck(context: Context): Boolean =
+        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** 普通课程提醒通知 id:按「课程 + 日期」区分,不同天的提醒不会互相覆盖。 */
+    fun reminderId(key: String): Int = key.hashCode()
+
+    /**
+     * 普通课程提醒(标准模式,或实时活动不可用时的兜底)。
+     *
      * @param leadMinutes 提前量(0 = 已到上课时间)
      * @param startMinute 课程开始分钟(自 0:00,-1 = 未知)
      */
     fun showCourseReminder(
         context: Context,
+        notificationId: Int,
         courseId: String,
         courseName: String,
         startMinute: Int,
@@ -90,7 +107,7 @@ object Notifier {
         teacher: String,
         leadMinutes: Int,
     ) {
-        if (!hasPermission(context)) return
+        if (!canPost(context, CHANNEL_REMINDER)) return
         ensureChannels(context)
 
         val startText = if (startMinute >= 0) Schedule.clockText(startMinute) else ""
@@ -102,77 +119,219 @@ object Notifier {
             if (teacher.isNotEmpty()) append(" · $teacher")
         }
 
-        val contentIntent = PendingIntent.getActivity(
-            context,
-            courseId.hashCode(),
-            Intent(context, MainActivity::class.java).apply {
-                putExtra(EXTRA_COURSE_ID, courseId)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDER)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setContentIntent(contentIntent)
+            .setContentIntent(courseContentIntent(context, courseId))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .build()
 
-        runCatching {
-            NotificationManagerCompat.from(context).notify(courseId.hashCode(), notification)
-        }
+        post(context, notificationId, notification)
     }
 
     /**
-     * Live Updates 通用通知(服务端推送):课表变更 / 活动 / 上课提醒的附加通道。
-     * 通知 id 基于内容 hash,同一内容重复推送会覆盖,不会堆积。
+     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随分钟推进。
+     * 通知带「取消本节课提醒」按钮(静音到下课为止)。
+     *
+     * API 36+ 额外走 ProgressStyle(进度分段 + 进度点)与 promoted 胶囊(反射调用,
+     * 失败只记日志——不同 ROM 对这两个 API 的支持不一致,不能让它把通知搞崩)。
      */
-    fun showLiveUpdate(context: Context, title: String, body: String) {
-        if (!hasPermission(context)) return
+    fun buildLiveCourse(
+        context: Context,
+        courseId: String,
+        courseName: String,
+        location: String,
+        startAtMillis: Long,
+        endAtMillis: Long,
+        leadMinutes: Int,
+        muteKey: String,
+        now: Long,
+    ): Notification {
         ensureChannels(context)
 
-        val contentIntent = PendingIntent.getActivity(
+        val minutesToStart = minutesBetween(now, startAtMillis)
+        val minutesToEnd = minutesBetween(now, endAtMillis)
+        val inClass = now >= startAtMillis
+        val title = courseName
+        val statusLine = when {
+            !inClass && minutesToStart > 0 -> "还有 $minutesToStart 分钟上课"
+            !inClass -> "马上就要上课"
+            minutesToEnd > 0 -> "上课中 · 还有 $minutesToEnd 分钟下课"
+            else -> "已下课"
+        }
+        val chipText = when {
+            !inClass && minutesToStart > 0 -> "$minutesToStart 分钟"
+            !inClass -> "现在上课"
+            minutesToEnd > 0 -> "$minutesToEnd 分钟"
+            else -> "已下课"
+        }
+        val timeText = "${clock(startAtMillis)}–${clock(endAtMillis)}"
+        val place = location.ifBlank { "未设置地点" }
+        val body = "$statusLine · $timeText"
+        val expanded = "$body\n$place"
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_COURSE_LIVE)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+            .setContentIntent(courseContentIntent(context, courseId))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .addAction(
+                R.drawable.ic_notify,
+                "取消本节课提醒",
+                cancelLivePendingIntent(context, muteKey, endAtMillis),
+            )
+
+        val progress = progressFor(startAtMillis, endAtMillis, leadMinutes, now)
+        if (Build.VERSION.SDK_INT >= 36) {
+            builder.setProgress(LIVE_PROGRESS_MAX, progress, false)
+        } else {
+            builder.setProgress(100, progress * 100 / LIVE_PROGRESS_MAX, false)
+        }
+
+        val notification = builder.build()
+        if (Build.VERSION.SDK_INT >= 36) {
+            applyPromotedChip(notification, chipText)
+        }
+        return notification
+    }
+
+    /**
+     * API 36 的 promoted 胶囊:让通知以状态栏小字 + 进度形式常驻。
+     * 反射调用 + 多重兜底,任何一步失败都只是回落到普通常驻通知。
+     */
+    private fun applyPromotedChip(notification: Notification, chipText: String) {
+        runCatching {
+            val extras = notification.extras
+            extras.putBoolean("android.requestPromotedOngoing", true)
+            extras.putCharSequence("android.shortCriticalText", chipText)
+        }.onFailure { Log.w(TAG, "promoted chip extras 注入失败: ${it.javaClass.simpleName}") }
+    }
+
+    /** 进度:课前从 [leadMinutes] 前推进到上课,上课后满格。 */
+    private fun progressFor(startAt: Long, endAt: Long, leadMinutes: Int, now: Long): Int {
+        if (now >= startAt) return LIVE_PROGRESS_MAX
+        val from = startAt - leadMinutes.coerceAtLeast(0) * 60_000L
+        val span = (startAt - from).coerceAtLeast(1L)
+        return ((now - from).toFloat() / span * LIVE_PROGRESS_MAX).toInt().coerceIn(0, LIVE_PROGRESS_MAX - 1)
+    }
+
+    private fun minutesBetween(from: Long, to: Long): Int =
+        Math.ceil((to - from) / 60_000.0).toInt()
+
+    private fun clock(millis: Long): String {
+        val t = java.time.LocalTime.ofInstant(
+            java.time.Instant.ofEpochMilli(millis),
+            java.time.ZoneId.systemDefault(),
+        )
+        return "%02d:%02d".format(t.hour, t.minute)
+    }
+
+    /** 通知被点击 → 打开应用并直达课程详情。 */
+    fun courseContentIntent(context: Context, courseId: String): PendingIntent = PendingIntent.getActivity(
+        context,
+        REQ_LIVE_CONTENT,
+        Intent(context, MainActivity::class.java).apply {
+            putExtra(EXTRA_COURSE_ID, courseId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /** 实时活动上的「取消本节课提醒」→ [LiveUpdateActionReceiver] 记录静音并收掉通知。 */
+    private fun cancelLivePendingIntent(context: Context, muteKey: String, muteUntil: Long): PendingIntent =
+        PendingIntent.getBroadcast(
             context,
-            0,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            99012,
+            Intent(context, LiveUpdateActionReceiver::class.java).apply {
+                action = LiveUpdateActionReceiver.ACTION_CANCEL_REMINDER
+                putExtra(LiveUpdateActionReceiver.EXTRA_MUTE_KEY, muteKey)
+                putExtra(LiveUpdateActionReceiver.EXTRA_MUTE_UNTIL, muteUntil)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+    /** 通用推送通知(服务端 FCM):课表变更 / 活动提醒。 */
+    fun showLiveUpdate(context: Context, title: String, body: String) {
+        if (!canPost(context, CHANNEL_LIVE)) return
+        ensureChannels(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_LIVE)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setContentIntent(contentIntent)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
-
-        runCatching {
-            NotificationManagerCompat.from(context).notify(title.hashCode(), notification)
-        }
+        post(context, title.hashCode(), notification)
     }
 
-    private fun hasPermission(context: Context): Boolean =
-        Build.VERSION.SDK_INT < 33 ||
-            NotificationManagerCompat.from(context).areNotificationsEnabled()
-
-    /**
-     * 后台检查到新版本:一条可点进「检查更新」页的通知。
-     * 同一 id 覆盖,不会堆积;忽略某版本后由调用方不再发。
-     */
-    fun showUpdateAvailable(context: Context, version: String, notes: String) {
-        if (!hasPermission(context)) return
+    /** 明日课程预告(前一天晚上):明天门数 + 第一节。 */
+    fun showTomorrowReminder(
+        context: Context,
+        courseCount: Int,
+        firstName: String,
+        firstLocation: String,
+        firstStartMinute: Int,
+    ) {
+        if (courseCount <= 0) return
+        if (!canPost(context, CHANNEL_REMINDER)) return
         ensureChannels(context)
 
+        val body = buildString {
+            if (firstName.isNotBlank()) {
+                append("第一节 $firstName")
+                if (firstStartMinute >= 0) append(" · ${Schedule.clockText(firstStartMinute)} 开始")
+                if (firstLocation.isNotBlank()) append("\n$firstLocation")
+            } else {
+                append("点开看看明天要上什么")
+            }
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDER)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle("明天有 $courseCount 门课")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .build()
+        post(context, NOTIFY_ID_TOMORROW, notification)
+    }
+
+    /** 后台检查到新版本:一条可点进「检查更新」页的通知。 */
+    fun showUpdateAvailable(context: Context, version: String, notes: String) {
+        if (!canPost(context, CHANNEL_APP_UPDATE)) return
+        ensureChannels(context)
         val contentIntent = PendingIntent.getActivity(
             context,
             REQ_UPDATE_INTENT,
@@ -182,7 +341,6 @@ object Notifier {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-
         val body = notes.trim().ifBlank { "点此查看并下载" }
         val notification = NotificationCompat.Builder(context, CHANNEL_APP_UPDATE)
             .setSmallIcon(R.drawable.ic_notify)
@@ -194,51 +352,12 @@ object Notifier {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .build()
-
-        runCatching {
-            NotificationManagerCompat.from(context).notify(NOTIFY_ID_UPDATE, notification)
-        }
+        post(context, NOTIFY_ID_UPDATE, notification)
     }
 
-    /** 进度轨最大刻度(与 ProgressStyle.Segment 长度同基准)。 */
-    const val LIVE_PROGRESS_MAX = 1000
-
-    /** 进度轨填充色(默认强调色 #C56473)。 */
-    private val RAIL_ACCENT: Int = android.graphics.Color.parseColor("#C56473")
-
-    /**
-     * 构建 Android 16 Live Updates 通知(ProgressStyle,状态栏 chip)。
-     * 仅 Build.VERSION.SDK_INT >= 36 时调用;返回的通知用于前台服务 startForeground,
-     * 由服务在课前到下课期间持续更新([progress] 递增,文案实时变化)。
-     *
-     * [shortText] 即状态栏小字(如「还有 10 分钟」);[contentTitle]/[contentBody] 用于展开视图。
-     * [progress] 为当前进度位置,范围 0..[LIVE_PROGRESS_MAX]。
-     */
-    fun buildCourseLiveUpdate(
-        context: Context,
-        contentTitle: String,
-        contentBody: String,
-        shortText: String,
-        progress: Int,
-        contentIntent: PendingIntent? = null,
-    ): Notification {
-        ensureChannels(context)
-        val progressStyle = Notification.ProgressStyle()
-            .setProgressIndeterminate(false)
-            .addProgressSegment(
-                Notification.ProgressStyle.Segment(LIVE_PROGRESS_MAX).setColor(RAIL_ACCENT),
-            )
-            .setProgress(progress.coerceIn(0, LIVE_PROGRESS_MAX))
-        val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
-            .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(contentTitle)
-            .setContentText(contentBody)
-            .setCategory(Notification.CATEGORY_STATUS)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setShortCriticalText(shortText)
-            .setStyle(progressStyle)
-            .apply { if (contentIntent != null) setContentIntent(contentIntent) }
-        return builder.build()
+    /** 统一收口:权限被回收时 notify 会抛 SecurityException,不能让它冒到调用方。 */
+    private fun post(context: Context, id: Int, notification: Notification) {
+        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+            .onFailure { Log.w(TAG, "通知发送失败: ${it.javaClass.simpleName}") }
     }
 }

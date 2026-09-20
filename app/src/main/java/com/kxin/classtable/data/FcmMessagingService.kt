@@ -27,7 +27,7 @@ class FcmMessagingService : FirebaseMessagingService() {
             val entry = EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
             runCatching { entry.fcmTokens().upload(token) }
             // 令牌刷新 = 系统唤醒了应用,顺带自愈闹钟(国产 ROM 清理后补回来)
-            runCatching { entry.notificationScheduler().rescheduleAll() }
+            runCatching { entry.reminderPlanner().rescheduleAll() }
         }
     }
 
@@ -36,7 +36,7 @@ class FcmMessagingService : FirebaseMessagingService() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching {
                 EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
-                    .notificationScheduler()
+                    .reminderPlanner()
                     .rescheduleAll()
             }
         }
@@ -70,13 +70,14 @@ class FcmMessagingService : FirebaseMessagingService() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             val entry = EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
             runCatching { entry.syncRepository().syncNow() }
-            runCatching { entry.notificationScheduler().rescheduleAll() }
+            runCatching { entry.reminderPlanner().rescheduleAll() }
         }
         return true
     }
 
     /**
-     * 上课提醒:与服务端约定,通知 id 与本地闹钟相同(courseId.hashCode()),双通道自动去重。
+     * 上课提醒:服务端推送与本地闹钟的**通知 id 相同**(`课程:当天` 的 hash),
+     * 两条通道同时到达时互相覆盖,不会重复打扰。
      * 返回 false 表示没有课程字段,交给系统默认展示。
      */
     private fun handleCourseReminder(data: Map<String, String>, message: RemoteMessage): Boolean {
@@ -87,9 +88,11 @@ class FcmMessagingService : FirebaseMessagingService() {
         val startMinute = data["startMinute"]?.toIntOrNull()
             ?: (data["startTime"]?.let { Schedule.parseClock(it) })
             ?: -1
+        val courseId = data["courseId"].orEmpty()
         Notifier.showCourseReminder(
             context = this,
-            courseId = data["courseId"] ?: "",
+            notificationId = Notifier.reminderId("$courseId:${java.time.LocalDate.now().toEpochDay()}"),
+            courseId = courseId,
             courseName = courseName,
             startMinute = startMinute,
             location = data["location"].orEmpty(),
@@ -104,6 +107,6 @@ class FcmMessagingService : FirebaseMessagingService() {
     interface FcmEntryPoint {
         fun fcmTokens(): FcmTokens
         fun syncRepository(): SyncRepository
-        fun notificationScheduler(): com.kxin.classtable.notify.NotificationScheduler
+        fun reminderPlanner(): com.kxin.classtable.notify.ReminderPlanner
     }
 }

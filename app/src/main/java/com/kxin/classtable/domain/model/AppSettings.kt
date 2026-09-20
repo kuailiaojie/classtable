@@ -4,6 +4,9 @@ import com.kxin.classtable.domain.Schedule
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** 课程提醒形态:标准单次提醒 / 实时活动(课前到下课常驻倒计时)。 */
+enum class NotifyMode { STANDARD, LIVE }
+
 /** AI 供应商:Gemini 或任意 OpenAI 兼容接口(DeepSeek/通义千问/Kimi/智谱 GLM 等)。 */
 enum class AiProvider(val label: String, val defaultModel: String, val defaultBaseUrl: String) {
     GEMINI("Gemini", "gemini-3.6-flash", "https://generativelanguage.googleapis.com/v1beta"),
@@ -25,6 +28,12 @@ data class AppSettings(
     val notificationsEnabled: Boolean = true,
     /** 提前多少分钟发通知(0 = 准点)。 */
     val notifyLeadMinutes: Int = 10,
+    /** 提醒形态:标准 / 实时活动。 */
+    val notifyMode: String = NotifyMode.STANDARD.name,
+    /** 明日课程预告(前一天晚上提醒明天第一节与门数)。 */
+    val tomorrowReminderEnabled: Boolean = false,
+    /** 明日课程预告的提醒时刻("HH:MM")。 */
+    val tomorrowReminderTime: String = "21:30",
     /** 是否在后台自动检查更新(每天一次,有新版发通知)。 */
     val autoCheckUpdate: Boolean = true,
     /** 上次自动检查更新的时间戳(0 = 从未检查)。 */

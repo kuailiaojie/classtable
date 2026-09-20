@@ -54,8 +54,11 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
+import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.notify.LiveCourse
+import com.kxin.classtable.notify.startLiveCourseService
 import com.kxin.classtable.widget.NextClassWidgetReceiver
 import com.kxin.classtable.widget.TodayWidgetReceiver
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -97,6 +100,17 @@ class SettingsViewModel @Inject constructor(
     fun setNotifyLeadMinutes(minutes: Int) =
         viewModelScope.launch { settingsRepository.setNotifyLeadMinutes(minutes) }
 
+    /** 提醒形态(标准 / 实时活动)。 */
+    fun setNotifyMode(mode: String) = viewModelScope.launch {
+        settingsRepository.setNotifyMode(
+            runCatching { NotifyMode.valueOf(mode) }.getOrDefault(NotifyMode.STANDARD),
+        )
+    }
+
+    /** 明日课程预告:开关 + 时刻。 */
+    fun setTomorrowReminder(enabled: Boolean, time: String) =
+        viewModelScope.launch { settingsRepository.setTomorrowReminder(enabled, time) }
+
     fun setAutoCheckUpdate(enabled: Boolean) =
         viewModelScope.launch { settingsRepository.setAutoCheckUpdate(enabled) }
 
@@ -134,6 +148,9 @@ fun SettingsScreen(
     var aiModel by remember { mutableStateOf(settings.aiModel) }
     var notifyEnabled by remember { mutableStateOf(settings.notificationsEnabled) }
     var notifyLead by remember { mutableStateOf(settings.notifyLeadMinutes) }
+    var notifyMode by remember { mutableStateOf(settings.notifyMode) }
+    var tomorrowEnabled by remember { mutableStateOf(settings.tomorrowReminderEnabled) }
+    var tomorrowTime by remember { mutableStateOf(settings.tomorrowReminderTime) }
     var autoCheck by remember { mutableStateOf(settings.autoCheckUpdate) }
     LaunchedEffect(showAutoCheckDialog) {
         if (showAutoCheckDialog) autoCheck = settings.autoCheckUpdate
@@ -179,6 +196,9 @@ fun SettingsScreen(
         if (showNotifyDialog) {
             notifyEnabled = settings.notificationsEnabled
             notifyLead = settings.notifyLeadMinutes
+            notifyMode = settings.notifyMode
+            tomorrowEnabled = settings.tomorrowReminderEnabled
+            tomorrowTime = settings.tomorrowReminderTime
         }
     }
     LaunchedEffect(showAiDialog) {
@@ -278,6 +298,13 @@ fun SettingsScreen(
             onDismissRequest = { showNotifyDialog = false },
             title = "课程提醒",
             actions = {
+                YohakuDialogAction(
+                    text = "预览实时活动",
+                    onClick = {
+                        previewLiveUpdate(context)
+                        showNotifyDialog = false
+                    },
+                )
                 YohakuDialogAction(text = "取消", onClick = { showNotifyDialog = false })
                 YohakuDialogAction(
                     text = "保存",
@@ -285,6 +312,8 @@ fun SettingsScreen(
                     onClick = {
                         viewModel.setNotificationsEnabled(notifyEnabled)
                         viewModel.setNotifyLeadMinutes(notifyLead)
+                        viewModel.setNotifyMode(notifyMode)
+                        viewModel.setTomorrowReminder(tomorrowEnabled, tomorrowTime)
                         showNotifyDialog = false
                     },
                 )
@@ -326,6 +355,62 @@ fun SettingsScreen(
                                 text = label,
                                 selected = notifyEnabled && notifyLead == min,
                                 onClick = { notifyLead = min },
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(text = "提醒形态", style = YohakuType.label12, color = colors.neutral7)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        YohakuChip(
+                            text = "标准提醒",
+                            selected = notifyMode == NotifyMode.STANDARD.name,
+                            onClick = { notifyMode = NotifyMode.STANDARD.name },
+                        )
+                        YohakuChip(
+                            text = "实时活动",
+                            selected = notifyMode == NotifyMode.LIVE.name,
+                            onClick = { notifyMode = NotifyMode.LIVE.name },
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "实时活动:从提前量那一刻起常驻一条通知,显示「还有 N 分钟上课 / 下课」直到下课,通知上可直接取消本节课提醒(重试与重启都不会再打扰)。",
+                        style = YohakuType.label12,
+                        color = colors.neutral6,
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(text = "明日课程预告", style = YohakuType.label12, color = colors.neutral7)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        YohakuChip(
+                            text = "开启",
+                            selected = tomorrowEnabled,
+                            onClick = { tomorrowEnabled = true },
+                        )
+                        YohakuChip(
+                            text = "关闭",
+                            selected = !tomorrowEnabled,
+                            onClick = { tomorrowEnabled = false },
+                        )
+                    }
+                    if (tomorrowEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        YohakuTextField(
+                            value = tomorrowTime,
+                            onValueChange = { tomorrowTime = it },
+                            label = "提醒时刻",
+                            placeholder = "21:30",
+                            isError = Schedule.parseClock(tomorrowTime) == null,
+                        )
+                        if (Schedule.parseClock(tomorrowTime) == null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "请按 24 小时制填写,如 21:30",
+                                style = YohakuType.label12,
+                                color = colors.error,
                             )
                         }
                     }
@@ -428,12 +513,14 @@ fun SettingsScreen(
         DividerLine()
         SettingRow(
             title = "课程提醒",
-            value = if (!settings.notificationsEnabled) {
-                "已关闭"
-            } else if (settings.notifyLeadMinutes <= 0) {
-                "准点提醒"
-            } else {
-                "课前 ${settings.notifyLeadMinutes} 分钟"
+            value = when {
+                !settings.notificationsEnabled -> "已关闭"
+                settings.notifyMode == NotifyMode.LIVE.name && settings.notifyLeadMinutes <= 0 ->
+                    "准点 · 实时活动"
+                settings.notifyMode == NotifyMode.LIVE.name ->
+                    "课前 ${settings.notifyLeadMinutes} 分钟 · 实时活动"
+                settings.notifyLeadMinutes <= 0 -> "准点提醒"
+                else -> "课前 ${settings.notifyLeadMinutes} 分钟"
             },
             onClick = { showNotifyDialog = true },
         )
@@ -504,4 +591,24 @@ private fun pinWidget(context: Context, receiver: Class<out GlanceAppWidgetRecei
     if (!ok) {
         Toast.makeText(context, "当前桌面不支持直接添加,请长按桌面空白处手动添加", Toast.LENGTH_SHORT).show()
     }
+}
+
+/**
+ * 预览实时活动:用一节「5 分钟后开始、45 分钟」的假课程拉起常驻通知,
+ * 让用户在设置里先看清它长什么样(不写课程数据、不影响真实提醒)。
+ */
+private fun previewLiveUpdate(context: Context) {
+    val start = System.currentTimeMillis() + 5 * 60_000L
+    startLiveCourseService(
+        context,
+        LiveCourse(
+            courseId = "preview",
+            name = "高等数学",
+            location = "教学楼 A101",
+            startAtMillis = start,
+            endAtMillis = start + 45 * 60_000L,
+            leadMinutes = 5,
+            muteKey = "preview:${System.currentTimeMillis()}",
+        ),
+    )
 }

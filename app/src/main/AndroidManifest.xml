@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- 提醒触发时短时唤醒,保证在系统再次休眠前读完数据并发出通知 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 应用内更新:下载 APK 后拉起系统安装器 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -46,6 +48,11 @@
             android:name=".notify.CourseReminderReceiver"
             android:exported="false" />
 
+        <!-- 实时活动通知上的操作按钮(取消本节课提醒) -->
+        <receiver
+            android:name=".notify.LiveUpdateActionReceiver"
+            android:exported="false" />
+
         <!-- Android 16 Live Updates 前台服务:课前倒计时/上课中/下课,后台启动受限时由接收器兜底 -->
         <service
             android:name=".notify.CourseLiveUpdateService"
@@ -58,10 +65,13 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.DATE_CHANGED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <!-- 精确闹钟权限被授予/收回后要换用对应的闹钟类型 -->
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 

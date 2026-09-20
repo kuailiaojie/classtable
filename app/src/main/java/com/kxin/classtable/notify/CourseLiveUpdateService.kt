@@ -1,183 +1,182 @@
 package com.kxin.classtable.notify
 
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
-import com.kxin.classtable.MainActivity
+import androidx.core.content.ContextCompat
+import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.data.local.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.LocalTime
-import java.time.ZoneId
-import kotlin.math.ceil
 
 /**
- * Android 16 Live Updates 前台服务:在课前提醒时刻启动,持有进度型通知,
- * 覆盖「课前倒计时 → 上课中 → 下课」整个时段,下课自动停止并移除通知。
- * Android 16(API 36)上由系统提升为状态栏 Live Update chip;更老版本由
- * [CourseReminderReceiver] 走普通高优先级通知兜底。
+ * 课程进行中的常驻通知(实时活动):从「提前量」时刻起持有通知,覆盖
+ * 课前倒计时 → 上课中(还有 N 分钟下课)→ 下课,下课 1 分钟后自动收掉。
+ *
+ * 与旧实现的差别:
+ * - **按分钟边界对齐刷新**(不用 chronometer:它会被系统替换掉状态栏胶囊的文案)。
+ * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课。
+ * - **静音检查**:点了「取消本节课提醒」立即收掉,并且不会因为重试闹钟又冒出来。
+ * - 通知权限/渠道被关掉时自停,不做无意义的常驻。
  */
 class CourseLiveUpdateService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var refreshJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val courseId = intent?.getStringExtra(EXTRA_COURSE_ID) ?: ""
-        if (courseId.isBlank()) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val name = intent?.getStringExtra(EXTRA_COURSE_NAME) ?: "课程"
-        val location = intent?.getStringExtra(EXTRA_LOCATION).orEmpty()
-        val teacher = intent?.getStringExtra(EXTRA_TEACHER).orEmpty()
-        val startMillis = intent?.getLongExtra(EXTRA_START_MILLIS, 0L) ?: 0L
-        val endMillis = intent?.getLongExtra(EXTRA_END_MILLIS, 0L) ?: 0L
-        val lead = intent?.getIntExtra(EXTRA_LEAD, 10) ?: 10
-
-        if (startMillis <= 0L || endMillis <= startMillis) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        // 前台通知与普通提醒同 id(courseId.hashCode()),双通道去重,不叠加。
-        val notifId = courseId.hashCode()
+        val planner = planner()
+        val payload = intent?.toLiveCourse() ?: planner.restoreLive()
         val now = System.currentTimeMillis()
-        ServiceCompat.startForeground(
-            this,
-            notifId,
-            liveUpdate(courseId, name, location, teacher, startMillis, endMillis, lead, now),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-        )
 
-        scope.launch {
-            // 每 30 秒刷新进度与文案;下课 1 分钟后停止前台并移除通知。
-            while (true) {
-                if (System.currentTimeMillis() >= endMillis + 60_000L) break
-                delay(30_000L)
-                val n = liveUpdate(
-                    courseId, name, location, teacher, startMillis, endMillis, lead,
-                    System.currentTimeMillis(),
-                )
-                NotificationManagerCompat.from(this@CourseLiveUpdateService).notify(notifId, n)
-            }
-            ServiceCompat.stopForeground(this@CourseLiveUpdateService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        val usable = payload != null &&
+            payload.endAtMillis > now &&
+            !planner.isMuted(payload.muteKey, now) &&
+            Notifier.canPost(this, Notifier.CHANNEL_COURSE_LIVE)
+        if (!usable) {
+            Log.i(TAG, "跳过实时活动:无 payload / 已下课 / 已静音 / 无通知权限")
+            planner.clearLive()
+            stopForegroundNow()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        planner.saveLive(payload!!)
+        startForegroundNotification(payload, now)
+        startRefreshLoop(planner, payload)
+        return START_STICKY
+    }
+
+    private fun startForegroundNotification(payload: LiveCourse, now: Long) {
+        val notification = Notifier.buildLiveCourse(
+            context = this,
+            courseId = payload.courseId,
+            courseName = payload.name,
+            location = payload.location,
+            startAtMillis = payload.startAtMillis,
+            endAtMillis = payload.endAtMillis,
+            leadMinutes = payload.leadMinutes,
+            muteKey = payload.muteKey,
+            now = now,
+        )
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
+                Notifier.LIVE_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        }.onFailure {
+            Log.w(TAG, "startForeground 失败: ${it.javaClass.simpleName}")
             stopSelf()
         }
-
-        return START_NOT_STICKY
     }
 
-    private fun liveUpdate(
-        courseId: String,
-        name: String,
-        location: String,
-        teacher: String,
-        startMillis: Long,
-        endMillis: Long,
-        lead: Int,
-        now: Long,
-    ) = Notifier.buildCourseLiveUpdate(
-        context = this,
-        contentTitle = titleFor(startMillis, endMillis, name, now),
-        contentBody = bodyFor(startMillis, endMillis, name, location, teacher, now),
-        shortText = shortFor(startMillis, endMillis, now),
-        progress = progressFor(startMillis, lead, now),
-        contentIntent = contentIntent(courseId),
-    )
+    private fun startRefreshLoop(planner: ReminderPlanner, payload: LiveCourse) {
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
+            while (isActive) {
+                // 对齐到下个整分钟:状态栏胶囊上的「N 分钟」跟着墙上时钟跳
+                val delayToNextMinute = 60_000L - System.currentTimeMillis() % 60_000L + 150L
+                delay(delayToNextMinute.coerceAtLeast(1_000L))
 
-    private fun contentIntent(courseId: String): PendingIntent = PendingIntent.getActivity(
-        this,
-        courseId.hashCode(),
-        Intent(this, MainActivity::class.java).apply {
-            putExtra(Notifier.EXTRA_COURSE_ID, courseId)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        },
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+                val now = System.currentTimeMillis()
+                if (now >= payload.endAtMillis + 60_000L) break
+                if (planner.isMuted(payload.muteKey, now)) break
+                if (!Notifier.canPost(this@CourseLiveUpdateService, Notifier.CHANNEL_COURSE_LIVE)) break
 
-    private fun titleFor(startMillis: Long, endMillis: Long, name: String, now: Long): String = when {
-        now < startMillis -> "$name 即将开始"
-        now < endMillis -> "$name 上课中"
-        else -> "$name 已下课"
-    }
-
-    private fun bodyFor(
-        startMillis: Long,
-        endMillis: Long,
-        name: String,
-        location: String,
-        teacher: String,
-        now: Long,
-    ): String {
-        val startText = startClock(startMillis)
-        val meta = listOf(location, teacher).filter { it.isNotEmpty() }.joinToString(" · ")
-        val status = when {
-            now < startMillis -> {
-                val remain = ceil((startMillis - now) / 60_000.0).toInt().coerceAtLeast(0)
-                if (remain <= 0) "$startText 开始" else "还有 $remain 分钟开始 · $startText"
+                val notification = Notifier.buildLiveCourse(
+                    context = this@CourseLiveUpdateService,
+                    courseId = payload.courseId,
+                    courseName = payload.name,
+                    location = payload.location,
+                    startAtMillis = payload.startAtMillis,
+                    endAtMillis = payload.endAtMillis,
+                    leadMinutes = payload.leadMinutes,
+                    muteKey = payload.muteKey,
+                    now = now,
+                )
+                val posted = runCatching {
+                    NotificationManagerCompat.from(this@CourseLiveUpdateService)
+                        .notify(Notifier.LIVE_NOTIFICATION_ID, notification)
+                }.isSuccess
+                if (!posted) break
             }
-            now < endMillis -> {
-                val remain = ceil((endMillis - now) / 60_000.0).toInt().coerceAtLeast(1)
-                "上课中 · 还有 $remain 分钟下课"
-            }
-            else -> "已下课"
-        }
-        return buildString {
-            append("$name · $status")
-            if (meta.isNotEmpty()) append("\n$meta")
+            finish()
         }
     }
 
-    private fun shortFor(startMillis: Long, endMillis: Long, now: Long): String = when {
-        now < startMillis -> {
-            val remain = ceil((startMillis - now) / 60_000.0).toInt().coerceAtLeast(0)
-            if (remain <= 0) "现在上课" else "还有 $remain 分钟"
-        }
-        now < endMillis -> {
-            val remain = ceil((endMillis - now) / 60_000.0).toInt().coerceAtLeast(1)
-            "上课中·$remain 分钟"
-        }
-        else -> "已下课"
+    private fun finish() {
+        planner().clearLive()
+        stopForegroundNow()
+        stopSelf()
     }
 
-    private fun progressFor(startMillis: Long, lead: Int, now: Long): Int {
-        val fireAt = startMillis - lead * 60_000L
-        val max = Notifier.LIVE_PROGRESS_MAX
-        return if (now >= startMillis) {
-            max
-        } else {
-            val span = (startMillis - fireAt).coerceAtLeast(1L)
-            ((now - fireAt).toFloat() / span * max).toInt().coerceIn(0, max - 1)
+    private fun stopForegroundNow() {
+        runCatching {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         }
     }
 
-    private fun startClock(millis: Long): String {
-        val t = LocalTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
-        return "%02d:%02d".format(t.hour, t.minute)
-    }
+    private fun planner(): ReminderPlanner = ReminderPlanner(
+        applicationContext,
+        AppDatabase.get(applicationContext).courseDao(),
+        SettingsRepository(applicationContext),
+    )
 
     override fun onDestroy() {
+        refreshJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
 
-    companion object {
-        const val EXTRA_COURSE_ID = "course_id"
-        const val EXTRA_COURSE_NAME = "course_name"
-        const val EXTRA_LOCATION = "location"
-        const val EXTRA_TEACHER = "teacher"
-        const val EXTRA_START_MILLIS = "start_millis"
-        const val EXTRA_END_MILLIS = "end_millis"
-        const val EXTRA_LEAD = "lead_minutes"
+    private companion object {
+        const val TAG = "CourseLiveUpdate"
+    }
+}
+
+/** 从闹钟 Intent 还原实时活动 payload。 */
+internal fun Intent.toLiveCourse(): LiveCourse? {
+    val courseId = getStringExtra(ReminderPlanner.EXTRA_COURSE_ID)?.takeIf { it.isNotBlank() } ?: return null
+    val startAt = getLongExtra(ReminderPlanner.EXTRA_START_MILLIS, 0L)
+    val endAt = getLongExtra(ReminderPlanner.EXTRA_END_MILLIS, 0L)
+    if (startAt <= 0L || endAt <= startAt) return null
+    return LiveCourse(
+        courseId = courseId,
+        name = getStringExtra(ReminderPlanner.EXTRA_COURSE_NAME).orEmpty(),
+        location = getStringExtra(ReminderPlanner.EXTRA_LOCATION).orEmpty(),
+        startAtMillis = startAt,
+        endAtMillis = endAt,
+        leadMinutes = getIntExtra(ReminderPlanner.EXTRA_LEAD, 10),
+        muteKey = getStringExtra(ReminderPlanner.EXTRA_MUTE_KEY).orEmpty(),
+    )
+}
+
+/** 供外部(如「预览实时活动」)启动服务。 */
+fun startLiveCourseService(context: android.content.Context, payload: LiveCourse) {
+    runCatching {
+        ContextCompat.startForegroundService(
+            context,
+            Intent(context, CourseLiveUpdateService::class.java)
+                .putExtra(ReminderPlanner.EXTRA_COURSE_ID, payload.courseId)
+                .putExtra(ReminderPlanner.EXTRA_COURSE_NAME, payload.name)
+                .putExtra(ReminderPlanner.EXTRA_LOCATION, payload.location)
+                .putExtra(ReminderPlanner.EXTRA_START_MILLIS, payload.startAtMillis)
+                .putExtra(ReminderPlanner.EXTRA_END_MILLIS, payload.endAtMillis)
+                .putExtra(ReminderPlanner.EXTRA_LEAD, payload.leadMinutes)
+                .putExtra(ReminderPlanner.EXTRA_MUTE_KEY, payload.muteKey),
+        )
     }
 }

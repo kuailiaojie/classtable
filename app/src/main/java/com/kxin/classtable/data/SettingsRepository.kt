@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
+import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,9 @@ class SettingsRepository @Inject constructor(
     private val KEY_AI_MODEL = stringPreferencesKey("ai_model")
     private val KEY_NOTIFY_ENABLED = booleanPreferencesKey("notify_enabled")
     private val KEY_NOTIFY_LEAD = intPreferencesKey("notify_lead_minutes")
+    private val KEY_NOTIFY_MODE = stringPreferencesKey("notify_mode")
+    private val KEY_TOMORROW_ENABLED = booleanPreferencesKey("tomorrow_reminder_enabled")
+    private val KEY_TOMORROW_TIME = stringPreferencesKey("tomorrow_reminder_time")
     private val KEY_AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
     private val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
     private val KEY_DISMISSED_VERSION = stringPreferencesKey("dismissed_version")
@@ -62,6 +66,9 @@ class SettingsRepository @Inject constructor(
             aiModel = p[KEY_AI_MODEL] ?: "",
             notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
             notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
+            notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.STANDARD.name,
+            tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: false,
+            tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
             autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
             lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
             dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
@@ -129,6 +136,15 @@ class SettingsRepository @Inject constructor(
     suspend fun setNotificationsEnabled(enabled: Boolean) = editSettings { it[KEY_NOTIFY_ENABLED] = enabled }
 
     suspend fun setNotifyLeadMinutes(minutes: Int) = editSettings { it[KEY_NOTIFY_LEAD] = minutes.coerceIn(0, 180) }
+
+    /** 提醒形态(标准 / 实时活动)。 */
+    suspend fun setNotifyMode(mode: NotifyMode) = editSettings { it[KEY_NOTIFY_MODE] = mode.name }
+
+    /** 明日课程预告:开关 + 时刻("HH:MM")。 */
+    suspend fun setTomorrowReminder(enabled: Boolean, time: String) = editSettings {
+        it[KEY_TOMORROW_ENABLED] = enabled
+        it[KEY_TOMORROW_TIME] = time.trim()
+    }
 
     suspend fun setAutoCheckUpdate(enabled: Boolean) = editSettings { it[KEY_AUTO_CHECK_UPDATE] = enabled }
 

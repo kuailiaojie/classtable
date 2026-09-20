@@ -19,7 +19,7 @@ import com.kxin.classtable.data.FcmTokens
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
-import com.kxin.classtable.notify.NotificationScheduler
+import com.kxin.classtable.notify.ReminderPlanner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +45,7 @@ class ClasstableApp : Application() {
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
-    lateinit var notificationScheduler: NotificationScheduler
+    lateinit var reminderPlanner: ReminderPlanner
 
     @Inject
     lateinit var fcmTokens: FcmTokens
@@ -106,13 +106,14 @@ class ClasstableApp : Application() {
             }
         })
 
-        // 课程或设置(作息/学期/通知开关/提前量)变化 → 重排课程提醒
+        // 课程或设置(作息/学期/通知开关/提前量/提醒模式)变化 → 重排课程提醒。
+        // 排程按「签名」幂等:内容没变时直接返回,不再每次发射都全量取消+重排。
         scope.launch {
             combine(
                 courseRepository.observeAll(),
                 settingsRepository.settings,
             ) { _, _ -> Unit }.collect {
-                notificationScheduler.rescheduleAll()
+                reminderPlanner.rescheduleAll()
             }
         }
     }

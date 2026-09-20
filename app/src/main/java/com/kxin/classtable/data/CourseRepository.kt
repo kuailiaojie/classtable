@@ -7,7 +7,7 @@ import com.kxin.classtable.data.local.CourseEntity
 import com.kxin.classtable.data.local.DeletedCourseDao
 import com.kxin.classtable.data.local.DeletedCourseEntity
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.notify.NotificationScheduler
+import com.kxin.classtable.notify.ReminderPlanner
 import com.kxin.classtable.widget.NextClassWidget
 import com.kxin.classtable.widget.TodayWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,7 +27,7 @@ class CourseRepository @Inject constructor(
     private val dao: CourseDao,
     private val deletedDao: DeletedCourseDao,
     private val sync: SyncRepository,
-    private val notificationScheduler: NotificationScheduler,
+    private val reminderPlanner: ReminderPlanner,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -59,7 +59,7 @@ class CourseRepository @Inject constructor(
         Analytics.log("course_deleted", "course_id" to id)
         // 取消该课程已排的提醒 + 云同步,均在后台完成,不阻塞导航
         scope.launch {
-            runCatching { notificationScheduler.cancelCourse(id) }
+            runCatching { reminderPlanner.cancelCourse(id) }
             runCatching { sync.syncNow() }
         }
         postChangeSideEffects()
@@ -76,7 +76,7 @@ class CourseRepository @Inject constructor(
     /** 课程数据变更后的副作用:刷新小组件 + 重排提醒(均在 IO,避免阻塞调用线程)。 */
     private fun postChangeSideEffects() {
         refreshWidgets()
-        scope.launch { notificationScheduler.rescheduleAll() }
+            scope.launch { reminderPlanner.rescheduleAll() }
     }
 
     private fun refreshWidgets() {

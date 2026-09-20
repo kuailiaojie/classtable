@@ -9,9 +9,9 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 
 /**
- * 提醒自愈兜底:周期运行(每 12 小时)无条件重排全部闹钟。
+ * 提醒自愈兜底:周期运行(每 12 小时)强制重排全部闹钟。
  * 国产 ROM 的电池优化/清理可能移除精确闹钟;App 不被打开时靠本任务把闹钟补回来
- * (rescheduleAll 幂等,重复设置同一 PendingIntent 会覆盖,无副作用)。
+ * (排程按签名幂等,重复设置同一 PendingIntent 会覆盖,无副作用)。
  */
 class ReminderSelfHealWorker(
     appContext: Context,
@@ -21,8 +21,8 @@ class ReminderSelfHealWorker(
     override suspend fun doWork(): Result {
         runCatching {
             EntryPointAccessors.fromApplication(applicationContext, SelfHealEntryPoint::class.java)
-                .notificationScheduler()
-                .rescheduleAll()
+                .reminderPlanner()
+                .rescheduleAll(force = true)
         }
         return Result.success()
     }
@@ -30,6 +30,6 @@ class ReminderSelfHealWorker(
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface SelfHealEntryPoint {
-        fun notificationScheduler(): NotificationScheduler
+        fun reminderPlanner(): ReminderPlanner
     }
 }
