@@ -374,6 +374,9 @@ private fun WeekGrid(
                     }
                 }
             }
+            // 悬浮导航浮在网格之上(网格画满可用高度,底部会从栏下穿过);末尾留出栏体高度,
+            // 于是被栏盖住的最后几行仍然能卷上来看,而不用把整个网格往上缩、牺牲「一屏看全」。
+            Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
         }
     }
 }

@@ -147,8 +147,11 @@ fun DayScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        horizontal = YohakuDimens.screenPadding,
-                        vertical = YohakuDimens.gapCard,
+                        start = YohakuDimens.screenPadding,
+                        end = YohakuDimens.screenPadding,
+                        top = YohakuDimens.gapCard,
+                        // 末尾预留悬浮导航的高度:中途内容从栏下穿过,最后一节课仍能卷上来
+                        bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
                     ),
                     verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
                 ) {

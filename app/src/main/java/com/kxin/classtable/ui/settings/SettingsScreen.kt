@@ -565,6 +565,10 @@ fun SettingsScreen(
             DividerLine()
             SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
         }
+
+        // 悬浮导航浮在内容之上:列表中途会从栏下穿过,末尾留出栏体高度,
+        // 最后一行才不会被永久盖住。
+        Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
     }
 }
 

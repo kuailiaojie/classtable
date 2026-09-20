@@ -42,7 +42,6 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuBottomNav
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
-import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
@@ -134,21 +133,18 @@ fun ClasstableRoot(
         }
         // 纸面背景铺满全屏(含状态栏/导航栏区域),内容区再做系统栏内边距
         Box(modifier = Modifier.fillMaxSize().background(colors.paper)) {
-            // 底部导航是悬浮层:只在四个根标签页显示,内容区在它上方结束(预留 navReservedHeight),
-            // 二级页(课程详情、导入、设置子页…)占满整屏,不出现导航。
+            // 底部导航是悬浮层:只在四个根标签页显示,二级页占满整屏。
+            //
+            // 内容区**不再给导航让出底部空间**(那是上一版的做法):让内容一直铺到系统手势条,
+            // 导航栏才会压在内容之上,滑动时课程从栏下穿过 —— 这是「悬浮」与「贴底」的区别。
+            // 内容不被最后一屏压住的问题,改由各根标签页在自己的滚动内容里预留
+            // navReservedHeight 解决(预留量在滚动区内,所以中途照样会从栏下经过)。
             val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
             val showBottomNav = currentRoute in ROOT_TABS
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .systemBarsPadding()
-                    .then(
-                        if (showBottomNav) {
-                            Modifier.padding(bottom = YohakuDimens.navReservedHeight)
-                        } else {
-                            Modifier
-                        },
-                    ),
+                    .systemBarsPadding(),
             ) {
                 NavHost(navController = nav, startDestination = "week") {
                 composable("week") { WeekScreen(nav) }

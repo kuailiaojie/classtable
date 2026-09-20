@@ -99,7 +99,9 @@ fun CoursesScreen(
                 contentPadding = PaddingValues(
                     start = YohakuDimens.screenPadding,
                     end = YohakuDimens.screenPadding,
-                    bottom = YohakuDimens.gapCard,
+                    // 悬浮导航压在内容之上(列表中途会从栏下穿过),所以只在**滚动内容末尾**
+                    // 预留出栏体的高度,保证最后一门课能卷到栏上方,而不是被永久盖住。
+                    bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
                 ),
             ) {
                 (1..7).forEach { day ->
