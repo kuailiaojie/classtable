@@ -60,7 +60,8 @@ fun YohakuBottomNav(
         shadowElevation = YohakuDimens.navElevation,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            // 栏体已经够宽,竖向收薄:内边距越小,「悬浮的一条」越像一枚胶囊,而不是一块板
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -71,7 +72,7 @@ fun YohakuBottomNav(
                         .width(YohakuDimens.navItemWidth)
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable { onNavigate(route) }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
@@ -80,7 +81,7 @@ fun YohakuBottomNav(
                         color = if (selected) colors.accent else colors.neutral7,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Box(
                         modifier = Modifier
                             .size(3.dp)

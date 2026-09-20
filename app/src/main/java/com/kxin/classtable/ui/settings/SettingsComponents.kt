@@ -84,6 +84,36 @@ internal fun SettingRow(title: String, value: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * 卡片内的「标题 + 说明 + ›」行:说明较长、塞不进 [SettingRow] 的值槽位时用这个。
+ *
+ * 之前把「4×2 · 今天全部课程」这类说明当 value 传给 [SettingRow],它和标题挤在一行,
+ * 标题被压、说明被截 —— 排版就是不协调的来源。
+ */
+@Composable
+internal fun SettingRowWithSubtitle(title: String, subtitle: String, onClick: () -> Unit) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = rowHPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = YohakuType.copy15, color = colors.neutral9)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = subtitle, style = YohakuType.label12, color = colors.neutral7)
+        }
+        Text(
+            text = "›",
+            style = YohakuType.copy15,
+            color = colors.neutral6,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
 /** 卡片内的「标签 + 控件」块:主题、强调色这类需要放 chips / 色板的分组用。 */
 @Composable
 internal fun SettingBlock(title: String, content: @Composable () -> Unit) {

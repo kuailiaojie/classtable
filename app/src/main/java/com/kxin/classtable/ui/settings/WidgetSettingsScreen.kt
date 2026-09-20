@@ -135,8 +135,9 @@ fun WidgetSettingsScreen(
                 }
                 DividerLine()
                 SettingBlock(title = "课表最多显示") {
+                    // 五个片在一行会挤爆窄屏(320dp),减到四个
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(2, 3, 4, 6, 8).forEach { n ->
+                        listOf(2, 4, 6, 8).forEach { n ->
                             YohakuChip(
                                 text = "$n 门",
                                 selected = prefs.maxRows == n,
@@ -193,9 +194,9 @@ fun WidgetSettingsScreen(
 @Composable
 private fun PinRow(title: String, subtitle: String, receiver: Class<out GlanceAppWidgetReceiver>) {
     val context = LocalContext.current
-    SettingRow(
+    SettingRowWithSubtitle(
         title = title,
-        value = subtitle,
+        subtitle = subtitle,
         onClick = { pinWidget(context, receiver) },
     )
 }

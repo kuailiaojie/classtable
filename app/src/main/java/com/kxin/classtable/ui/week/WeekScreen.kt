@@ -242,7 +242,11 @@ fun WeekScreen(
                     showNowLine = pageWeek == realWeek,
                     teachingDays = teachingDays,
                     onCourseClick = { detailCourse = it },
-                    modifier = Modifier.weight(1f),
+                    // 网格要**排在悬浮导航之上**:以前让它铺到屏幕底部再从栏下穿过,
+                    // 结果是最后一两节被导航栏永久压住(还要靠滚动才能看见),对课表来说是错的。
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(bottom = YohakuDimens.navReservedHeight),
                 )
             }
         }
@@ -451,9 +455,8 @@ private fun WeekGrid(
                     }
                 }
             }
-            // 悬浮导航浮在网格之上(网格画满可用高度,底部会从栏下穿过);末尾留出栏体高度,
-            // 于是被栏盖住的最后几行仍然能卷上来看,而不用把整个网格往上缩、牺牲「一屏看全」。
-            Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
+            // 网格已经排在悬浮导航之上(见调用处的 padding),这里不需要再留栏体高度:
+            // 七行正好铺满可见区域,「一屏看全一周」不再需要滚动。
         }
     }
 }

@@ -20,7 +20,7 @@ object YohakuDimens {
     /** 悬浮底部导航:单项宽度(四项目定宽,间距自然均匀) */
     val navItemWidth = 68.dp
     /** 悬浮底部导航给内容预留的高度(栏高 + 上下浮动余量 + 投影) */
-    val navReservedHeight = 80.dp
+    val navReservedHeight = 64.dp
 
     val accentBarWidth = 4.dp
 
