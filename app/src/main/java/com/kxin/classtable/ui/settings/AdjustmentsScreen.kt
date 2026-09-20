@@ -30,24 +30,42 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDatePicker
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuOutlineButton
+import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.HolidayClient
+import com.kxin.classtable.domain.HolidayPlan
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AppSettings
+import com.kxin.classtable.domain.planHolidays
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+
+/** 预览里的一条补班日:[source] 是建议的原课程日期,学校细则可能不同,可以改。 */
+data class MakeupReview(val date: LocalDate, val source: LocalDate?, val selected: Boolean)
+
+/** 预览里的一个假期:放假区间是否采用 + 它下面各条补班日。 */
+data class HolidayReview(
+    val plan: HolidayPlan,
+    val restSelected: Boolean,
+    val makeups: List<MakeupReview>,
+)
 
 @HiltViewModel
 class AdjustmentsViewModel @Inject constructor(
@@ -56,8 +74,66 @@ class AdjustmentsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
+    private val _reviews = MutableStateFlow<List<HolidayReview>?>(null)
+    val reviews: StateFlow<List<HolidayReview>?> = _reviews.asStateFlow()
+
+    private val _loading = MutableStateFlow(false)
+    val loading: StateFlow<Boolean> = _loading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     fun save(items: List<ScheduleAdjustment>) = viewModelScope.launch {
         settingsRepository.setScheduleAdjustments(Adjustments.encode(items))
+    }
+
+    /**
+     * 抓取某年的节假日并生成补课建议。
+     *
+     * **只生成预览,不写任何数据** —— 采用与否由用户在页面上逐条勾选后决定。
+     * 学期外的日期会被过滤掉(没设开学日时无从判断,保留全部)。
+     */
+    fun fetchHolidays(year: Int, startDay: Long, weekCount: Int) = viewModelScope.launch {
+        _loading.value = true
+        _error.value = null
+        runCatching { planHolidays(HolidayClient.fetch(year)) }
+            .onSuccess { plans ->
+                val inTerm = plans.mapNotNull { plan ->
+                    val rests = plan.restDates.filter {
+                        Schedule.inTerm(it.toEpochDay(), startDay, weekCount)
+                    }
+                    val makeups = plan.makeups.filter {
+                        Schedule.inTerm(it.date.toEpochDay(), startDay, weekCount)
+                    }
+                    if (rests.isEmpty() && makeups.isEmpty()) null else plan.copy(restDates = rests, makeups = makeups)
+                }
+                if (inTerm.isEmpty()) {
+                    _reviews.value = null
+                    _error.value = "该年份没有落在学期内的节假日"
+                } else {
+                    _reviews.value = inTerm.map { plan ->
+                        HolidayReview(
+                            plan = plan,
+                            restSelected = true,
+                            makeups = plan.makeups.map { MakeupReview(it.date, it.source, selected = true) },
+                        )
+                    }
+                }
+            }
+            .onFailure { e ->
+                _reviews.value = null
+                _error.value = e.message ?: "获取失败,请稍后重试"
+            }
+        _loading.value = false
+    }
+
+    fun updateReviews(transform: (List<HolidayReview>) -> List<HolidayReview>) {
+        _reviews.value = _reviews.value?.let(transform)
+    }
+
+    fun clearReviews() {
+        _reviews.value = null
+        _error.value = null
     }
 }
 
@@ -77,7 +153,29 @@ fun AdjustmentsScreen(
     val items = remember(settings.scheduleAdjustments) {
         Adjustments.decode(settings.scheduleAdjustments)
     }
+    val reviews by viewModel.reviews.collectAsStateWithLifecycle()
+    val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    var year by remember { mutableStateOf(LocalDate.now().year.toString()) }
     var draft by remember { mutableStateOf<Draft?>(null) }
+
+    /** 把预览里勾中的日期并进调休表(同一天的旧安排被覆盖)。 */
+    fun applyReviews() {
+        val pending = reviews ?: return
+        val imported = buildList {
+            pending.forEach { review ->
+                if (review.restSelected) {
+                    review.plan.restDates.forEach { add(ScheduleAdjustment(it, null, review.plan.name)) }
+                }
+                review.makeups.filter { it.selected && it.source != null }
+                    .forEach { add(ScheduleAdjustment(it.date, it.source, review.plan.name)) }
+            }
+        }
+        if (imported.isEmpty()) return
+        val importedDates = imported.map { it.date }.toSet()
+        viewModel.save((items.filterNot { it.date in importedDates } + imported).sortedBy { it.date })
+        viewModel.clearReviews()
+    }
 
     Column(
         modifier = Modifier
@@ -103,6 +201,100 @@ fun AdjustmentsScreen(
                 color = colors.neutral7,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+            // 自动获取:公开节假日接口 → 分组假期 + 补课建议。只生成预览,采用与否自己勾。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                YohakuTextField(
+                    value = year,
+                    onValueChange = { year = it.filter(Char::isDigit).take(4) },
+                    label = "年份",
+                    modifier = Modifier.width(96.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                YohakuOutlineButton(
+                    text = if (loading) "正在获取…" else "获取节假日与调休",
+                    enabled = !loading && year.length == 4,
+                    onClick = {
+                        year.toIntOrNull()?.let {
+                            viewModel.fetchHolidays(it, settings.semesterStartDay, settings.semesterWeekCount)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            error?.let {
+                Text(
+                    text = it,
+                    style = YohakuType.label12,
+                    color = colors.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+
+            reviews?.let { pending ->
+                val picked = pending.sumOf { review ->
+                    (if (review.restSelected) review.plan.restDates.size else 0) +
+                        review.makeups.count { it.selected }
+                }
+                Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+                Text(
+                    text = "待确认 · $picked 天(补课日期是自动匹配的建议,请核对后采用)",
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                )
+                pending.forEachIndexed { planIndex, review ->
+                    if (review.plan.restDates.isNotEmpty()) {
+                        ReviewRow(
+                            title = review.plan.name,
+                            desc = "${shortDate(review.plan.restDates.first())} – " +
+                                "${shortDate(review.plan.restDates.last())} · 停课 ${review.plan.restDates.size} 天",
+                            selected = review.restSelected,
+                        ) {
+                            viewModel.updateReviews { list ->
+                                list.mapIndexed { i, r ->
+                                    if (i == planIndex) r.copy(restSelected = !r.restSelected) else r
+                                }
+                            }
+                        }
+                    }
+                    review.makeups.forEachIndexed { makeupIndex, makeup ->
+                        ReviewRow(
+                            title = "补课 · ${dateLabel(makeup.date.toEpochDay())}",
+                            desc = makeup.source
+                                ?.let { "补 ${dateLabel(it.toEpochDay())} 的课" }
+                                ?: "未匹配到原课程日期",
+                            selected = makeup.selected,
+                        ) {
+                            viewModel.updateReviews { list ->
+                                list.mapIndexed { i, r ->
+                                    if (i != planIndex) {
+                                        r
+                                    } else {
+                                        r.copy(
+                                            makeups = r.makeups.toMutableList().also {
+                                                it[makeupIndex] = it[makeupIndex].copy(selected = !makeup.selected)
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                YohakuButton(
+                    text = "采用所选日期($picked 天)",
+                    onClick = { applyReviews() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                YohakuOutlineButton(
+                    text = "放弃预览",
+                    onClick = { viewModel.clearReviews() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            }
 
             if (items.isEmpty()) {
                 Text(
@@ -307,4 +499,34 @@ private fun DraftRow(label: String, value: String, onClick: () -> Unit) {
 private fun dateLabel(epochDay: Long): String {
     val d = LocalDate.ofEpochDay(epochDay)
     return "${d.monthValue}/${d.dayOfMonth} 周${"一二三四五六日"[d.dayOfWeek.value - 1]}"
+}
+
+/** "10/1"(区间描述里用,省掉星期) */
+private fun shortDate(date: LocalDate): String = "${date.monthValue}/${date.dayOfMonth}"
+
+/** 预览里的一行:描述 + 一个「已选 / 忽略」的开关片。 */
+@Composable
+private fun ReviewRow(
+    title: String,
+    desc: String,
+    selected: Boolean,
+    onToggle: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = YohakuType.copy13, color = colors.neutral10)
+            Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+        }
+        YohakuChip(
+            text = if (selected) "已选" else "忽略",
+            selected = selected,
+            onClick = onToggle,
+        )
+    }
 }

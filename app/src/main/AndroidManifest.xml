@@ -121,6 +121,18 @@
                 android:resource="@xml/today_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.TomorrowWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_tomorrow">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tomorrow_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

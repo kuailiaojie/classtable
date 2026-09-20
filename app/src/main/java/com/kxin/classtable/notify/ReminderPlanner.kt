@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.util.Log
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.CourseDao
+import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -120,11 +121,22 @@ class ReminderPlanner @Inject constructor(
         val zone = ZoneId.systemDefault()
         val live = settings.notifyMode == NotifyMode.LIVE.name
         val entries = mutableListOf<Entry>()
+        // 调休:提醒必须和课表看到的一致 —— 停课日不排提醒,补课日按原课程日期那天的课排
+        val adjustments = Adjustments.decode(settings.scheduleAdjustments)
 
         for (offset in 0 until HORIZON_DAYS) {
             val date = today.plusDays(offset.toLong())
-            val week = Schedule.weekOf(date.toEpochDay(), settings.semesterStartDay, settings.semesterWeekCount)
-            val dayCourses = courses.filter { it.isOnWeekday(date.dayOfWeek.value) && it.isActiveOnWeek(week) }
+            val teaching = Adjustments.teachingDay(
+                adjustments,
+                date,
+                settings.semesterStartDay,
+                settings.semesterWeekCount,
+            )
+            val dayCourses = if (teaching == null) {
+                emptyList()
+            } else {
+                courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
+            }
 
             dayCourses.forEach { course ->
                 val startMinute = Schedule.courseStartMinute(course, periods) ?: return@forEach
@@ -165,11 +177,18 @@ class ReminderPlanner @Inject constructor(
             // 明日课程预告(可选):前一天指定时刻提醒
             if (settings.tomorrowReminderEnabled && offset in 0 until HORIZON_DAYS - 1) {
                 val nextDate = date.plusDays(1)
-                val nextWeek = Schedule.weekOf(
-                    nextDate.toEpochDay(), settings.semesterStartDay, settings.semesterWeekCount,
+                val nextTeaching = Adjustments.teachingDay(
+                    adjustments,
+                    nextDate,
+                    settings.semesterStartDay,
+                    settings.semesterWeekCount,
                 )
-                val nextCourses = courses.filter {
-                    it.isOnWeekday(nextDate.dayOfWeek.value) && it.isActiveOnWeek(nextWeek)
+                val nextCourses = if (nextTeaching == null) {
+                    emptyList()
+                } else {
+                    courses.filter {
+                        it.isOnWeekday(nextTeaching.second) && it.isActiveOnWeek(nextTeaching.first)
+                    }
                 }
                 if (nextCourses.isEmpty()) continue
                 val minute = Schedule.parseClock(settings.tomorrowReminderTime) ?: DEFAULT_TOMORROW_MINUTE
@@ -302,6 +321,8 @@ class ReminderPlanner @Inject constructor(
             s.notifyMode,
             s.tomorrowReminderEnabled,
             s.tomorrowReminderTime,
+            // 调休必须进签名:否则改了调休、签名没变,这里会直接 early return,提醒还是旧的
+            s.scheduleAdjustments,
             coursePart,
         ).joinToString("|")
     }
@@ -320,7 +341,7 @@ class ReminderPlanner @Inject constructor(
         private const val KEY_MUTED_KEY = "muted_key"
         private const val KEY_MUTED_UNTIL = "muted_until"
         private const val KEY_LIVE = "live_payload"
-        private const val SIGNATURE_VERSION = "plan-v1"
+        private const val SIGNATURE_VERSION = "plan-v2"
 
         /** 滚动窗口天数(含今天)。 */
         const val HORIZON_DAYS = 8

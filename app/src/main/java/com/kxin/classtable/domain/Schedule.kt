@@ -251,6 +251,17 @@ object Schedule {
         return (0..6).map { monday.plusDays(it.toLong()) }
     }
 
+    /**
+     * [epochDay] 是否落在学期区间内(第 1 周的周一起,共 [weekCount] 周)。
+     * 未设置开学日时无从判断,一律返回 true。
+     */
+    fun inTerm(epochDay: Long, startDay: Long, weekCount: Int): Boolean {
+        if (startDay <= 0L) return true
+        val firstMonday = mondayEpochDay(startDay)
+        val lastSunday = firstMonday + weekCount.coerceAtLeast(1) * 7L - 1
+        return epochDay in firstMonday..lastSunday
+    }
+
     /** "9月23日 周三" */
     fun todayDateText(): String {
         val d = LocalDate.now()

@@ -77,15 +77,15 @@ object Adjustments {
     /**
      * [date] 这一天怎么过。没有安排就是普通的一天。
      *
-     * 原课程日期自身也可能是调休日(补课的课又被调走),所以沿链往上追一层 ——
-     * 追之前把当前这条剔除,保证不会绕回自己死循环。
+     * **明确不追链**:补课日的「原课程日期」直接就是那天要上的课,即使那个日期本身落在
+     * 被停课的假期里也一样 —— 「10/1–10/7 停课 + 10/11 补 10/2 的课」正是这种情形,
+     * 若沿链继承停课状态,补课日会被判成停课。参考实现的注释同样写的是 without chaining。
      */
     fun resolve(items: List<ScheduleAdjustment>, date: LocalDate): DaySchedule {
         val entry = items.firstOrNull { it.date == date }
             ?: return DaySchedule(date, rest = false, makeup = false)
         val source = entry.sourceDate ?: return DaySchedule(date, rest = true, makeup = false)
-        val chain = resolve(items.filterNot { it.date == date }, source)
-        return DaySchedule(chain.effectiveDate, rest = chain.rest, makeup = true)
+        return DaySchedule(source, rest = false, makeup = true)
     }
 
     /**

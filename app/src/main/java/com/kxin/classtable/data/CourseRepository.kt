@@ -11,6 +11,7 @@ import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.notify.ReminderPlanner
 import com.kxin.classtable.widget.NextClassWidget
 import com.kxin.classtable.widget.TodayWidget
+import com.kxin.classtable.widget.TomorrowWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,7 @@ class CourseRepository @Inject constructor(
         scope.launch {
             runCatching { NextClassWidget().updateAll(context) }
             runCatching { TodayWidget().updateAll(context) }
+            runCatching { TomorrowWidget().updateAll(context) }
         }
     }
 }

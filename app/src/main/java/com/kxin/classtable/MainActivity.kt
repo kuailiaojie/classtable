@@ -68,6 +68,7 @@ import com.kxin.classtable.ui.settings.SettingsViewModel
 import com.kxin.classtable.ui.settings.UpdateScreen
 import com.kxin.classtable.ui.settings.UpdateState
 import com.kxin.classtable.ui.settings.UpdateViewModel
+import com.kxin.classtable.ui.settings.WidgetSettingsScreen
 import com.kxin.classtable.ui.week.WeekScreen
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -173,6 +174,7 @@ fun ClasstableRoot(
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
                 composable("adjustments") { AdjustmentsScreen(nav) }
+                composable("widget_settings") { WidgetSettingsScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
                 composable("adapter_sync") { AdapterSyncScreen(nav) }

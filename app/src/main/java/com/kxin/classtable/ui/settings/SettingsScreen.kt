@@ -143,7 +143,6 @@ fun SettingsScreen(
 
     var showAiDialog by remember { mutableStateOf(false) }
     var showNotifyDialog by remember { mutableStateOf(false) }
-    var showWidgetDialog by remember { mutableStateOf(false) }
     var showAutoCheckDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var aiProvider by remember { mutableStateOf(settings.aiProvider) }
@@ -423,36 +422,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showWidgetDialog) {
-        YohakuDialog(
-            onDismissRequest = { showWidgetDialog = false },
-            title = "桌面小组件",
-            actions = {
-                YohakuDialogAction(text = "取消", onClick = { showWidgetDialog = false })
-            },
-            content = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "选择小组件后,按系统提示放置到桌面。",
-                        style = YohakuType.label12,
-                        color = colors.neutral7,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    WidgetOptionRow(
-                        title = "今日课表",
-                        subtitle = "4×2 · 今日课程列表,正在上的课带标记",
-                        onClick = { pinWidget(context, TodayWidgetReceiver::class.java) },
-                    )
-                    WidgetOptionRow(
-                        title = "下节课",
-                        subtitle = "1×1 · 下一节课的名称、时间与地点",
-                        onClick = { pinWidget(context, NextClassWidgetReceiver::class.java) },
-                    )
-                }
-            },
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -553,7 +522,11 @@ fun SettingsScreen(
         }
 
         SettingsSection(title = "桌面") {
-            SettingRow(title = "桌面小组件", value = "今日 / 下节课", onClick = { showWidgetDialog = true })
+            SettingRow(
+                title = "桌面小组件",
+                value = "今日 / 明日 / 下节课 · 可自定义",
+                onClick = { nav.navigate("widget_settings") },
+            )
         }
 
         SettingsSection(title = "账号与数据") {
@@ -579,37 +552,6 @@ fun SettingsScreen(
         // 悬浮导航浮在内容之上:列表中途会从栏下穿过,末尾留出栏体高度,
         // 最后一行才不会被永久盖住。
         Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
-    }
-}
-
-/** 小组件选项行:标题 + 尺寸说明,点击触发系统固定流程。 */
-@Composable
-private fun WidgetOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
-    val colors = LocalYohakuColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = YohakuType.copy15, color = colors.neutral9)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = subtitle, style = YohakuType.label12, color = colors.neutral7)
-        }
-        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
-    }
-}
-
-/** 请求把指定小组件固定到桌面;Launcher 不支持时提示手动添加。 */
-private fun pinWidget(context: Context, receiver: Class<out GlanceAppWidgetReceiver>) {
-    val component = ComponentName(context.applicationContext, receiver)
-    val manager = AppWidgetManager.getInstance(context)
-    // extras 与添加成功回调 PendingIntent 均不需要,传 null
-    val ok = manager.requestPinAppWidget(component, null, null)
-    if (!ok) {
-        Toast.makeText(context, "当前桌面不支持直接添加,请长按桌面空白处手动添加", Toast.LENGTH_SHORT).show()
     }
 }
 
