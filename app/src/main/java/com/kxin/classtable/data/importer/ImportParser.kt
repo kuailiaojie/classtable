@@ -87,19 +87,28 @@ object ImportParser {
      * 预设节次 → "480-530,610-660,..."(每节起止时间对)。
      * 有 endTime 用 endTime;缺 endTime 的用下一节开始,末节 +50 分钟。
      */
+    /**
+     * 适配器回传的作息 → 内部规格 "start-end:number,…"。
+     *
+     * **节次号是数据**:脚本里 `number` 是几就写几 —— 教务把某一行排在最后(比如 17:45 那种
+     * 单小节的晚间课),它在 App 里就仍然是那个号,不会因为按时间排序排到了第 5 位就被改叫第 5 节。
+     * `number` 缺失或非法(<1)时留 0,由 [Schedule.normalizePeriods] 按时间顺序补号
+     * (旧脚本、旧数据因此完全不受影响)。
+     */
     fun parseTimeSlots(json: String): String? = runCatching {
         val arr = JSONArray(json)
         val raw = (0 until arr.length()).mapNotNull { i ->
             val o = arr.getJSONObject(i)
             val s = parseTimeMinutes(o.optString("startTime")) ?: return@mapNotNull null
-            s to parseTimeMinutes(o.optString("endTime"))
+            Triple(s, parseTimeMinutes(o.optString("endTime")), o.optInt("number", 0).takeIf { it >= 1 } ?: 0)
         }.sortedBy { it.first }
         if (raw.isEmpty()) return@runCatching null
-        val pairs = raw.mapIndexed { idx, (s, e) ->
+        val periods = raw.mapIndexed { idx, (s, e, number) ->
             val end = e ?: raw.getOrNull(idx + 1)?.first ?: (s + Schedule.PERIOD_LENGTH_MIN)
-            s to end
-        }.filter { it.second > it.first }
-        if (pairs.isEmpty()) null else pairs.joinToString(",") { "${it.first}-${it.second}" }
+            Schedule.Period(s, end, number)
+        }.filter { it.end > it.start }
+        val normalized = Schedule.normalizePeriods(periods)
+        if (normalized.isEmpty()) null else Schedule.serializePeriods(normalized)
     }.getOrNull()
 
     /** 学期配置 → (周数, 开学日 epochDay);无有效信息返回 null。 */

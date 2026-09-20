@@ -132,7 +132,7 @@ fun SettingsScreen(
     val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val firstPeriodText = if (periods.isNotEmpty()) {
-        "第1节 %02d:%02d".format(periods[0].start / 60, periods[0].start % 60)
+        "第${periods[0].number}节 %02d:%02d".format(periods[0].start / 60, periods[0].start % 60)
     } else {
         "未设置"
     }

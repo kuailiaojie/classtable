@@ -116,12 +116,8 @@ fun DayScreen(
         }
         val nowMinute = Schedule.minuteOfDay(nowMillis)
         val scheduled = todayCourses.mapNotNull { course ->
-            val s = course.customStartMinute
-                ?: periods.getOrNull(course.startPeriod - 1)?.start
-                ?: return@mapNotNull null
-            val e = course.customEndMinute
-                ?: periods.getOrNull(course.endPeriod - 1)?.end
-                ?: return@mapNotNull null
+            val s = Schedule.courseStartMinute(course, periods) ?: return@mapNotNull null
+            val e = Schedule.courseEndMinute(course, periods) ?: return@mapNotNull null
             Triple(course, s, e)
         }.sortedBy { it.second }
         val ongoing = scheduled.firstOrNull { nowMinute >= it.second && nowMinute < it.third }

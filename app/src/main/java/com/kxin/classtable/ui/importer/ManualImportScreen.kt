@@ -438,7 +438,8 @@ private fun parseScheduleLines(text: String): List<Schedule.Period>? {
         }
         out.add(period)
     }
-    return out.distinctBy { it.start }.sortedBy { it.start }
+    // 规整:按时间排序并补节次号(手填的作息没有节次号,补成 1、2、3…)
+    return Schedule.normalizePeriods(out.distinctBy { it.start })
 }
 
 private fun weekText(course: Course): String = when (course.weekType) {

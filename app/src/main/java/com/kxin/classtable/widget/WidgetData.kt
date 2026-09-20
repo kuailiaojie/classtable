@@ -51,7 +51,7 @@ object WidgetData {
             AppDatabase.get(context).courseDao().getAll()
                 .map { it.toDomain() }
                 .filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
-                .sortedBy { it.customStartMinute ?: settings.periods.getOrNull(it.startPeriod - 1)?.start ?: 0 }
+                .sortedBy { Schedule.courseStartMinute(it, settings.periods) ?: 0 }
         }
     }
 
@@ -105,8 +105,8 @@ object WidgetData {
         val now = LocalTime.now().let { it.hour * 60 + it.minute }
         return coursesOf(context, s, LocalDate.now())
             .mapNotNull { c ->
-                val start = c.customStartMinute ?: s.periods.getOrNull(c.startPeriod - 1)?.start
-                val end = c.customEndMinute ?: s.periods.getOrNull(c.endPeriod - 1)?.end
+                val start = Schedule.courseStartMinute(c, s.periods)
+                val end = Schedule.courseEndMinute(c, s.periods)
                 if (start == null || end == null || end <= now) null else c to start
             }
             .minByOrNull { it.second }

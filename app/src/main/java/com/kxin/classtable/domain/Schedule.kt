@@ -30,23 +30,34 @@ object Schedule {
 
     const val PERIOD_LENGTH_MIN = 50
 
-    /** 一节作息:开始/结束分钟(自 0:00),时长 = end - start。 */
-    data class Period(val start: Int, val end: Int) {
+    /**
+     * 一节作息:[start]/[end] 是开始与结束分钟(自 0:00),[number] 是**节次号**。
+     *
+     * 节次号与行顺序是**两件事**:列表按时间排序(课表从上到下就是一天的时间顺序),
+     * 而节次号来自教务本身(第几节就是第几节)。解耦之后,教务把 17:45 那行排在第 8 行,
+     * App 里它就仍然叫第 8 节 —— 不会因为按时间排到了第 5 位就被改叫第 5 节。
+     * [number] = 0 表示"没写节次号",解析时按时间顺序自动补 1、2、3…
+     */
+    data class Period(val start: Int, val end: Int, val number: Int = 0) {
         val duration: Int get() = (end - start).coerceAtLeast(1)
     }
 
     val defaultPeriods: List<Period> = parsePeriods(DEFAULT_PERIODS)
 
-    /** 解析 "480-530,610-660" 或旧格式 "480,530,610,..."。 */
+    /** 解析 "480-530:1,610-660:2"(节次号可省略)或旧格式 "480,530,610,…"。 */
     fun parsePeriods(spec: String): List<Period> {
         val items = spec.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         if (items.isEmpty()) return defaultPeriods
-        return if (items.any { it.contains('-') }) {
+        val parsed = if (items.any { it.contains('-') }) {
             items.mapNotNull { item ->
-                val p = item.split('-')
+                // 行内可带节次号:"480-530:1" —— 冒号后面那个数才是节次号
+                val colon = item.lastIndexOf(':')
+                val range = if (colon >= 0) item.substring(0, colon) else item
+                val number = if (colon >= 0) item.substring(colon + 1).trim().toIntOrNull() ?: 0 else 0
+                val p = range.split('-')
                 val s = p.getOrNull(0)?.trim()?.toIntOrNull() ?: return@mapNotNull null
                 val e = p.getOrNull(1)?.trim()?.toIntOrNull() ?: (s + PERIOD_LENGTH_MIN)
-                if (e > s) Period(s, e) else null
+                if (e > s) Period(s, e, number) else null
             }
         } else {
             val starts = items.mapNotNull { it.toIntOrNull() }
@@ -55,21 +66,43 @@ object Schedule {
                 Period(s, e)
             }
         }
+        return normalizePeriods(parsed)
     }
 
-    /** 序列化为 "480-530,610-660,..."。 */
-    fun serializePeriods(periods: List<Period>): String = periods.joinToString(",") { "${it.start}-${it.end}" }
+    /** 序列化为 "480-530:1,610-660:2,…"(节次号写在每一行里)。 */
+    fun serializePeriods(periods: List<Period>): String =
+        normalizePeriods(periods).joinToString(",") { "${it.start}-${it.end}:${it.number}" }
 
-    /** 大节行:每 2 个小节一行,末行可为单节;节数不限于 12 */
-    fun bigPeriods(periodCount: Int): List<Pair<Int, Int>> {
-        val count = periodCount.coerceAtLeast(1)
-        return (1..count step 2).map { it to minOf(it + 1, count) }
+    /**
+     * 规整作息表:按开始时间排序,并给**没写节次号**的行补号(1、2、3…,跳过已占用的号)。
+     *
+     * 旧数据(没有节次号)走这里补号,结果与"第几行就是第几节"完全一致 —— 升级无迁移成本。
+     */
+    fun normalizePeriods(periods: List<Period>): List<Period> {
+        val sorted = periods.sortedBy { it.start }
+        val used = sorted.filter { it.number >= 1 }.map { it.number }.toMutableSet()
+        var next = 1
+        return sorted.map { p ->
+            if (p.number >= 1) {
+                p
+            } else {
+                while (next in used) next++
+                used += next
+                p.copy(number = next)
+            }
+        }
     }
+
+    /** 第 [number] 节所在的行下标(0-based);表里没有这一节返回 -1。 */
+    fun rowOf(periods: List<Period>, number: Int): Int = periods.indexOfFirst { it.number == number }
+
+    /** 第 [number] 节的时段;表里没有这一节返回 null。 */
+    fun periodOf(periods: List<Period>, number: Int): Period? = periods.getOrNull(rowOf(periods, number))
 
     /** 小节区间 → "08:00–08:50" 等宽时间串 */
     fun periodRange(periods: List<Period> = defaultPeriods, startPeriod: Int, endPeriod: Int): String {
-        val s = periods.getOrNull(startPeriod - 1)?.start ?: periods.firstOrNull()?.start ?: 480
-        val e = periods.getOrNull(endPeriod - 1)?.end ?: (s + PERIOD_LENGTH_MIN)
+        val s = periodOf(periods, startPeriod)?.start ?: periods.firstOrNull()?.start ?: 480
+        val e = periodOf(periods, endPeriod)?.end ?: (s + PERIOD_LENGTH_MIN)
         return "${fmt(s)}–${fmt(e)}"
     }
 
@@ -96,8 +129,8 @@ object Schedule {
      */
     fun pinCourseTimes(course: Course, periods: List<Period>): Course {
         if (course.startPeriod <= 0) return course
-        val start = periods.getOrNull(course.startPeriod - 1)?.start ?: return course
-        val end = periods.getOrNull(course.endPeriod - 1)?.end ?: return course
+        val start = periodOf(periods, course.startPeriod)?.start ?: return course
+        val end = periodOf(periods, course.endPeriod)?.end ?: return course
         return course.copy(customStartMinute = start, customEndMinute = end)
     }
 
@@ -114,60 +147,35 @@ object Schedule {
 
     /** 课程开始分钟(自定义时间优先,否则按作息节次);无作息信息返回 null。 */
     fun courseStartMinute(course: Course, periods: List<Period> = defaultPeriods): Int? =
-        course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start
+        course.customStartMinute ?: periodOf(periods, course.startPeriod)?.start
 
     /** 课程结束分钟(自定义时间优先,否则按作息节次);无作息信息返回 null。 */
     fun courseEndMinute(course: Course, periods: List<Period> = defaultPeriods): Int? =
-        course.customEndMinute ?: periods.getOrNull(course.endPeriod - 1)?.end
+        course.customEndMinute ?: periodOf(periods, course.endPeriod)?.end
 
-    /** 课程是否落在某个大节行的时间范围内(自定义时间课程按分钟比对)。 */
-    fun courseOverlapsBigPeriod(course: Course, p1: Int, p2: Int, periods: List<Period>): Boolean {
-        val cs = course.customStartMinute
-        val ce = course.customEndMinute
-        if (cs == null || ce == null) return course.overlapsPeriod(p1, p2)
-        val rowStart = periods.getOrNull(p1 - 1)?.start ?: 0
-        val rowEnd = periods.getOrNull(p2 - 1)?.end ?: (rowStart + PERIOD_LENGTH_MIN)
-        return cs < rowEnd && ce > rowStart
-    }
-
-    /** 当前时刻所在小节序号(1..节数) */
-    fun currentPeriodIndex(periods: List<Period> = defaultPeriods): Int {
-        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
-        var idx = 0
-        for ((i, period) in periods.withIndex()) {
-            if (minutes >= period.start) idx = i + 1
-        }
-        return idx
-    }
-
-    /** 当前时刻所在大节序号(1..行数) */
-    fun currentBigPeriodIndex(periods: List<Period> = defaultPeriods): Int {
-        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
-        var idx = 0
-        for ((i, big) in bigPeriods(periods.size).withIndex()) {
-            val start = periods.getOrNull(big.first - 1)?.start ?: 0
-            if (minutes >= start) idx = i + 1
-        }
-        return idx
-    }
-
-    /** 自定义时间课程重叠的最小节序号;不重叠返回 0。 */
+    /**
+     * 自定义时间课程覆盖到的第一**行**(1-based 行号);不重叠返回 0。
+     *
+     * 返回行号而不是节次号:网格是按行排版的,节次号只用于「课程属于第几节」这件事。
+     */
     fun firstOverlapPeriod(course: Course, periods: List<Period>): Int {
-        if (!course.hasCustomTime()) return course.startPeriod
-        for ((i, _) in periods.withIndex()) {
-            val p = i + 1
-            if (courseOverlapsBigPeriod(course, p, p, periods)) return p
+        if (!course.hasCustomTime()) return rowOf(periods, course.startPeriod) + 1
+        val cs = course.customStartMinute ?: return 0
+        val ce = course.customEndMinute ?: return 0
+        for ((i, p) in periods.withIndex()) {
+            if (p.start < ce && p.end > cs) return i + 1
         }
         return 0
     }
 
-    /** 自定义时间课程重叠的最大节序号;不重叠返回 0。 */
+    /** 自定义时间课程覆盖到的最后**行**(1-based 行号);不重叠返回 0。 */
     fun lastOverlapPeriod(course: Course, periods: List<Period>): Int {
-        if (!course.hasCustomTime()) return course.endPeriod
+        if (!course.hasCustomTime()) return rowOf(periods, course.endPeriod) + 1
+        val cs = course.customStartMinute ?: return 0
+        val ce = course.customEndMinute ?: return 0
         var last = 0
-        for ((i, _) in periods.withIndex()) {
-            val p = i + 1
-            if (courseOverlapsBigPeriod(course, p, p, periods)) last = p
+        for ((i, p) in periods.withIndex()) {
+            if (p.start < ce && p.end > cs) last = i + 1
         }
         return last
     }
@@ -175,8 +183,8 @@ object Schedule {
     /** 当前时刻是否在该课程的时间区间内(自定义课按起止,普通课按节次)。 */
     fun isCourseOngoing(course: Course, periods: List<Period> = defaultPeriods): Boolean {
         val now = LocalTime.now().hour * 60 + LocalTime.now().minute
-        val s = course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start ?: return false
-        val e = course.customEndMinute ?: periods.getOrNull(course.endPeriod - 1)?.end ?: return false
+        val s = course.customStartMinute ?: periodOf(periods, course.startPeriod)?.start ?: return false
+        val e = course.customEndMinute ?: periodOf(periods, course.endPeriod)?.end ?: return false
         return now >= s && now < e
     }
 

@@ -392,7 +392,8 @@ private fun WeekGrid(
                             horizontalAlignment = Alignment.End,
                         ) {
                             Text(
-                                text = "${idx + 1}",
+                                // 显示**节次号**(数据里的),不是行号:教务第 8 节可能排在第 5 行上
+                                text = "${period.number}",
                                 style = YohakuType.gridGutter,
                                 color = colors.neutral8,
                             )
@@ -537,7 +538,11 @@ private fun layoutDay(
         val (top, height) = if (c.hasCustomTime()) {
             Schedule.customCourseLayout(c, periods)
         } else {
-            (c.startPeriod - 1).toFloat() to (c.endPeriod - c.startPeriod + 1).toFloat()
+            // 节次号 → 行下标(两者已解耦:教务第 8 节可能落在网格的第 5 行)
+            val firstRow = Schedule.rowOf(periods, c.startPeriod)
+            val lastRow = Schedule.rowOf(periods, c.endPeriod)
+            if (firstRow < 0 || lastRow < firstRow) return@mapNotNull null
+            firstRow.toFloat() to (lastRow - firstRow + 1).toFloat()
         }
         if (height <= 0f) null else GridBlock(c, top, height)
     }.sortedWith(compareBy({ it.top }, { -it.height }))

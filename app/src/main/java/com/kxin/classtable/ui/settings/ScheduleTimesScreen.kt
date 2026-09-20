@@ -336,8 +336,9 @@ fun ScheduleTimesScreen(
 
 // ---------------------------------------------------------------- 时间线模型
 
-/** 时间线上的一块。时长决定它在时间线上的位置:整条线锚在第一节的开始时刻,改一块的时长,后面的块整体后移。 */
-private data class TimeBlock(val isBreak: Boolean, val minutes: Int)
+/** 时间线上的一块。时长决定它在时间线上的位置(整条线锚在第一节课的开始时刻),
+ *  [number] 是这一节的**节次号**(跟着数据走,与它在时间线上的先后无关)。 */
+private data class TimeBlock(val isBreak: Boolean, val minutes: Int, val number: Int = 0)
 
 private data class Timeline(val anchor: Int, val blocks: List<TimeBlock>) {
     /** 每块的绝对起止(时长为前缀和)。[Span.classNumber] 是「第几节」,课间取它前面那节的序号。 */
@@ -395,7 +396,8 @@ private data class Timeline(val anchor: Int, val blocks: List<TimeBlock>) {
     }
 
     fun toPeriods(): List<Schedule.Period> =
-        spans().filter { !it.block.isBreak }.map { Schedule.Period(it.start, it.end) }
+        spans().filter { !it.block.isBreak }
+            .map { Schedule.Period(it.start, it.end, it.block.number) }
 }
 
 private data class Span(
@@ -429,7 +431,7 @@ private fun periodsToTimeline(periods: List<Schedule.Period>): Timeline {
     if (periods.isEmpty()) return Timeline(DEFAULT_START, listOf(TimeBlock(false, DEFAULT_CLASS_MINUTES)))
     val blocks = ArrayList<TimeBlock>(periods.size * 2)
     periods.forEachIndexed { i, p ->
-        blocks += TimeBlock(false, (p.end - p.start).coerceAtLeast(MIN_BLOCK_MINUTES))
+        blocks += TimeBlock(false, (p.end - p.start).coerceAtLeast(MIN_BLOCK_MINUTES), p.number)
         val next = periods.getOrNull(i + 1) ?: return@forEachIndexed
         val gap = next.start - p.end
         if (gap > 0) blocks += TimeBlock(true, gap)
@@ -513,7 +515,8 @@ private fun ClassBlock(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "第 ${span.classNumber} 节",
+                    // 显示节次号(来自数据);新加的行还没号,先用它在时间线上的序位顶上
+                    text = "第 ${span.block.number.takeIf { it >= 1 } ?: span.classNumber} 节",
                     style = YohakuType.courseName,
                     color = colors.neutral10,
                     modifier = Modifier.weight(1f),

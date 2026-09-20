@@ -138,9 +138,10 @@ fun CourseFormScreen(
                 customTimeEnd = Schedule.clockText(c.customEndMinute ?: 0)
             } else {
                 timeMode = 0
-                val max = periods.size.coerceAtLeast(1)
-                periodStart = c.startPeriod.coerceIn(1, max)
-                periodEnd = c.endPeriod.coerceIn(periodStart, max)
+                // 节次号可能不连续(比如把午间那节删掉了),按表里真实存在的号来选
+                val numbers = periods.map { it.number }
+                periodStart = if (c.startPeriod in numbers) c.startPeriod else numbers.firstOrNull() ?: 1
+                periodEnd = if (c.endPeriod in numbers && c.endPeriod >= periodStart) c.endPeriod else periodStart
                 pickingEnd = false
             }
         }
@@ -218,12 +219,12 @@ fun CourseFormScreen(
             val pinnedStart = if (sameSection) {
                 editing?.customStartMinute
             } else {
-                periods.getOrNull(periodStart - 1)?.start
+                Schedule.periodOf(periods, periodStart)?.start
             }
             val pinnedEnd = if (sameSection) {
                 editing?.customEndMinute
             } else {
-                periods.getOrNull(periodEnd - 1)?.end
+                Schedule.periodOf(periods, periodEnd)?.end
             }
             val course = Course(
                 id = editing?.id ?: UUID.randomUUID().toString(),
@@ -336,8 +337,9 @@ fun CourseFormScreen(
             Spacer(modifier = Modifier.height(10.dp))
             if (timeMode == 0) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    periods.indices.forEach { i ->
-                        val n = i + 1
+                    // 选项用**节次号**(数据里的),不是行序位:教务第 8 节可能排在第 5 行上
+                    periods.forEach { period ->
+                        val n = period.number
                         YohakuChip(
                             text = "$n",
                             selected = n in periodStart..periodEnd,
