@@ -390,12 +390,14 @@ private fun WeekGrid(
                             Text(
                                 text = "${idx + 1}",
                                 style = YohakuType.gridGutter,
-                                color = colors.neutral6,
+                                color = colors.neutral8,
                             )
                             Text(
                                 text = Schedule.clockText(period.start),
+                                // 这一列是「现在是第几节、几点」的唯一参照,必须看得清:
+                                // 之前用 neutral5(最淡那一档)+8sp,基本读不出来,等于没有时间轴
                                 style = YohakuType.gridGutterTime,
-                                color = colors.neutral5,
+                                color = colors.neutral7,
                             )
                         }
                     }
@@ -421,19 +423,31 @@ private fun WeekGrid(
                     }
                 }
 
-                // 当前时间线:只画在「今天」那一列
+                // 当前时间线:只画在「今天」那一列。
+                // 必须带标签 —— 光一条横线没人知道那是什么,之前就被当成「莫名多出来的小横条」。
                 if (showNowLine && today in 1..7) {
                     Schedule.fractionalRow(nowMinute, periods)?.let { row ->
+                        val lineX = YohakuDimens.gridPadding + gutter + colW * (today - 1)
+                        val lineY = rowH * row
                         Box(
                             modifier = Modifier
-                                .offset(
-                                    x = YohakuDimens.gridPadding + gutter + colW * (today - 1),
-                                    y = rowH * row,
-                                )
+                                .offset(x = lineX, y = lineY)
                                 .width(colW)
                                 .height(1.5.dp)
                                 .background(colors.accent),
                         )
+                        Box(
+                            modifier = Modifier
+                                .offset(x = lineX, y = (lineY - 12.dp).coerceAtLeast(0.dp))
+                                .background(colors.paper)
+                                .padding(horizontal = 3.dp),
+                        ) {
+                            Text(
+                                text = "现在",
+                                style = YohakuType.gridMeta,
+                                color = colors.accent,
+                            )
+                        }
                     }
                 }
             }

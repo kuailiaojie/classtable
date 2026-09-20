@@ -30,20 +30,43 @@ data class HolidayPlan(
 data class HolidayMakeup(val date: LocalDate, val source: LocalDate?)
 
 /**
- * 节假日数据源:公开接口、无需 key。抓取只生成预览,不写任何课表数据。
+ * 节假日数据源:公开接口、无需 key,但**按顺序试多个源**。
+ *
+ * 这类第三方服务会抽风、被限流或被拦(国内网络尤其),之前只挂一个源,一失败整个功能就不可用 ——
+ * 用户看到的就是「节假日服务暂时不可用」。现在依次尝试:带「法定/补班」类型的完整接口,
+ * 再退到开源节假日数据(holiday-cn)的两个 CDN;任何一家能用就够。抓取只生成预览,不写课表数据。
  */
 object HolidayClient {
-    private const val ENDPOINT = "https://timor.tech/api/holiday/year/%d/"
+    private val sources = listOf<(Int) -> String>(
+        { year -> "https://timor.tech/api/holiday/year/$year/" },
+        { year -> "https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/$year.json" },
+        { year -> "https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/$year.json" },
+    )
 
     /** 抓取某年的节假日与调休安排。 */
-    suspend fun fetch(year: Int): List<HolidayDay> = withContext(Dispatchers.IO) {
+    suspend fun fetch(year: Int): List<HolidayDay> {
         require(year in 2000..2100) { "年份需在 2000–2100 之间" }
-        val connection = URL(ENDPOINT.format(year)).openConnection() as HttpURLConnection
+        val failures = mutableListOf<String>()
+        for (build in sources) {
+            val url = build(year)
+            val days = try {
+                request(url, year)
+            } catch (e: Exception) {
+                failures += "${url.substringAfter("//").substringBefore("/")}(${e.message})"
+                continue
+            }
+            if (days.isNotEmpty()) return days
+        }
+        error("节假日服务暂时不可用,请稍后重试。已尝试 ${sources.size} 个来源:" + failures.joinToString("、"))
+    }
+
+    private suspend fun request(url: String, year: Int): List<HolidayDay> = withContext(Dispatchers.IO) {
+        val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 15_000
             connection.setRequestProperty("Accept", "application/json")
-            require(connection.responseCode == 200) { "节假日服务暂时不可用,请稍后重试" }
+            require(connection.responseCode == 200) { "HTTP ${connection.responseCode}" }
             val bytes = connection.inputStream.use { input ->
                 val out = ByteArrayOutputStream()
                 val buffer = ByteArray(8192)
@@ -55,22 +78,27 @@ object HolidayClient {
                 }
                 out.toByteArray()
             }
-            parse(bytes.toString(Charsets.UTF_8), year)
+            parseAny(bytes.toString(Charsets.UTF_8), year)
         } finally {
             connection.disconnect()
         }
     }
 
-    fun parse(body: String, year: Int): List<HolidayDay> {
+    /** 两种返回格式:timor(带法定/补班类型)与 holiday-cn(只有休/班)。按字段名分辨。 */
+    internal fun parseAny(body: String, year: Int): List<HolidayDay> =
+        if (body.contains("\"days\"")) parseHolidayCn(body, year) else parseTimor(body, year)
+
+    /** timor.tech:一年一个对象,wage 3 = 法定节假日 / 2 = 普通假日 / 1 = 上班。 */
+    fun parseTimor(body: String, year: Int): List<HolidayDay> {
         val root = JSONObject(body)
-        require(root.optInt("code", -1) == 0) { "节假日服务返回异常" }
-        val holidays = root.optJSONObject("holiday") ?: error("节假日数据缺失")
+        require(root.optInt("code", -1) == 0) { "返回异常" }
+        val holidays = root.optJSONObject("holiday") ?: error("数据缺失")
         val out = ArrayList<HolidayDay>()
         holidays.keys().forEach { key ->
             val entry = holidays.optJSONObject(key) ?: return@forEach
             val text = entry.optString("date").takeIf { it.isNotBlank() } ?: "$year-$key"
             val date = runCatching { LocalDate.parse(text) }.getOrNull() ?: return@forEach
-            require(date.year == year) { "节假日年份不匹配" }
+            require(date.year == year) { "年份不匹配" }
             out += HolidayDay(
                 date = date,
                 name = entry.optString("name").take(80).ifBlank { "调休" },
@@ -78,9 +106,37 @@ object HolidayClient {
                 wage = entry.optInt("wage", 2),
             )
         }
-        val result = out.sortedBy { it.date }
-        require(result.isNotEmpty()) { "$year 年节假日尚未公布" }
-        require(result.map { it.date }.distinct().size == result.size) { "节假日日期重复" }
+        return checked(out, year)
+    }
+
+    /**
+     * holiday-cn:`{"days":[{"name","date","isOffDay"}]}`。
+     *
+     * 它不区分「法定节假日」与「普通假日」,所以休息日一律按 wage=2 —— planHolidays 在拿不到
+     * wage>=3 时会退化成「每个假期补 1 天」的保守估计,补课天数可能少一点,人工在预览里能改。
+     */
+    fun parseHolidayCn(body: String, year: Int): List<HolidayDay> {
+        val days = JSONObject(body).optJSONArray("days") ?: error("数据缺失")
+        val out = ArrayList<HolidayDay>()
+        for (i in 0 until days.length()) {
+            val entry = days.optJSONObject(i) ?: continue
+            val date = runCatching { LocalDate.parse(entry.optString("date")) }.getOrNull() ?: continue
+            require(date.year == year) { "年份不匹配" }
+            val off = entry.optBoolean("isOffDay", false)
+            out += HolidayDay(
+                date = date,
+                name = entry.optString("name").take(80).ifBlank { "调休" },
+                isRest = off,
+                wage = if (off) 2 else 1,
+            )
+        }
+        return checked(out, year)
+    }
+
+    private fun checked(days: List<HolidayDay>, year: Int): List<HolidayDay> {
+        val result = days.sortedBy { it.date }
+        require(result.isNotEmpty()) { "$year 年数据为空" }
+        require(result.map { it.date }.distinct().size == result.size) { "日期重复" }
         return result
     }
 }

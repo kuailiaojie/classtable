@@ -272,6 +272,26 @@
         return "";
     }
 
+    /**
+     * 两个节次在**时间上**是否接得上。
+     *
+     * 节次号相邻 ≠ 时间上连续:删掉 12:00 那一节之后,上午最后一节(10:05–11:40)与下午第一节
+     * (14:00–15:35)的编号恰好接上了,只看编号会把它们并成一节(10:05–15:35)—— 表现就是
+     * 「某一节课莫名其妙变长了」。所以还要看时间:两节之间只隔一个课间才算连续,
+     * 隔了午休/晚休(这里按超过 60 分钟算)就不合并。
+     */
+    function isTimeAdjacent(prevEndSection, nextStartSection) {
+        const slots = getPresetTimeSlots();
+        const prev = slots.find((s) => s.number === prevEndSection);
+        const next = slots.find((s) => s.number === nextStartSection);
+        if (!prev || !next) return true; // 表里查不到,退回原来的编号规则
+        const toMin = (t) => {
+            const parts = String(t).split(":");
+            return Number(parts[0]) * 60 + Number(parts[1]);
+        };
+        return toMin(next.startTime) - toMin(prev.endTime) <= 60;
+    }
+
     // 合并同一课程的连续节次
     function mergeContiguousSections(courses) {
         const list = (courses || [])
@@ -296,7 +316,9 @@
                 && prev.position === item.position
                 && prev.day === item.day
                 && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
-            const isContiguous = sameCourse && prev.endSection + 1 === item.startSection;
+            const isContiguous = sameCourse
+                && prev.endSection + 1 === item.startSection
+                && isTimeAdjacent(prev.endSection, item.startSection);
 
             if (isContiguous) {
                 prev.endSection = Math.max(prev.endSection, item.endSection);

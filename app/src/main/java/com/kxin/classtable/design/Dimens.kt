@@ -29,7 +29,7 @@ object YohakuDimens {
     /** 周视图网格水平内边距(七天同屏,比 screenPadding 窄,把宽度让给列) */
     val gridPadding = 12.dp
     /** 周视图左侧节次留白列宽(只放节号与起始时间) */
-    val gridGutterWidth = 28.dp
+    val gridGutterWidth = 36.dp
     /** 周视图课程块之间的缝隙 */
     val gridCellGap = 2.dp
     /** 周视图课程块内边距 */
