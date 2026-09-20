@@ -6,7 +6,9 @@ import android.net.ConnectivityManager
 import android.net.Network
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.kxin.classtable.notify.ReminderSelfHealWorker
@@ -16,6 +18,7 @@ import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.FcmTokens
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
+import com.kxin.classtable.data.UpdateCheckWorker
 import com.kxin.classtable.notify.NotificationScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +69,19 @@ class ClasstableApp : Application() {
             "reminder_self_heal",
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<ReminderSelfHealWorker>(12, java.util.concurrent.TimeUnit.HOURS).build(),
+        )
+
+        // 自动检查更新:每天一次(仅在联网时跑);开关与节流在 UpdateRepository 里判断。
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "update_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<UpdateCheckWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build(),
+                )
+                .build(),
         )
 
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌

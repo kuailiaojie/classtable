@@ -8,13 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,6 +35,8 @@ import androidx.navigation.navArgument
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
@@ -110,15 +109,20 @@ fun ClasstableRoot(
                 !RomHelper.ignoreBatteryOptimizations(context) ||
                 RomHelper.detect() != RomType.STOCK
         )
-        // 通知点击 → 直达课程详情(仅处理进程首次带参启动,避免重组合重复导航)
+        // 通知点击 → 直达课程详情 / 检查更新页(仅处理进程首次带参启动,避免重组合重复导航)
         var handledDeepLink by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) {
-            val courseId = runCatching {
-                context.findActivity()?.intent?.getStringExtra(Notifier.EXTRA_COURSE_ID)
-            }.getOrNull()
+            val intent = context.findActivity()?.intent
+            val courseId = runCatching { intent?.getStringExtra(Notifier.EXTRA_COURSE_ID) }.getOrNull()
+            val openUpdate = runCatching {
+                intent?.getBooleanExtra(Notifier.EXTRA_OPEN_UPDATE, false) ?: false
+            }.getOrDefault(false)
             if (!handledDeepLink && !courseId.isNullOrBlank()) {
                 handledDeepLink = true
                 nav.navigate("course_detail/$courseId")
+            } else if (!handledDeepLink && openUpdate) {
+                handledDeepLink = true
+                nav.navigate("update")
             }
         }
         // 纸面背景铺满全屏(含状态栏/导航栏区域),内容区再做系统栏内边距
@@ -173,44 +177,35 @@ fun ClasstableRoot(
                 }
             }
             (updateState as? UpdateState.Available)?.let { available ->
-                AlertDialog(
+                YohakuDialog(
                     onDismissRequest = { updateViewModel.dismiss() },
-                    title = {
-                        Text(
-                            text = "发现新版本 v${available.info.latestVersion}",
-                            style = YohakuType.title20,
+                    title = "发现新版本 v${available.info.latestVersion}",
+                    actions = {
+                        YohakuDialogAction(
+                            text = "忽略此版本",
+                            onClick = { updateViewModel.ignoreVersion(available.info.latestVersion) },
                         )
-                    },
-                    text = {
-                        Text(
-                            text = "当前版本 v${updateViewModel.currentVersion},是否前往更新?",
-                            style = YohakuType.copy14,
-                        )
-                    },
-                    confirmButton = {
-                        Text(
-                            text = "查看更新",
-                            style = YohakuType.copy14,
-                            color = colors.accent,
-                            modifier = Modifier
-                                .clickable {
-                                    updateViewModel.dismiss()
-                                    nav.navigate("update")
-                                }
-                                .padding(8.dp),
-                        )
-                    },
-                    dismissButton = {
-                        Text(
+                        YohakuDialogAction(
                             text = "以后再说",
-                            style = YohakuType.copy14,
-                            color = colors.neutral7,
-                            modifier = Modifier
-                                .clickable { updateViewModel.dismiss() }
-                                .padding(8.dp),
+                            onClick = { updateViewModel.dismiss() },
+                        )
+                        YohakuDialogAction(
+                            text = "查看更新",
+                            accent = true,
+                            onClick = {
+                                updateViewModel.dismiss()
+                                nav.navigate("update")
+                            },
                         )
                     },
-                )
+                ) {
+                    Text(
+                        text = "当前版本 v${updateViewModel.currentVersion}。" +
+                            "「忽略此版本」后不再提示,可在设置里手动检查。",
+                        style = YohakuType.copy14,
+                        color = LocalYohakuColors.current.neutral9,
+                    )
+                }
             }
         }
     }

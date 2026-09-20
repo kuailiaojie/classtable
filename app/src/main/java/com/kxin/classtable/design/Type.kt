@@ -53,5 +53,21 @@ object YohakuType {
     val gridDate = TextStyle(fontFamily = YohakuFonts.Mono, fontWeight = FontWeight.Normal, fontSize = 9.sp, lineHeight = 12.sp)
 }
 
-/** 供 Material3 底层组件使用;可见外观全部由 YohakuType 控制。 */
-val YohakuMaterialTypography = Typography()
+/**
+ * 交给 Material3 的字阶映射:让**仍在使用 Material 组件的槽位**也落在 Yohaku 字阶上。
+ * 之前这里是空的 `Typography()`,于是对话框标题是 24sp Roboto、正文是 14sp Roboto ——
+ * 明明每个 `Text` 都传了 YohakuType,容器内部槽位却是 Material 的。
+ */
+val YohakuMaterialTypography = Typography(
+    headlineSmall = YohakuType.title24,
+    headlineMedium = YohakuType.title28,
+    titleLarge = YohakuType.title20,
+    titleMedium = YohakuType.copy16,
+    titleSmall = YohakuType.copy14,
+    bodyLarge = YohakuType.copy16,
+    bodyMedium = YohakuType.copy14,
+    bodySmall = YohakuType.label12,
+    labelLarge = YohakuType.copy13,
+    labelMedium = YohakuType.label12,
+    labelSmall = YohakuType.label12,
+)

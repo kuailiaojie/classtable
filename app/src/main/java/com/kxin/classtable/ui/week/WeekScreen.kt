@@ -14,19 +14,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +44,8 @@ import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuBottomNav
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
@@ -57,6 +59,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -72,10 +75,11 @@ class WeekViewModel @Inject constructor(
 }
 
 /**
- * 周视图:一屏看全一周七天,不再左右翻页。
+ * 周视图:一屏看全一周七天,左右滑动翻周。
  *
- * 横向 = 周一…周日七列,纵向 = 按节次等高的行;行高由可用高度除以节数算出(不低于下限,
- * 放不下时整格纵向滚动),所以「七天 + 全部节次」始终同屏。
+ * 每一页 = 一周:横向七列(周一~周日,表头带日号、今天高亮),纵向按节次等高等分,
+ * 所以「七天 + 全部节次」始终同屏。翻周直接横滑(不再有 ‹ › 按钮),「今天」跳回真实当前周。
+ * 行高由可用高度除以节数算出(不低于下限,放不下时整格纵向滚动)。
  * 课程块绝对定位横穿其节次区间(自定义时间课程按分钟比例精确定位);同一时段有多门课时
  * 按车道并排。左侧只留 28dp 放节号与起始时间,把宽度还给列。
  * 填充色是每门课的淡彩(便于扫读),accent 仍然只表示「此刻正在上」。
@@ -89,17 +93,16 @@ fun WeekScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
-    // 周次实时推算(以开学日所在周的周一为锚),不再依赖持久化旧值;
-    // ‹/› 只做临时偏移浏览,「今天」归零。跨天/回前台会自动重算。
+    // 周次实时推算(以开学日所在周的周一为锚),不再依赖持久化旧值;跨天/回前台会自动重算。
     val realWeek = Schedule.currentWeek(settings.semesterStartDay, weekCount)
-    var weekOffset by rememberSaveable { mutableIntStateOf(0) }
-    val week = (realWeek + weekOffset).coerceIn(1, weekCount)
-    val today = Schedule.todayWeekday()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
-    val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
-    val dayNumbers = remember(settings.semesterStartDay, week) {
-        Schedule.weekDayNumbers(settings.semesterStartDay, week)
+    val today = Schedule.todayWeekday()
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = (realWeek - 1).coerceIn(0, weekCount - 1)) {
+        weekCount
     }
+    val week = pagerState.currentPage + 1
+    val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
 
@@ -112,48 +115,32 @@ fun WeekScreen(
         }
     }
     val nowMinute = ((nowMillis / 60_000).toInt() % 1440)
-    val showNowLine = weekOffset == 0
 
     detailCourse?.let { course ->
-        AlertDialog(
+        YohakuDialog(
             onDismissRequest = { detailCourse = null },
-            title = { Text(course.name, style = YohakuType.title20) },
-            text = {
-                Column {
-                    InfoLine(
-                        label = "时间",
-                        value = "${Course.weekdaysText(course)} · " +
-                            Schedule.courseTimeText(course, periods),
-                    )
-                    if (course.location.isNotEmpty()) InfoLine(label = "地点", value = course.location)
-                    if (course.teacher.isNotEmpty()) InfoLine(label = "教师", value = course.teacher)
-                    InfoLine(label = "周次", value = weekSummary(course))
-                }
-            },
-            confirmButton = {
-                Text(
+            title = course.name,
+            actions = {
+                YohakuDialogAction(text = "关闭", onClick = { detailCourse = null })
+                YohakuDialogAction(
                     text = "查看详情",
-                    style = YohakuType.copy14,
-                    color = colors.accent,
-                    modifier = Modifier
-                        .clickable {
-                            detailCourse = null
-                            nav.navigate("course_detail/${course.id}")
-                        }
-                        .padding(8.dp),
+                    accent = true,
+                    onClick = {
+                        detailCourse = null
+                        nav.navigate("course_detail/${course.id}")
+                    },
                 )
             },
-            dismissButton = {
-                Text(
-                    text = "关闭",
-                    style = YohakuType.copy14,
-                    color = colors.neutral7,
-                    modifier = Modifier
-                        .clickable { detailCourse = null }
-                        .padding(8.dp),
-                )
-            },
-        )
+        ) {
+            InfoLine(
+                label = "时间",
+                value = "${Course.weekdaysText(course)} · " +
+                    Schedule.courseTimeText(course, periods),
+            )
+            if (course.location.isNotEmpty()) InfoLine(label = "地点", value = course.location)
+            if (course.teacher.isNotEmpty()) InfoLine(label = "教师", value = course.teacher)
+            InfoLine(label = "周次", value = weekSummary(course))
+        }
     }
 
     if (showAdd) {
@@ -171,7 +158,7 @@ fun WeekScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        // 顶部:今天日期星期 + 周信息 + 周导航 + 添加
+        // 顶部:今天日期星期 + 周信息 + 今天(翻周改用左右滑动)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -193,28 +180,12 @@ fun WeekScreen(
                 )
             }
             Text(
-                text = "‹",
-                style = YohakuType.title24,
-                color = if (week > 1) colors.neutral9 else colors.neutral5,
-                modifier = Modifier
-                    .clickable(enabled = week > 1) { weekOffset -= 1 }
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-            Text(
-                text = "›",
-                style = YohakuType.title24,
-                color = if (week < weekCount) colors.neutral9 else colors.neutral5,
-                modifier = Modifier
-                    .clickable(enabled = week < weekCount) { weekOffset += 1 }
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-            Text(
                 text = "今天",
                 style = YohakuType.copy13,
                 color = colors.neutral7,
                 modifier = Modifier
-                    .clickable { weekOffset = 0 }
-                    .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                    .clickable { scope.launch { pagerState.animateScrollToPage(realWeek - 1) } }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             )
             Text(
                 text = "添加",
@@ -226,20 +197,30 @@ fun WeekScreen(
             )
         }
 
-        // 表头:星期 + 日号(与网格列严格对齐)
-        WeekdayHeader(dayNumbers = dayNumbers, today = today)
-
-        // 网格:七列 × 全部节次,一屏看完
-        WeekGrid(
-            courses = courses,
-            periods = periods,
-            week = week,
-            today = today,
-            nowMinute = nowMinute,
-            showNowLine = showNowLine,
-            onCourseClick = { detailCourse = it },
+        // 一周一页:左右滑动翻周
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.weight(1f),
-        )
+            beyondViewportPageCount = 1,
+        ) { page ->
+            val pageWeek = page + 1
+            val dayNumbers = remember(settings.semesterStartDay, pageWeek) {
+                Schedule.weekDayNumbers(settings.semesterStartDay, pageWeek)
+            }
+            Column(modifier = Modifier.fillMaxSize()) {
+                WeekdayHeader(dayNumbers = dayNumbers, today = today)
+                WeekGrid(
+                    courses = courses,
+                    periods = periods,
+                    week = pageWeek,
+                    today = today,
+                    nowMinute = nowMinute,
+                    showNowLine = pageWeek == realWeek,
+                    onCourseClick = { detailCourse = it },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
 
         YohakuBottomNav(current = "week", onNavigate = { nav.navigateToTab(it) })
     }
@@ -503,48 +484,35 @@ private fun AddDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
         Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
         Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
     )
-    AlertDialog(
+    YohakuDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加", style = YohakuType.title20) },
-        text = {
-            Column {
-                options.forEachIndexed { index, (title, desc, route) ->
-                    if (index > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(colors.neutral3),
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(route) }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = title, style = YohakuType.copy15, color = colors.neutral10)
-                            Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
-                        }
-                        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
-                    }
-                }
+        title = "添加",
+        actions = { YohakuDialogAction(text = "取消", onClick = onDismiss) },
+    ) {
+        options.forEachIndexed { index, (label, desc, route) ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(colors.neutral3),
+                )
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            Text(
-                text = "取消",
-                style = YohakuType.copy14,
-                color = colors.neutral7,
+            Row(
                 modifier = Modifier
-                    .clickable { onDismiss() }
-                    .padding(8.dp),
-            )
-        },
-    )
+                    .fillMaxWidth()
+                    .clickable { onPick(route) }
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = label, style = YohakuType.copy15, color = colors.neutral10)
+                    Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+                }
+                Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+            }
+        }
+    }
 }
 
 @Composable

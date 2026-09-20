@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.18 (2026-09-19)
+
+### 组件去 Material 化
+- **新增 `YohakuDialog`**(foundation `Dialog` + 纸面自绘:neutral2 底、1dp neutral5 细边框、radiusSheet 12dp、无阴影、项目风格的纯文字动作),**8 处 `AlertDialog` 全部迁入**:启动更新提示、周视图课程速览与「添加」弹层、设置页 AI 密钥 / 课程提醒 / 桌面小组件 / 自动检查更新、导入页选适配器与适配器详情。
+- **主题层补齐映射(根因)**:`Theme.kt` 现在把 `Typography` 映射到 Yohaku 字阶(此前是空 `Typography()`,对话框标题实际按 Material 的 24sp Roboto 渲染)、`Shapes` 收敛到 4/6/8/12dp(此前最大 28dp),并把 Material 组件会消费的颜色槽(`surfaceContainer*` / `onSurfaceVariant` / `secondary` 等)全部指到中性色 —— **弹窗底色那层紫调 baseline 消失了**。
+- **新增 `YohakuIndication`**:按下时整块淡淡压深,替代 Material 涟漪(此前全项目每个 `clickable` 都带 M3 涟漪)。
+- `YohakuChip` 改为 `Box + selectable` 自绘(去掉 Surface 自带涟漪,同时让读屏能报出「已选中」);`YohakuButton` 显式覆盖内边距、最小高度与 elevation。
+- **新增 `YohakuDatePicker`** 自绘月历,替换学期页的 Material `DatePicker` + 两个 `TextButton`(全项目最「Material」的一面)。
+
+### 自动检查更新
+- 设置页新增「自动检查更新」开关(默认开启),行内显示是否已忽略某版本。
+- 新增后台任务(WorkManager 每天一次、仅联网时执行)检查版本;发现新版本发一条通知(新渠道「应用更新」),点击直达检查更新页 —— **只提示,不自动下载**。
+- 启动提示新增「忽略此版本」:同一版本不再主动打扰(此前 24h 后仍会再弹)。
+- 检查节流与开关收拢进设置(原先记在 `filesDir/update/meta.json`)。
+
+### 周视图滑动翻周
+- 周视图改为**按周分页**:左右滑动即翻周,顶部 `‹` `›` 按钮移除;「今天」跳回真实当前周。当前时间线与今天列底色只在真实当前周出现。
+
+### 未完成(下一版继续)
+- **通知模块重写**(照 [SleepDown-Schedule](https://github.com/xiaomanjun233/SleepDown-Schedule) 的提醒架构:排程签名、滚动窗口自续期、实时活动重试补发、通知操作按钮、明日课程预告)。
+- 适配脚本的原生对话框(`ImportBridge` 内 3 处 `android.app.AlertDialog`)改为 Compose 纸面弹窗。
+
 ## 0.1.17 (2026-09-19)
 
 ### 周视图重做:一屏看全一周七天

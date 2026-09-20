@@ -21,7 +21,11 @@ object Notifier {
     const val CHANNEL_REMINDER = "course_reminder"
     const val CHANNEL_LIVE = "live_updates"
     const val CHANNEL_COURSE_LIVE = "course_live"
+    const val CHANNEL_APP_UPDATE = "app_update"
     const val EXTRA_COURSE_ID = "notify_course_id"
+    const val EXTRA_OPEN_UPDATE = "notify_open_update"
+    private const val NOTIFY_ID_UPDATE = 99001
+    private const val REQ_UPDATE_INTENT = 99002
 
     private fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -56,6 +60,17 @@ object Notifier {
                         NotificationManager.IMPORTANCE_HIGH,
                     ).apply {
                         description = "课前倒计时与上课状态(Android 16 Live Updates)"
+                    },
+                )
+            }
+            if (nm.getNotificationChannel(CHANNEL_APP_UPDATE) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_APP_UPDATE,
+                        "应用更新",
+                        NotificationManager.IMPORTANCE_DEFAULT,
+                    ).apply {
+                        description = "后台检查到新版本时的提示"
                     },
                 )
             }
@@ -149,6 +164,41 @@ object Notifier {
     private fun hasPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 ||
             NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+    /**
+     * 后台检查到新版本:一条可点进「检查更新」页的通知。
+     * 同一 id 覆盖,不会堆积;忽略某版本后由调用方不再发。
+     */
+    fun showUpdateAvailable(context: Context, version: String, notes: String) {
+        if (!hasPermission(context)) return
+        ensureChannels(context)
+
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            REQ_UPDATE_INTENT,
+            Intent(context, MainActivity::class.java).apply {
+                putExtra(EXTRA_OPEN_UPDATE, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val body = notes.trim().ifBlank { "点此查看并下载" }
+        val notification = NotificationCompat.Builder(context, CHANNEL_APP_UPDATE)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle("发现新版本 v$version")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .build()
+
+        runCatching {
+            NotificationManagerCompat.from(context).notify(NOTIFY_ID_UPDATE, notification)
+        }
+    }
 
     /** 进度轨最大刻度(与 ProgressStyle.Segment 长度同基准)。 */
     const val LIVE_PROGRESS_MAX = 1000

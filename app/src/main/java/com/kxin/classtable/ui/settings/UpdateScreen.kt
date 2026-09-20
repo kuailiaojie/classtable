@@ -89,13 +89,21 @@ class UpdateViewModel @Inject constructor(
             .onFailure { _state.value = UpdateState.Failed(it.message ?: "下载失败") }
     }
 
-    /** 启动时静默检查(24h 节流);有新版才把状态置为 Available 以弹出提示。 */
+    /** 启动时静默检查:受「自动检查更新」开关与 24h 节流约束;已忽略的版本不再打扰。 */
     fun autoCheck() = viewModelScope.launch {
         if (!repository.shouldAutoCheck()) return@launch
         repository.markChecked()
         repository.check().onSuccess { info ->
-            if (info.isNewer) _state.value = UpdateState.Available(info)
+            if (info.isNewer && info.latestVersion != repository.dismissedVersion()) {
+                _state.value = UpdateState.Available(info)
+            }
         }
+    }
+
+    /** 忽略该版本:不再主动提示(手动检查仍会显示)。 */
+    fun ignoreVersion(version: String) = viewModelScope.launch {
+        repository.ignoreVersion(version)
+        _state.value = UpdateState.Idle
     }
 
     fun dismiss() {

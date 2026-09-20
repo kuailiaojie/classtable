@@ -35,6 +35,9 @@ class SettingsRepository @Inject constructor(
     private val KEY_AI_MODEL = stringPreferencesKey("ai_model")
     private val KEY_NOTIFY_ENABLED = booleanPreferencesKey("notify_enabled")
     private val KEY_NOTIFY_LEAD = intPreferencesKey("notify_lead_minutes")
+    private val KEY_AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
+    private val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
+    private val KEY_DISMISSED_VERSION = stringPreferencesKey("dismissed_version")
     private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
     /** 已进过 ROM「应用启动管理」页:引导标记,仅本机;荣耀无公开 API 可查真实自启动状态,访问过即视为已配置。 */
     private val KEY_AUTO_START_VISITED = booleanPreferencesKey("autostart_visited")
@@ -59,6 +62,9 @@ class SettingsRepository @Inject constructor(
             aiModel = p[KEY_AI_MODEL] ?: "",
             notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
             notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
+            autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
+            lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
+            dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
             onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
         )
     }
@@ -123,6 +129,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setNotificationsEnabled(enabled: Boolean) = editSettings { it[KEY_NOTIFY_ENABLED] = enabled }
 
     suspend fun setNotifyLeadMinutes(minutes: Int) = editSettings { it[KEY_NOTIFY_LEAD] = minutes.coerceIn(0, 180) }
+
+    suspend fun setAutoCheckUpdate(enabled: Boolean) = editSettings { it[KEY_AUTO_CHECK_UPDATE] = enabled }
+
+    /** 记录一次检查(节流用);仅本机,不触发同步时间戳。 */
+    suspend fun markUpdateChecked(at: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { it[KEY_LAST_UPDATE_CHECK] = at }
+    }
+
+    /** 忽略某版本:该版本不再主动提示;仅本机。 */
+    suspend fun setDismissedVersion(version: String) {
+        context.settingsDataStore.edit { it[KEY_DISMISSED_VERSION] = version }
+    }
 
     /** 首次启动权限引导完成/跳过标记:仅本机,不同步。 */
     suspend fun setOnboardingDone() {

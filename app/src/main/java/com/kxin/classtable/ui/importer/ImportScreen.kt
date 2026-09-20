@@ -42,7 +42,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -70,6 +69,8 @@ import com.kxin.classtable.data.importer.SchoolEntry
 import com.kxin.classtable.data.importer.WarehouseIndex
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
@@ -157,10 +158,13 @@ fun ImportScreen(
     // 弹窗 1:选适配器(一校多适配器 / 通用教务都从这里进入)
     pendingSchool?.let { school ->
         val options = adapters.filter { it.folder == school.folder }
-        AlertDialog(
+        YohakuDialog(
             onDismissRequest = { pendingSchool = null },
-            title = { Text(school.name, style = YohakuType.title20) },
-            text = {
+            title = school.name,
+            actions = {
+                YohakuDialogAction(text = "取消", onClick = { pendingSchool = null })
+            },
+            content = {
                 Column {
                     Text(
                         text = if (options.size > 1) "该校有 ${options.size} 个导入方案,请选择" else "选择导入方案",
@@ -212,17 +216,32 @@ fun ImportScreen(
                     }
                 }
             },
-            confirmButton = {},
         )
     }
 
     // 弹窗 2:适配器详情(描述/作者/提示),通用教务需在此填教务网址,再确定导入
     detailAdapter?.let { adapter ->
         val urlRequired = adapter.needsManualUrl
-        AlertDialog(
+        YohakuDialog(
             onDismissRequest = { detailAdapter = null },
-            title = { Text(adapter.adapterName, style = YohakuType.title20) },
-            text = {
+            title = adapter.adapterName,
+            actions = {
+                val normalizedUrl = normalizeImportUrl(customUrl)
+                val ok = !urlRequired || isValidImportUrl(normalizedUrl)
+                YohakuDialogAction(text = "取消", onClick = { detailAdapter = null })
+                YohakuDialogAction(
+                    text = "确定导入",
+                    accent = true,
+                    enabled = ok,
+                    onClick = {
+                        if (urlRequired) customUrl = normalizedUrl
+                        selectedAdapter = adapter
+                        detailAdapter = null
+                        step = 2
+                    },
+                )
+            },
+            content = {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -270,33 +289,6 @@ fun ImportScreen(
                         )
                     }
                 }
-            },
-            confirmButton = {
-                val normalizedUrl = normalizeImportUrl(customUrl)
-                val ok = !urlRequired || isValidImportUrl(normalizedUrl)
-                Text(
-                    text = "确定导入",
-                    style = YohakuType.copy14,
-                    color = if (ok) colors.accent else colors.neutral5,
-                    modifier = Modifier
-                        .clickable(enabled = ok) {
-                            if (urlRequired) customUrl = normalizedUrl
-                            selectedAdapter = adapter
-                            detailAdapter = null
-                            step = 2
-                        }
-                        .padding(8.dp),
-                )
-            },
-            dismissButton = {
-                Text(
-                    text = "取消",
-                    style = YohakuType.copy14,
-                    color = colors.neutral7,
-                    modifier = Modifier
-                        .clickable { detailAdapter = null }
-                        .padding(8.dp),
-                )
             },
         )
     }

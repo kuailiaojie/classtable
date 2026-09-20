@@ -1,5 +1,7 @@
 package com.kxin.classtable.design
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,9 +24,18 @@ fun YohakuButton(
     val colors = LocalYohakuColors.current
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.defaultMinSize(minHeight = 44.dp),
         enabled = enabled,
         shape = RoundedCornerShape(YohakuDimens.radiusControl),
+        // 显式覆盖 Material 残留:内边距 24dp/最小高度 40dp/默认 elevation/涟漪
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            disabledElevation = 0.dp,
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = colors.accent,
             contentColor = Color.White,

@@ -25,6 +25,12 @@ data class AppSettings(
     val notificationsEnabled: Boolean = true,
     /** 提前多少分钟发通知(0 = 准点)。 */
     val notifyLeadMinutes: Int = 10,
+    /** 是否在后台自动检查更新(每天一次,有新版发通知)。 */
+    val autoCheckUpdate: Boolean = true,
+    /** 上次自动检查更新的时间戳(0 = 从未检查)。 */
+    val lastUpdateCheckAt: Long = 0L,
+    /** 已忽略的版本号:该版本不再主动提示,手动检查仍会显示。 */
+    val dismissedVersion: String = "",
     /** 首次启动权限引导是否已完成(完成/跳过后再也不弹,可随时在设置页重进)。 */
     val onboardingDone: Boolean = false,
 ) {

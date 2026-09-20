@@ -12,12 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +32,7 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
+import com.kxin.classtable.design.YohakuDatePicker
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
@@ -74,7 +70,6 @@ class SemesterViewModel @Inject constructor(
 }
 
 /** 学期周次子页:开学日期 + 学期周数,自动推导当前周。 */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SemesterScreen(
     nav: NavHostController,
@@ -102,31 +97,18 @@ fun SemesterScreen(
     LaunchedEffect(saved) { if (saved) nav.popBackStack() }
 
     if (showPicker) {
-        val datePickerState = rememberDatePickerState(
-            // Material3 的 selectedDateMillis 是 UTC 零点;未设置时取「今日 UTC 零点」,
-            // 传当前瞬时会在 UTC+8 等时区把日期预选到前一天。
-            initialSelectedDateMillis = if (startDay > 0L) {
-                startDay * 86_400_000L
-            } else {
-                LocalDate.now().toEpochDay() * 86_400_000L
+        YohakuDatePicker(
+            initialEpochDay = if (startDay > 0L) startDay else null,
+            onPick = {
+                startDay = it
+                showPicker = false
             },
+            onClear = {
+                startDay = 0L
+                showPicker = false
+            },
+            onDismiss = { showPicker = false },
         )
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { startDay = it / 86_400_000L }
-                        showPicker = false
-                    },
-                ) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("取消") }
-            },
-        ) {
-            DatePicker(state = datePickerState)
-        }
     }
 
     val weekCountValue = weekCount.toIntOrNull() ?: 0

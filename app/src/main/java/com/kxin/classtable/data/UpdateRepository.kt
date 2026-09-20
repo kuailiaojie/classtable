@@ -29,10 +29,10 @@ data class UpdateInfo(
 @Singleton
 class UpdateRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val settings: SettingsRepository,
 ) {
     private val proxyBase: String = BuildConfig.FIREBASE_PROXY_URL.trimEnd('/')
     private val versionUrl: String get() = "$proxyBase/version"
-    private val metaFile: File get() = File(context.filesDir, "update/meta.json")
 
     /** 查询最新版本并判断是否有更新。 */
     suspend fun check(): Result<UpdateInfo> = withContext(Dispatchers.IO) {
@@ -95,24 +95,22 @@ class UpdateRepository @Inject constructor(
             }
         }
 
-    /** 距上次自动检查是否已超过 24 小时。 */
-    suspend fun shouldAutoCheck(): Boolean = withContext(Dispatchers.IO) {
-        val last = runCatching {
-            if (metaFile.isFile) JSONObject(metaFile.readText(Charsets.UTF_8)).optLong("lastCheckAt") else 0L
-        }.getOrDefault(0L)
-        System.currentTimeMillis() - last > 24L * 60 * 60 * 1000
+    /**
+     * 是否该做一次自动检查:开关打开 + 距上次超过 [CHECK_INTERVAL_MS]。
+     * 节流与开关都落在设置里(原来记在 filesDir/update/meta.json,与其余配置分散)。
+     */
+    suspend fun shouldAutoCheck(): Boolean {
+        val s = settings.currentSettings()
+        if (!s.autoCheckUpdate) return false
+        return System.currentTimeMillis() - s.lastUpdateCheckAt > CHECK_INTERVAL_MS
     }
 
-    suspend fun markChecked() = withContext(Dispatchers.IO) {
-        runCatching {
-            metaFile.parentFile?.mkdirs()
-            metaFile.writeText(
-                JSONObject().put("lastCheckAt", System.currentTimeMillis()).toString(),
-                Charsets.UTF_8,
-            )
-        }
-        Unit
-    }
+    suspend fun markChecked() = settings.markUpdateChecked()
+
+    /** 用户已忽略的版本(该版本不再主动提示)。 */
+    suspend fun dismissedVersion(): String = settings.currentSettings().dismissedVersion
+
+    suspend fun ignoreVersion(version: String) = settings.setDismissedVersion(version)
 
     private fun getJson(url: String): JSONObject {
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -153,4 +151,8 @@ class UpdateRepository @Inject constructor(
         .removePrefix("v")
         .split('.')
         .map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
+
+    private companion object {
+        const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
+    }
 }
