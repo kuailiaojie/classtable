@@ -83,23 +83,30 @@
         return list;
     }
 
-    // 节次编号与 TimeSlots 编号映射
-    // 节次序号 → 作息时间段号。
-    // 学校实际作息里没有 12:00 那一节(原时间段 3),所以整节删掉、其后的时间段顺次上移一位;
-    // 原始序号 7 原本指向的就是这节,改为返回 0,由调用方按「非法节次」丢弃它带的课程。
-    // 注意不能用 `mapping[section] || section` 兜底 —— 0 是假值,会被兜回 7。
-    function mapSectionToTimeSlotNumber(section) {
-        const mapping = {
-            1: 1,
-            2: 2,
-            3: 3,
-            4: 4,
-            5: 6,
-            6: 7,
-            7: 0,
-            8: 5
-        };
-        return Object.prototype.hasOwnProperty.call(mapping, section) ? mapping[section] : section;
+    /**
+     * 课表页的「行号」→ 作息表里「按时间排序」的节次号。
+     *
+     * 学校公布的作息是六个大节(每两小节合成一节):
+     *   大节1 08:00–09:35 / 大节2 10:05–11:40 / 大节3 14:00–15:35
+     *   大节4 16:05–17:40 / 大节5 19:00–20:35 / 大节6 20:45–22:20
+     * 课表页在此基础上还会多出行来,行数因校区而异,**而且多出来的行不都在末尾**:
+     *
+     *   7 行(本校):08:00 / 10:05 / 12:00(午间) / 14:00 / 16:05 / 19:00 / 20:45
+     *                → 第 1、2、3、4、6、7 节(午间那行整节不要;第 5 节 17:45 本校没有)
+     *   8 行(别的校区):08:00 / 10:05 / 14:00 / 16:05 / 19:00 / 20:45 / 12:00(午间) / 17:45
+     *                → 第 1、2、3、4、6、7、5 节
+     *
+     * 之前只写了 8 行那张表,本校 7 行时从第 4 行起整体错位一节,最后一行还会被丢掉。
+     * 午间行返回 0,由调用方按「非法节次」丢弃 —— 注意不能用 `mapping[s] || s` 兜底,0 是假值。
+     */
+    function mapSectionToTimeSlotNumber(section, pageRows) {
+        const sevenRows = { 1: 1, 2: 2, 3: 0, 4: 3, 5: 4, 6: 6, 7: 7 };
+        const eightRows = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 6, 6: 7, 7: 0, 8: 5 };
+        const mapping = pageRows === 7 ? sevenRows : eightRows;
+        if (Object.prototype.hasOwnProperty.call(mapping, section)) return mapping[section];
+        // 表外的行号不猜:记一条日志,按原号返回(时间可能不准,但至少不会把课弄丢)
+        console.warn(`未覆盖的节次行号 ${section}(页面共 ${pageRows} 行),作息时间可能不准`);
+        return section;
     }
 
     // 反引号化 JavaScript 字面量字符串，处理转义字符
@@ -226,7 +233,7 @@
                     : parseInt(indexMatch[1], 10) * unitCount + parseInt(indexMatch[2], 10);
                 if (!Number.isInteger(indexValue) || indexValue < 0) continue;
                 const day = Math.floor(indexValue / unitCount) + 1;
-                const section = mapSectionToTimeSlotNumber((indexValue % unitCount) + 1);
+                const section = mapSectionToTimeSlotNumber((indexValue % unitCount) + 1, unitCount);
                 if (day < 1 || day > 7 || section < 1 || section > 16) continue;
                 courses.push({
                     name,
