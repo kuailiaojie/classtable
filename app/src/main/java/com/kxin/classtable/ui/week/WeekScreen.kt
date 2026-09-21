@@ -343,6 +343,7 @@ private fun WeekGrid(
         val rowH = maxOf(maxHeight / rowCount, YohakuDimens.gridMinRowHeight)
         val gridHeight = rowH * rowCount
         val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
+        val gridContentWidth = maxWidth - YohakuDimens.gridPadding * 2
         val gutter = YohakuDimens.gridGutterWidth
         // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课
         val lanesPerDay = (1..7).map { d ->
@@ -381,7 +382,7 @@ private fun WeekGrid(
                     Box(
                         modifier = Modifier
                             .offset(x = YohakuDimens.gridPadding, y = rowH * idx)
-                            .width(maxWidth - YohakuDimens.gridPadding * 2)
+                            .width(gridContentWidth)
                             .height(1.dp)
                             .background(colors.neutral3),
                     )
