@@ -83,21 +83,14 @@
         return list;
     }
 
-    /**
-     * 行号 → 节次号。App 端「节次号」已经是数据,所以这里**基本原样返回**:
-     * 只有被标了 `skip` 的行(12:00 午间课)返回 0,由调用方按「非法节次」丢弃。
-     *
-     * 以前这里是一张重排表,因为 App 把「作息行顺序」当成了「节次号」;现在两者解耦,
-     * 重排不再需要 —— 教务显示第 7 节,App 里就是第 7 节。
-     * 注意:0 是假值,调用方判断时不能用 `||` 兜底。
-     */
+    // 教务系统的行号包含午间空行和不按时间排列的特殊行,不能直接当作 App 节次号。
+    // 这里按页面从上到下的真实作息映射为连续的第 1 至第 6 节。
+    const PAGE_ROW_TO_TIME_SLOT = [0, 1, 2, 0, 3, 4, 5, 6, 0];
+
     function mapSectionToTimeSlotNumber(section) {
-        const slot = getPresetTimeSlots().find((s) => s.number === section);
-        if (!slot) {
-            console.warn(`课表页出现未登记的行号 ${section},这一行不导入`);
-            return 0;
-        }
-        return slot.skip ? 0 : section;
+        const slot = PAGE_ROW_TO_TIME_SLOT[section] || 0;
+        if (!slot) console.warn(`课表页第 ${section} 行没有对应的作息时间,这一行不导入`);
+        return slot;
     }
 
     /**
@@ -105,11 +98,8 @@
      * 映射对不对肉眼难判,留一条可核对的记录。
      */
     function logRowMapping(pageRows) {
-        const rows = getPresetTimeSlots().map((s) => {
-            const dropped = mapSectionToTimeSlotNumber(s.number) === 0;
-            return `第${s.number}节(${s.startTime}${dropped ? ",已跳过" : ""})`;
-        });
-        console.log(`[长江大学] 课表页共 ${pageRows} 行;作息表:${rows.join(" ")}`);
+        const rows = getPresetTimeSlots().map((s) => `第${s.number}节(${s.startTime}-${s.endTime})`);
+        console.log(`[长江大学] 课表页共 ${pageRows} 行;按时间排序的作息表:${rows.join(" ")}`);
     }
 
     // 反引号化 JavaScript 字面量字符串，处理转义字符
@@ -292,23 +282,15 @@
         return "";
     }
 
-    /**
-     * 作息表:`number` 就是**课表页的行号**(与教务里显示的第几节一致),时间是学校公布的安排。
-     *
-     * 行号与时间顺序**无关**:第 8 行(17:45 那节单小节的晚间课)时间上排在第 5 行之后,
-     * 但它仍然是第 8 节 —— App 端「节次号」与「作息行顺序」已经解耦,不会再被改号。
-     * `skip: true` = 这一行整行不要(12:00 午间课,学校实际作息里没有)。
-     */
+    // 作息表按真实时间升序排列,课程节次号与这份顺序一一对应。
     function getPresetTimeSlots() {
         return [
-            { number: 1, startTime: "08:00", endTime: "09:35" },                  // 一、二小节
-            { number: 2, startTime: "10:05", endTime: "11:40" },                  // 三、四小节
-            { number: 3, startTime: "12:00", endTime: "13:35", skip: true },      // 午间课,不要
-            { number: 4, startTime: "14:00", endTime: "15:35" },                  // 五、六小节
-            { number: 5, startTime: "16:05", endTime: "17:40" },                  // 七、八小节
-            { number: 6, startTime: "19:00", endTime: "20:35" },                  // 九、十小节
-            { number: 7, startTime: "20:45", endTime: "22:20" },                  // 十一、十二小节
-            { number: 8, startTime: "17:45", endTime: "18:30" }                   // 单小节晚间课
+            { number: 1, startTime: "08:00", endTime: "09:35" },
+            { number: 2, startTime: "10:05", endTime: "11:40" },
+            { number: 3, startTime: "14:00", endTime: "15:35" },
+            { number: 4, startTime: "15:40", endTime: "17:15" },
+            { number: 5, startTime: "17:00", endTime: "18:35" },
+            { number: 6, startTime: "18:00", endTime: "18:45" }
         ];
     }
 

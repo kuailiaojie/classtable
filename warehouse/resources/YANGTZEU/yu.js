@@ -83,19 +83,23 @@
         return list;
     }
 
-    // 节次编号与 TimeSlots 编号映射
+    // 教务系统的行号包含午间空行和不按时间排列的特殊行,不能直接当作 App 节次号。
+    // 这里按页面从上到下的真实作息映射为连续的第 1 至第 6 节。
+    const PAGE_ROW_TO_TIME_SLOT = [0, 1, 2, 0, 3, 4, 5, 6, 0];
+
     function mapSectionToTimeSlotNumber(section) {
-        const mapping = {
-            1: 1,
-            2: 2,
-            3: 4,
-            4: 5,
-            5: 7,
-            6: 8,
-            7: 3,
-            8: 6
-        };
-        return mapping[section] || section;
+        const slot = PAGE_ROW_TO_TIME_SLOT[section] || 0;
+        if (!slot) console.warn(`课表页第 ${section} 行没有对应的作息时间,这一行不导入`);
+        return slot;
+    }
+
+    /**
+     * 把「每行的节次号、时间、是否跳过」打进日志(随 console 消息进 App 日志)。
+     * 映射对不对肉眼难判,留一条可核对的记录。
+     */
+    function logRowMapping(pageRows) {
+        const rows = getPresetTimeSlots().map((s) => `第${s.number}节(${s.startTime}-${s.endTime})`);
+        console.log(`[长江大学] 课表页共 ${pageRows} 行;按时间排序的作息表:${rows.join(" ")}`);
     }
 
     // 反引号化 JavaScript 字面量字符串，处理转义字符
@@ -187,6 +191,8 @@
         const unitCountMatch = text.match(/\bvar\s+unitCount\s*=\s*(\d+)\s*;/);
         const unitCount = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
         if (!Number.isInteger(unitCount) || unitCount <= 0) return [];
+        // 把「页面几行 + 每行落到第几节」记下来:映射对不对肉眼难判,留一条可核对的日志
+        logRowMapping(unitCount);
         const courses = [];
         const activities = [];
         const activityRe = /\bactivity\s*=\s*new\s+TaskActivity\s*\(/g;
@@ -235,7 +241,15 @@
                 });
             }
         }
-        return mergeContiguousSections(courses);
+        // 不做「连续节次合并」。
+        //
+        // 原来这里会把同一门课、节次相邻的两条合成一块卡片,目的是让连堂看起来是一整段。
+        // 但这个适配器的节次号经过重排,「编号相邻」并不等于「时间上连续」:合并是链式的,
+        // 一旦某几节编号接上,就会把午休/晚休之间的空档也吃进去 —— 实际出现过一门课被并成
+        // 4-7 一大块(横跨整个下午加晚上)的结果。
+        //
+        // 教务里是几节就显示几节:每节各自一个卡片、各自一段时间,不会再有「莫名其妙变长」。
+        return courses;
     }
 
     // 当教师名为表达式时，尝试在附近代码中回溯真实教师名
@@ -268,50 +282,15 @@
         return "";
     }
 
-    // 合并同一课程的连续节次
-    function mergeContiguousSections(courses) {
-        const list = (courses || [])
-            .filter((c) => c && c.name && Number.isInteger(c.day) && Number.isInteger(c.startSection) && Number.isInteger(c.endSection))
-            .map((c) => ({
-                ...c,
-                weeks: normalizeWeeks(c.weeks)
-            }));
-        list.sort((a, b) => {
-            const ak = `${a.name}|${a.teacher}|${a.position}|${a.day}|${a.weeks.join(",")}`;
-            const bk = `${b.name}|${b.teacher}|${b.position}|${b.day}|${b.weeks.join(",")}`;
-            if (ak < bk) return -1;
-            if (ak > bk) return 1;
-            return a.startSection - b.startSection;
-        });
-        const merged = [];
-        for (const item of list) {
-            const prev = merged[merged.length - 1];
-            const sameCourse = prev
-                && prev.name === item.name
-                && prev.teacher === item.teacher
-                && prev.position === item.position
-                && prev.day === item.day
-                && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
-            const isContiguous = sameCourse && prev.endSection + 1 === item.startSection;
-
-            if (isContiguous) {
-                prev.endSection = Math.max(prev.endSection, item.endSection);
-            } else {
-                merged.push({ ...item });
-            }
-        }
-        return merged;
-    }
+    // 作息表按真实时间升序排列,课程节次号与这份顺序一一对应。
     function getPresetTimeSlots() {
         return [
             { number: 1, startTime: "08:00", endTime: "09:35" },
             { number: 2, startTime: "10:05", endTime: "11:40" },
-            { number: 3, startTime: "12:00", endTime: "13:35" }, // 午间课
-            { number: 4, startTime: "14:00", endTime: "15:35" },
-            { number: 5, startTime: "16:05", endTime: "17:40" },
-            { number: 6, startTime: "17:45", endTime: "18:30" }, // 晚间课，部分课程为 18:00-18:45
-            { number: 7, startTime: "19:00", endTime: "20:35" },
-            { number: 8, startTime: "20:45", endTime: "22:20" }
+            { number: 3, startTime: "14:00", endTime: "15:35" },
+            { number: 4, startTime: "15:40", endTime: "17:15" },
+            { number: 5, startTime: "17:00", endTime: "18:35" },
+            { number: 6, startTime: "18:00", endTime: "18:45" }
         ];
     }
 
