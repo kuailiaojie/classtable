@@ -84,22 +84,18 @@
     }
 
     // 节次编号与 TimeSlots 编号映射
-    // 节次序号 → 作息时间段号。
-    // 学校实际作息里没有 12:00 那一节(原时间段 3),所以整节删掉、其后的时间段顺次上移一位;
-    // 原始序号 7 原本指向的就是这节,改为返回 0,由调用方按「非法节次」丢弃它带的课程。
-    // 注意不能用 `mapping[section] || section` 兜底 —— 0 是假值,会被兜回 7。
     function mapSectionToTimeSlotNumber(section) {
         const mapping = {
             1: 1,
             2: 2,
-            3: 3,
-            4: 4,
-            5: 6,
-            6: 7,
-            7: 0,
-            8: 5
+            3: 4,
+            4: 5,
+            5: 7,
+            6: 8,
+            7: 3,
+            8: 6
         };
-        return Object.prototype.hasOwnProperty.call(mapping, section) ? mapping[section] : section;
+        return mapping[section] || section;
     }
 
     // 反引号化 JavaScript 字面量字符串，处理转义字符
@@ -272,26 +268,6 @@
         return "";
     }
 
-    /**
-     * 两个节次在**时间上**是否接得上。
-     *
-     * 节次号相邻 ≠ 时间上连续:删掉 12:00 那一节之后,上午最后一节(10:05–11:40)与下午第一节
-     * (14:00–15:35)的编号恰好接上了,只看编号会把它们并成一节(10:05–15:35)—— 表现就是
-     * 「某一节课莫名其妙变长了」。所以还要看时间:两节之间只隔一个课间才算连续,
-     * 隔了午休/晚休(这里按超过 60 分钟算)就不合并。
-     */
-    function isTimeAdjacent(prevEndSection, nextStartSection) {
-        const slots = getPresetTimeSlots();
-        const prev = slots.find((s) => s.number === prevEndSection);
-        const next = slots.find((s) => s.number === nextStartSection);
-        if (!prev || !next) return true; // 表里查不到,退回原来的编号规则
-        const toMin = (t) => {
-            const parts = String(t).split(":");
-            return Number(parts[0]) * 60 + Number(parts[1]);
-        };
-        return toMin(next.startTime) - toMin(prev.endTime) <= 60;
-    }
-
     // 合并同一课程的连续节次
     function mergeContiguousSections(courses) {
         const list = (courses || [])
@@ -316,9 +292,7 @@
                 && prev.position === item.position
                 && prev.day === item.day
                 && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
-            const isContiguous = sameCourse
-                && prev.endSection + 1 === item.startSection
-                && isTimeAdjacent(prev.endSection, item.startSection);
+            const isContiguous = sameCourse && prev.endSection + 1 === item.startSection;
 
             if (isContiguous) {
                 prev.endSection = Math.max(prev.endSection, item.endSection);
@@ -332,11 +306,12 @@
         return [
             { number: 1, startTime: "08:00", endTime: "09:35" },
             { number: 2, startTime: "10:05", endTime: "11:40" },
-            { number: 3, startTime: "14:00", endTime: "15:35" },
-            { number: 4, startTime: "16:05", endTime: "17:40" },
-            { number: 5, startTime: "17:45", endTime: "18:30" }, // 晚间课，部分课程为 18:00-18:45
-            { number: 6, startTime: "19:00", endTime: "20:35" },
-            { number: 7, startTime: "20:45", endTime: "22:20" }
+            { number: 3, startTime: "12:00", endTime: "13:35" }, // 午间课
+            { number: 4, startTime: "14:00", endTime: "15:35" },
+            { number: 5, startTime: "16:05", endTime: "17:40" },
+            { number: 6, startTime: "17:45", endTime: "18:30" }, // 晚间课，部分课程为 18:00-18:45
+            { number: 7, startTime: "19:00", endTime: "20:35" },
+            { number: 8, startTime: "20:45", endTime: "22:20" }
         ];
     }
 

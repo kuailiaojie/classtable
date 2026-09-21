@@ -104,6 +104,12 @@ fun WeekScreen(
     val pagerState = rememberPagerState(initialPage = (realWeek - 1).coerceIn(0, weekCount - 1)) {
         weekCount
     }
+    // 无论从哪里打开应用(启动 / 从最近任务回来 / 从通知 / 从桌面小组件),都先落在**当前周**:
+    // 翻页状态是可保存的,进程重建后会恢复成上次翻到的那一周,所以这里按真实周次把它拨回来。
+    LaunchedEffect(realWeek, weekCount) {
+        val currentPage = (realWeek - 1).coerceIn(0, weekCount - 1)
+        if (pagerState.currentPage != currentPage) pagerState.scrollToPage(currentPage)
+    }
     val week = pagerState.currentPage + 1
     val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
     var detailCourse by remember { mutableStateOf<Course?>(null) }
@@ -338,6 +344,7 @@ private fun WeekGrid(
         val gridHeight = rowH * rowCount
         val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
         val gutter = YohakuDimens.gridGutterWidth
+        val gridContentWidth = maxWidth - YohakuDimens.gridPadding * 2
         // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课
         val lanesPerDay = (1..7).map { d ->
             val teaching = teachingDays.getOrNull(d - 1)
@@ -367,6 +374,19 @@ private fun WeekGrid(
                             .width(colW)
                             .fillMaxHeight()
                             .background(colors.neutral1),
+                    )
+                }
+
+                // 行刻度:每个节次的横向细线正好落在该行顶部,和左侧「节号 + 起始时间」、
+                // 右侧的课程块共用同一把尺子(rowH)。以前左侧只有一串孤立的文字,没有行线,
+                // 看起来就和网格没对齐;画上刻度后一眼能看出每一节从哪一行开始。
+                periods.forEachIndexed { idx, _ ->
+                    Box(
+                        modifier = Modifier
+                            .offset(x = YohakuDimens.gridPadding, y = rowH * idx)
+                            .width(gridContentWidth)
+                            .height(1.dp)
+                            .background(colors.neutral3),
                     )
                 }
 
@@ -420,7 +440,9 @@ private fun WeekGrid(
                             height = block.height,
                             x = YohakuDimens.gridPadding + gutter + colW * dayIdx + laneW * lane,
                             width = laneW,
-                            isCurrent = dayIdx + 1 == today &&
+                            // 「正在上」只在**真实当前周**的今天那一列标出:翻到别的周时,
+                            // 时间点虽然对得上(只看时刻),但那一天并不是今天,不该再标。
+                            isCurrent = showNowLine && dayIdx + 1 == today &&
                                 Schedule.isCourseOngoing(block.course, periods),
                             onClick = onCourseClick,
                         )

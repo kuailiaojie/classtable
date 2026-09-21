@@ -158,7 +158,7 @@ fun ScheduleTimesScreen(
                 color = colors.neutral7,
             )
             Text(
-                text = "每一节都能单独删;「添加一节」往末尾再加。课间是相邻两节之间的空隙,自动得出。",
+                text = "每一节都能单独删;想在哪两节之间插一节,点那段课间的「加一节」;课间的长短用「－ / ＋」直接改。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
@@ -298,6 +298,7 @@ fun ScheduleTimesScreen(
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
                         onEditStart = editStart,
                         onEditEnd = editEnd,
+                        onAddClass = { timeline = timeline.plusClassAfter(span.index) },
                     )
                 } else {
                     ClassBlock(
@@ -392,6 +393,24 @@ private data class Timeline(val anchor: Int, val blocks: List<TimeBlock>) {
         val gap = DEFAULT_BREAK_MINUTES.coerceAtMost(room - MIN_BLOCK_MINUTES)
         val length = DEFAULT_CLASS_MINUTES.coerceAtMost(room - gap)
         return copy(blocks = blocks + listOf(TimeBlock(true, gap), TimeBlock(false, length)))
+    }
+
+    /**
+     * 在指定的**课间**处插入一节:保留这段课间,并在它后面补一节 + 一段新的课间。
+     * 以前「添加一节」只能往末尾追加,中间想插一节做不到 —— 这正是要补上的那件事。
+     */
+    fun plusClassAfter(breakIndex: Int): Timeline {
+        val brk = spans().getOrNull(breakIndex) ?: return this
+        if (!brk.block.isBreak) return this
+        val room = DAY_END - brk.end
+        if (room < MIN_BLOCK_MINUTES * 2) return this
+        val gap = DEFAULT_BREAK_MINUTES.coerceAtMost(room - MIN_BLOCK_MINUTES)
+        val length = DEFAULT_CLASS_MINUTES.coerceAtMost(room - gap)
+        val next = blocks.toMutableList().apply {
+            add(breakIndex + 1, TimeBlock(false, length))
+            add(breakIndex + 2, TimeBlock(true, gap))
+        }
+        return copy(blocks = next)
     }
 
     fun toPeriods(): List<Schedule.Period> =
@@ -563,13 +582,19 @@ private fun ClassBlock(
     }
 }
 
-/** 课间:相邻两节之间的空隙,不做成卡片(它是「之间」,不是一件东西),只留一行淡字 + 两个时间片。 */
+/**
+ * 课间:相邻两节之间的空隙,不做成卡片(它是「之间」,不是一件东西)。
+ *
+ * 以前课间只能用右下角那个不显眼的手柄拖,难怪「没法改课间」;现在把长短做成
+ * 一行明确的「－ / ＋」(1 分钟一档)。「加一节」则在这段课间处插进一节新课。
+ */
 @Composable
 private fun BreakBlock(
     span: Span,
     onResize: (Int) -> Unit,
     onEditStart: () -> Unit,
     onEditEnd: () -> Unit,
+    onAddClass: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
     Box(
@@ -605,17 +630,36 @@ private fun BreakBlock(
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
+                text = "加一节",
+                style = YohakuType.label12,
+                color = colors.accent,
+                modifier = Modifier
+                    .clickable(onClick = onAddClass)
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "－",
+                style = YohakuType.copy15,
+                color = colors.neutral6,
+                modifier = Modifier
+                    .clickable { onResize(span.block.minutes - 1) }
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+            )
+            Text(
                 text = "${span.block.minutes} 分钟",
                 style = YohakuType.copy13,
                 color = colors.neutral6,
-                modifier = Modifier.padding(end = 16.dp),
+            )
+            Text(
+                text = "＋",
+                style = YohakuType.copy15,
+                color = colors.neutral6,
+                modifier = Modifier
+                    .clickable { onResize(span.block.minutes + 1) }
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
             )
         }
-        ResizeHandle(
-            minutes = span.block.minutes,
-            onSet = onResize,
-            modifier = Modifier.align(Alignment.BottomEnd),
-        )
     }
 }
 
