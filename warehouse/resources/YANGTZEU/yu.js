@@ -83,33 +83,19 @@
         return list;
     }
 
-    /**
-     * 行号 → 节次号。App 端「节次号」已经是数据,所以这里**基本原样返回**:
-     * 只有被标了 `skip` 的行(12:00 午间课)返回 0,由调用方按「非法节次」丢弃。
-     *
-     * 以前这里是一张重排表,因为 App 把「作息行顺序」当成了「节次号」;现在两者解耦,
-     * 重排不再需要 —— 教务显示第 7 节,App 里就是第 7 节。
-     * 注意:0 是假值,调用方判断时不能用 `||` 兜底。
-     */
+    // 节次编号与 TimeSlots 编号映射
     function mapSectionToTimeSlotNumber(section) {
-        const slot = getPresetTimeSlots().find((s) => s.number === section);
-        if (!slot) {
-            console.warn(`课表页出现未登记的行号 ${section},这一行不导入`);
-            return 0;
-        }
-        return slot.skip ? 0 : section;
-    }
-
-    /**
-     * 把「每行的节次号、时间、是否跳过」打进日志(随 console 消息进 App 日志)。
-     * 映射对不对肉眼难判,留一条可核对的记录。
-     */
-    function logRowMapping(pageRows) {
-        const rows = getPresetTimeSlots().map((s) => {
-            const dropped = mapSectionToTimeSlotNumber(s.number) === 0;
-            return `第${s.number}节(${s.startTime}${dropped ? ",已跳过" : ""})`;
-        });
-        console.log(`[长江大学] 课表页共 ${pageRows} 行;作息表:${rows.join(" ")}`);
+        const mapping = {
+            1: 1,
+            2: 2,
+            3: 4,
+            4: 5,
+            5: 7,
+            6: 8,
+            7: 3,
+            8: 6
+        };
+        return mapping[section] || section;
     }
 
     // 反引号化 JavaScript 字面量字符串，处理转义字符
@@ -201,8 +187,6 @@
         const unitCountMatch = text.match(/\bvar\s+unitCount\s*=\s*(\d+)\s*;/);
         const unitCount = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
         if (!Number.isInteger(unitCount) || unitCount <= 0) return [];
-        // 把「页面几行 + 每行落到第几节」记下来:映射对不对肉眼难判,留一条可核对的日志
-        logRowMapping(unitCount);
         const courses = [];
         const activities = [];
         const activityRe = /\bactivity\s*=\s*new\s+TaskActivity\s*\(/g;
@@ -251,15 +235,7 @@
                 });
             }
         }
-        // 不做「连续节次合并」。
-        //
-        // 原来这里会把同一门课、节次相邻的两条合成一块卡片,目的是让连堂看起来是一整段。
-        // 但这个适配器的节次号经过重排,「编号相邻」并不等于「时间上连续」:合并是链式的,
-        // 一旦某几节编号接上,就会把午休/晚休之间的空档也吃进去 —— 实际出现过一门课被并成
-        // 4-7 一大块(横跨整个下午加晚上)的结果。
-        //
-        // 教务里是几节就显示几节:每节各自一个卡片、各自一段时间,不会再有「莫名其妙变长」。
-        return courses;
+        return mergeContiguousSections(courses);
     }
 
     // 当教师名为表达式时，尝试在附近代码中回溯真实教师名
@@ -292,23 +268,50 @@
         return "";
     }
 
-    /**
-     * 作息表:`number` 就是**课表页的行号**(与教务里显示的第几节一致),时间是学校公布的安排。
-     *
-     * 行号与时间顺序**无关**:第 8 行(17:45 那节单小节的晚间课)时间上排在第 5 行之后,
-     * 但它仍然是第 8 节 —— App 端「节次号」与「作息行顺序」已经解耦,不会再被改号。
-     * `skip: true` = 这一行整行不要(12:00 午间课,学校实际作息里没有)。
-     */
+    // 合并同一课程的连续节次
+    function mergeContiguousSections(courses) {
+        const list = (courses || [])
+            .filter((c) => c && c.name && Number.isInteger(c.day) && Number.isInteger(c.startSection) && Number.isInteger(c.endSection))
+            .map((c) => ({
+                ...c,
+                weeks: normalizeWeeks(c.weeks)
+            }));
+        list.sort((a, b) => {
+            const ak = `${a.name}|${a.teacher}|${a.position}|${a.day}|${a.weeks.join(",")}`;
+            const bk = `${b.name}|${b.teacher}|${b.position}|${b.day}|${b.weeks.join(",")}`;
+            if (ak < bk) return -1;
+            if (ak > bk) return 1;
+            return a.startSection - b.startSection;
+        });
+        const merged = [];
+        for (const item of list) {
+            const prev = merged[merged.length - 1];
+            const sameCourse = prev
+                && prev.name === item.name
+                && prev.teacher === item.teacher
+                && prev.position === item.position
+                && prev.day === item.day
+                && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
+            const isContiguous = sameCourse && prev.endSection + 1 === item.startSection;
+
+            if (isContiguous) {
+                prev.endSection = Math.max(prev.endSection, item.endSection);
+            } else {
+                merged.push({ ...item });
+            }
+        }
+        return merged;
+    }
     function getPresetTimeSlots() {
         return [
-            { number: 1, startTime: "08:00", endTime: "09:35" },                  // 一、二小节
-            { number: 2, startTime: "10:05", endTime: "11:40" },                  // 三、四小节
-            { number: 3, startTime: "12:00", endTime: "13:35", skip: true },      // 午间课,不要
-            { number: 4, startTime: "14:00", endTime: "15:35" },                  // 五、六小节
-            { number: 5, startTime: "16:05", endTime: "17:40" },                  // 七、八小节
-            { number: 6, startTime: "19:00", endTime: "20:35" },                  // 九、十小节
-            { number: 7, startTime: "20:45", endTime: "22:20" },                  // 十一、十二小节
-            { number: 8, startTime: "17:45", endTime: "18:30" }                   // 单小节晚间课
+            { number: 1, startTime: "08:00", endTime: "09:35" },
+            { number: 2, startTime: "10:05", endTime: "11:40" },
+            { number: 3, startTime: "12:00", endTime: "13:35" }, // 午间课
+            { number: 4, startTime: "14:00", endTime: "15:35" },
+            { number: 5, startTime: "16:05", endTime: "17:40" },
+            { number: 6, startTime: "17:45", endTime: "18:30" }, // 晚间课，部分课程为 18:00-18:45
+            { number: 7, startTime: "19:00", endTime: "20:35" },
+            { number: 8, startTime: "20:45", endTime: "22:20" }
         ];
     }
 
