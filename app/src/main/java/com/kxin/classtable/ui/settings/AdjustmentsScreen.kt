@@ -161,6 +161,41 @@ fun AdjustmentsScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     var year by remember { mutableStateOf(LocalDate.now().year.toString()) }
     var draft by remember { mutableStateOf<Draft?>(null) }
+    var editingMakeup by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    editingMakeup?.let { (planIndex, makeupIndex) ->
+        val makeup = reviews?.getOrNull(planIndex)?.makeups?.getOrNull(makeupIndex)
+        if (makeup != null) {
+            YohakuDatePicker(
+                initialEpochDay = makeup.source?.toEpochDay(),
+                onPick = { source ->
+                    viewModel.updateReviews { list ->
+                        list.mapIndexed { i, review ->
+                            if (i != planIndex) review else review.copy(
+                                makeups = review.makeups.toMutableList().also { makeups ->
+                                    makeups[makeupIndex] = makeup.copy(source = LocalDate.ofEpochDay(source))
+                                },
+                            )
+                        }
+                    }
+                    editingMakeup = null
+                },
+                onClear = {
+                    viewModel.updateReviews { list ->
+                        list.mapIndexed { i, review ->
+                            if (i != planIndex) review else review.copy(
+                                makeups = review.makeups.toMutableList().also { makeups ->
+                                    makeups[makeupIndex] = makeup.copy(source = null)
+                                },
+                            )
+                        }
+                    }
+                    editingMakeup = null
+                },
+                onDismiss = { editingMakeup = null },
+            )
+        }
+    }
 
     /** 把预览里勾中的日期并进调休表(同一天的旧安排被覆盖)。 */
     fun applyReviews() {
@@ -267,6 +302,8 @@ fun AdjustmentsScreen(
                                 ?.let { "补 ${dateLabel(it.toEpochDay())} 的课" }
                                 ?: "未匹配到原课程日期",
                             selected = makeup.selected,
+                            actionText = "修改",
+                            onAction = { editingMakeup = planIndex to makeupIndex },
                         ) {
                             viewModel.updateReviews { list ->
                                 list.mapIndexed { i, r ->
@@ -513,6 +550,8 @@ private fun ReviewRow(
     title: String,
     desc: String,
     selected: Boolean,
+    actionText: String? = null,
+    onAction: (() -> Unit)? = null,
     onToggle: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
@@ -525,6 +564,16 @@ private fun ReviewRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = YohakuType.copy13, color = colors.neutral10)
             Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+        }
+        if (actionText != null && onAction != null) {
+            Text(
+                text = actionText,
+                style = YohakuType.label12,
+                color = colors.accent,
+                modifier = Modifier
+                    .clickable(onClick = onAction)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+            )
         }
         YohakuChip(
             text = if (selected) "已选" else "忽略",

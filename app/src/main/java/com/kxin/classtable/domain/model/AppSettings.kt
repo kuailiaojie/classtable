@@ -29,9 +29,9 @@ data class AppSettings(
     /** 提前多少分钟发通知(0 = 准点)。 */
     val notifyLeadMinutes: Int = 10,
     /** 提醒形态:标准 / 实时活动。 */
-    val notifyMode: String = NotifyMode.STANDARD.name,
+    val notifyMode: String = NotifyMode.LIVE.name,
     /** 明日课程预告(前一天晚上提醒明天第一节与门数)。 */
-    val tomorrowReminderEnabled: Boolean = false,
+    val tomorrowReminderEnabled: Boolean = true,
     /** 明日课程预告的提醒时刻("HH:MM")。 */
     val tomorrowReminderTime: String = "21:30",
     /** 是否在后台自动检查更新(每天一次,有新版发通知)。 */

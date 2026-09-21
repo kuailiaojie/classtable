@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node tools/build-netlify.mjs)",
+      "Shell(.gradlew.bat:*)",
+      "powershell",
+      "Shell(set:*)",
+      "Shell(node --check netlify/functions/proxy.mjs)",
+      "Shell(node --check tools/build-netlify.mjs)",
+      "Shell(git:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

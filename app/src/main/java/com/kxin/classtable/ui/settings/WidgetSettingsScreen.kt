@@ -185,7 +185,6 @@ fun WidgetSettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
         }
     }
 }

@@ -104,6 +104,12 @@ fun WeekScreen(
     val pagerState = rememberPagerState(initialPage = (realWeek - 1).coerceIn(0, weekCount - 1)) {
         weekCount
     }
+    LaunchedEffect(realWeek, weekCount) {
+        val currentPage = (realWeek - 1).coerceIn(0, weekCount - 1)
+        if (pagerState.currentPage != currentPage) {
+            pagerState.animateScrollToPage(currentPage)
+        }
+    }
     val week = pagerState.currentPage + 1
     val weekRange = Schedule.weekRangeText(settings.semesterStartDay, week)
     var detailCourse by remember { mutableStateOf<Course?>(null) }
@@ -367,6 +373,17 @@ private fun WeekGrid(
                             .width(colW)
                             .fillMaxHeight()
                             .background(colors.neutral1),
+                    )
+                }
+
+                // 每个节次的横向刻度直接落在该行顶部,与左侧时间文字和课程块共用 rowH。
+                periods.forEachIndexed { idx, _ ->
+                    Box(
+                        modifier = Modifier
+                            .offset(x = YohakuDimens.gridPadding, y = rowH * idx)
+                            .width(maxWidth - YohakuDimens.gridPadding * 2)
+                            .height(1.dp)
+                            .background(colors.neutral3),
                     )
                 }
 

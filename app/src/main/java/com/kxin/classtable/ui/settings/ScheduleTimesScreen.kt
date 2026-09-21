@@ -158,7 +158,7 @@ fun ScheduleTimesScreen(
                 color = colors.neutral7,
             )
             Text(
-                text = "每一节都能单独删;「添加一节」往末尾再加。课间是相邻两节之间的空隙,自动得出。",
+                text = "每一节都能单独删;点任意课间的「此处加一节」即可插入。课间时长也能直接修改。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
@@ -298,6 +298,7 @@ fun ScheduleTimesScreen(
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
                         onEditStart = editStart,
                         onEditEnd = editEnd,
+                        onAddClass = { timeline = timeline.plusClassAfter(span.index) },
                     )
                 } else {
                     ClassBlock(
@@ -393,6 +394,21 @@ private data class Timeline(val anchor: Int, val blocks: List<TimeBlock>) {
         val gap = DEFAULT_BREAK_MINUTES.coerceAtMost(room - MIN_BLOCK_MINUTES)
         val length = DEFAULT_CLASS_MINUTES.coerceAtMost(room - gap)
         return copy(blocks = blocks + listOf(TimeBlock(true, gap), TimeBlock(false, length)))
+    }
+
+    /** 在指定课间后插入一节,保留原课间并为新节补一个可编辑的课间。 */
+    fun plusClassAfter(breakIndex: Int): Timeline {
+        val breakSpan = spans().getOrNull(breakIndex) ?: return this
+        if (!breakSpan.block.isBreak) return this
+        val room = DAY_END - breakSpan.end
+        if (room < MIN_BLOCK_MINUTES * 2) return this
+        val gap = DEFAULT_BREAK_MINUTES.coerceAtMost(room - MIN_BLOCK_MINUTES)
+        val length = DEFAULT_CLASS_MINUTES.coerceAtMost(room - gap)
+        val next = blocks.toMutableList().apply {
+            add(breakIndex + 1, TimeBlock(false, length))
+            add(breakIndex + 2, TimeBlock(true, gap))
+        }
+        return copy(blocks = next)
     }
 
     fun toPeriods(): List<Schedule.Period> =
@@ -573,6 +589,7 @@ private fun BreakBlock(
     onResize: (Int) -> Unit,
     onEditStart: () -> Unit,
     onEditEnd: () -> Unit,
+    onAddClass: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
     Box(
@@ -612,6 +629,14 @@ private fun BreakBlock(
                 style = YohakuType.copy13,
                 color = colors.neutral6,
                 modifier = Modifier.padding(end = 16.dp),
+            )
+            Text(
+                text = "此处加一节",
+                style = YohakuType.label12,
+                color = colors.accent,
+                modifier = Modifier
+                    .clickable(onClick = onAddClass)
+                    .padding(start = 8.dp, end = 12.dp),
             )
         }
         ResizeHandle(
