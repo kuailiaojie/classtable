@@ -344,7 +344,6 @@ private fun WeekGrid(
         val gridHeight = rowH * rowCount
         val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
         val gutter = YohakuDimens.gridGutterWidth
-        val gridContentWidth = maxWidth - YohakuDimens.gridPadding * 2
         // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课
         val lanesPerDay = (1..7).map { d ->
             val teaching = teachingDays.getOrNull(d - 1)
@@ -374,19 +373,6 @@ private fun WeekGrid(
                             .width(colW)
                             .fillMaxHeight()
                             .background(colors.neutral1),
-                    )
-                }
-
-                // 行刻度:每个节次的横向细线正好落在该行顶部,和左侧「节号 + 起始时间」、
-                // 右侧的课程块共用同一把尺子(rowH)。以前左侧只有一串孤立的文字,没有行线,
-                // 看起来就和网格没对齐;画上刻度后一眼能看出每一节从哪一行开始。
-                periods.forEachIndexed { idx, _ ->
-                    Box(
-                        modifier = Modifier
-                            .offset(x = YohakuDimens.gridPadding, y = rowH * idx)
-                            .width(gridContentWidth)
-                            .height(1.dp)
-                            .background(colors.neutral3),
                     )
                 }
 

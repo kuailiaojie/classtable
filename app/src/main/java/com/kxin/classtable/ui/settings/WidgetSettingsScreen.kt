@@ -86,13 +86,15 @@ fun WidgetSettingsScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = YohakuDimens.screenPadding),
+                .verticalScroll(rememberScrollState()),
         ) {
+            // 注意:SettingsSection 自带 screenPadding,这一层**不能**再加横向内边距 ——
+            // 加了就是双倍内缩,卡片(横条)比设置页窄一截。
             Text(
                 text = "改完立即生效,桌面上已放的小组件会一起刷新。强调色跟随「外观」。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
+                modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
 
