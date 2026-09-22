@@ -53,7 +53,7 @@ import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.domain.model.WeekType
+import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -148,7 +148,7 @@ fun WeekScreen(
             )
             if (course.location.isNotEmpty()) InfoLine(label = "地点", value = course.location)
             if (course.teacher.isNotEmpty()) InfoLine(label = "教师", value = course.teacher)
-            InfoLine(label = "周次", value = weekSummary(course))
+            InfoLine(label = "周次", value = course.weeksText(weekCount))
         }
     }
 
@@ -614,11 +614,4 @@ private fun InfoLine(label: String, value: String) {
         )
         Text(text = value, style = YohakuType.copy14, color = colors.neutral9)
     }
-}
-
-private fun weekSummary(course: Course): String = when (course.weekType) {
-    WeekType.EVERY_WEEK -> "每周"
-    WeekType.ODD_WEEK -> "单周"
-    WeekType.EVEN_WEEK -> "双周"
-    WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
 }

@@ -47,8 +47,9 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.domain.model.WeekType
+import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -152,7 +153,7 @@ fun ManualImportScreen(
                 color = colors.neutral7,
             )
             Text(
-                text = "周次可填:每周 / 单周 / 双周 / 1-16 / 1,3,5",
+                text = "周次可填:每周 / 单周 / 双周 / 1-16 / 1,3,5 / 3-19双周",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
@@ -361,7 +362,7 @@ private fun rowsToCourses(rows: List<List<String>>): List<Course> {
         val weekday = parseWeekday(row[3]) ?: return@mapNotNull null
         val start = row.getOrElse(4) { "" }.toIntOrNull() ?: 1
         val end = row.getOrElse(5) { "" }.toIntOrNull() ?: start
-        val (weekType, ws, we) = parseWeeks(row.getOrElse(6) { "每周" })
+        val spec = WeekSpec.parseOrEvery(row.getOrElse(6) { "每周" }, 0)
         val cs = row.getOrElse(7) { "" }.trim().let { Schedule.parseClock(it) }
         val ce = row.getOrElse(8) { "" }.trim().let { Schedule.parseClock(it) }
         val custom = cs != null && ce != null && ce > cs
@@ -373,9 +374,10 @@ private fun rowsToCourses(rows: List<List<String>>): List<Course> {
             weekday = weekday,
             startPeriod = if (custom) 0 else start,
             endPeriod = if (custom) 0 else end.coerceAtLeast(start),
-            weekType = weekType,
-            weekStart = ws,
-            weekEnd = we,
+            weekType = spec.type,
+            weekStart = spec.start,
+            weekEnd = spec.end,
+            weeks = spec.weeks,
             customStartMinute = if (custom) cs else null,
             customEndMinute = if (custom) ce else null,
         )
@@ -390,32 +392,6 @@ private fun parseWeekday(s: String): Int? {
         "星期一" to 1, "星期二" to 2, "星期三" to 3, "星期四" to 4, "星期五" to 5, "星期六" to 6, "星期日" to 7,
     )
     return map[t] ?: t.toIntOrNull()?.takeIf { it in 1..7 }
-}
-
-private fun parseWeeks(s: String): Triple<WeekType, Int, Int> {
-    val t = s.trim()
-    return when {
-        t.contains("单") -> Triple(WeekType.ODD_WEEK, 1, 16)
-        t.contains("双") -> Triple(WeekType.EVEN_WEEK, 1, 16)
-        t.contains("-") -> {
-            val p = t.split("-")
-            Triple(
-                WeekType.CUSTOM,
-                p.getOrNull(0)?.toIntOrNull() ?: 1,
-                p.getOrNull(1)?.toIntOrNull() ?: 16,
-            )
-        }
-        t.contains(",") -> {
-            val ws = t.split(",").mapNotNull { it.toIntOrNull() }.filter { it > 0 }
-            val wt = when {
-                ws.all { it % 2 == 1 } -> WeekType.ODD_WEEK
-                ws.all { it % 2 == 0 } -> WeekType.EVEN_WEEK
-                else -> WeekType.CUSTOM
-            }
-            Triple(wt, ws.minOrNull() ?: 1, ws.maxOrNull() ?: 16)
-        }
-        else -> Triple(WeekType.EVERY_WEEK, 1, 16)
-    }
 }
 
 /** 作息文本 → 时间段列表。支持 "08:00-08:50" 或 "1 08:00 08:50" 一行一节;任一无法解析返回 null。 */
@@ -441,9 +417,4 @@ private fun parseScheduleLines(text: String): List<Schedule.Period>? {
     return out.distinctBy { it.start }.sortedBy { it.start }
 }
 
-private fun weekText(course: Course): String = when (course.weekType) {
-    WeekType.EVERY_WEEK -> "每周"
-    WeekType.ODD_WEEK -> "单周"
-    WeekType.EVEN_WEEK -> "双周"
-    WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
-}
+private fun weekText(course: Course): String = course.weeksText()

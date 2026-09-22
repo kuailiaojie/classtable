@@ -1,8 +1,8 @@
 package com.kxin.classtable.data.importer
 
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.domain.model.WeekType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -24,7 +24,10 @@ object ImportParser {
         val error: String? = null,
     )
 
-    fun parseCourses(json: String): ParseResult {
+    /**
+     * [weekCount] 为当前学期周数,用于把「1..N 整学期」识别成每周;0 = 未知(退化用启发式)。
+     */
+    fun parseCourses(json: String, weekCount: Int = 0): ParseResult {
         val arr = runCatching { JSONArray(json) }.getOrElse { e ->
             return ParseResult(emptyList(), 0, 0, e.message ?: "JSON 格式无法解析")
         }
@@ -32,18 +35,21 @@ object ImportParser {
         var dropped = 0
         for (i in 0 until arr.length()) {
             val obj = runCatching { arr.getJSONObject(i) }.getOrNull()
-            val course = obj?.let { toCourse(it) }
+            val course = obj?.let { toCourse(it, weekCount) }
             if (course == null) dropped++ else out.add(course)
         }
         return ParseResult(out, arr.length(), dropped)
     }
 
     /** 单条 → 课程;信息不完整返回 null(计入 dropped,不再静默丢弃)。 */
-    private fun toCourse(o: JSONObject): Course? {
+    private fun toCourse(o: JSONObject, weekCount: Int): Course? {
         val name = o.optString("name").trim()
         val day = o.optInt("day")
         if (name.isEmpty() || day !in 1..7) return null
         val weeks = optIntList(o, "weeks").filter { it > 0 }
+        // 适配器给的是精确周次集合:能表达成 每周/单周/双周 就用档位,否则原样落成 CUSTOM。
+        // 以前这里压成 min..max,「3,5,7-9,11」会变成 3..11。
+        val spec = WeekSpec.fromWeeks(weeks, weekCount)
 
         val cs = parseTimeMinutes(o.optString("customStartTime"))
         val ce = parseTimeMinutes(o.optString("customEndTime"))
@@ -58,9 +64,10 @@ object ImportParser {
                 weekday = day,
                 startPeriod = 0,
                 endPeriod = 0,
-                weekType = detectWeekType(weeks),
-                weekStart = weeks.minOrNull() ?: 1,
-                weekEnd = weeks.maxOrNull() ?: 16,
+                weekType = spec.type,
+                weekStart = spec.start,
+                weekEnd = spec.end,
+                weeks = spec.weeks,
                 customStartMinute = cs,
                 customEndMinute = ce,
             )
@@ -77,9 +84,10 @@ object ImportParser {
             weekday = day,
             startPeriod = start,
             endPeriod = end,
-            weekType = detectWeekType(weeks),
-            weekStart = weeks.minOrNull() ?: 1,
-            weekEnd = weeks.maxOrNull() ?: 16,
+            weekType = spec.type,
+            weekStart = spec.start,
+            weekEnd = spec.end,
+            weeks = spec.weeks,
         )
     }
 
@@ -116,15 +124,6 @@ object ImportParser {
     private fun optIntList(o: JSONObject, key: String): List<Int> {
         val arr = o.optJSONArray(key) ?: return emptyList()
         return (0 until arr.length()).map { arr.optInt(it) }
-    }
-
-    fun detectWeekType(weeks: List<Int>): WeekType = when {
-        weeks.isEmpty() -> WeekType.EVERY_WEEK
-        weeks.size >= 15 && weeks.size == weeks.max() -> WeekType.EVERY_WEEK
-        weeks.all { it % 2 == 1 } -> WeekType.ODD_WEEK
-        weeks.all { it % 2 == 0 } -> WeekType.EVEN_WEEK
-        // 离散周次:近似为 min..max 的 CUSTOM(README 说明)
-        else -> WeekType.CUSTOM
     }
 
     /**

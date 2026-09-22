@@ -41,6 +41,7 @@ import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
@@ -105,6 +106,7 @@ fun CourseFormScreen(
     val editing = viewModel.editing
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
 
     var name by rememberSaveable { mutableStateOf("") }
     var teacher by rememberSaveable { mutableStateOf("") }
@@ -115,8 +117,11 @@ fun CourseFormScreen(
     var periodEnd by rememberSaveable { mutableIntStateOf(1) }     // 节次区间止
     var pickingEnd by rememberSaveable { mutableStateOf(false) }   // 是否正在选结束节
     var weekTypeIdx by rememberSaveable { mutableIntStateOf(0) }
-    var customStart by rememberSaveable { mutableStateOf("1") }
-    var customEnd by rememberSaveable { mutableStateOf("16") }
+    /** 单/双周的起止周。结束周留空 = 到学期末。 */
+    var rangeStart by rememberSaveable { mutableStateOf("1") }
+    var rangeEnd by rememberSaveable { mutableStateOf("") }
+    /** 「自定义」勾选到的周次,CSV(如 "4,6,8")。 */
+    var customWeeks by rememberSaveable { mutableStateOf("") }
     var timeMode by rememberSaveable { mutableIntStateOf(0) }      // 0=按节次 1=自定义时间
     var customTimeStart by rememberSaveable { mutableStateOf("18:30") }
     var customTimeEnd by rememberSaveable { mutableStateOf("20:00") }
@@ -129,9 +134,12 @@ fun CourseFormScreen(
             location = c.location
             note = c.note
             weekdaysMask = if (c.weekdays > 0) c.weekdays else 1 shl (c.weekday - 1)
-            weekTypeIdx = WeekType.entries.indexOf(c.weekType).coerceAtLeast(0)
-            customStart = c.weekStart.toString()
-            customEnd = c.weekEnd.toString()
+            val spec = WeekSpec.of(c, weekCount)
+            weekTypeIdx = WeekType.entries.indexOf(spec.type).coerceAtLeast(0)
+            // 每周不吃范围,起止给整学期,免得切到单双周时被旧默认的 16 截断
+            rangeStart = (if (spec.type == WeekType.EVERY_WEEK) 1 else spec.start).toString()
+            rangeEnd = (if (spec.type == WeekType.EVERY_WEEK) weekCount else spec.end).toString()
+            customWeeks = WeekSpec.encode(spec.weeks)
             if (c.isCustomScheduled()) {
                 timeMode = 1
                 customTimeStart = Schedule.clockText(c.customStartMinute ?: 0)
@@ -178,14 +186,37 @@ fun CourseFormScreen(
         }
     }
 
+    /** 当前选择解析出的周次计划。「自定义」一个都没勾时 `weeks` 为空(保存按钮会禁用)。 */
+    val pickedWeeks = WeekSpec.decode(customWeeks)
+    val weekSpec = run {
+        val lo = (rangeStart.toIntOrNull() ?: 1).coerceIn(1, weekCount)
+        val hi = (rangeEnd.toIntOrNull() ?: weekCount).coerceIn(1, weekCount)
+        when (weekTypeIdx) {
+            1 -> WeekSpec.Spec(WeekType.ODD_WEEK, minOf(lo, hi), maxOf(lo, hi))
+            2 -> WeekSpec.Spec(WeekType.EVEN_WEEK, minOf(lo, hi), maxOf(lo, hi))
+            3 -> WeekSpec.Spec(WeekType.CUSTOM, pickedWeeks.minOrNull() ?: 1, pickedWeeks.maxOrNull() ?: 1, pickedWeeks)
+            else -> WeekSpec.everySpec(weekCount)
+        }
+    }
+    val weekValid = weekTypeIdx != 3 || weekSpec.weeks.isNotEmpty()
+
+    fun toggleWeek(week: Int) {
+        val picked = pickedWeeks.toMutableSet()
+        if (!picked.add(week)) picked.remove(week)
+        customWeeks = WeekSpec.encode(picked.toList())
+    }
+
+    /** 切到「自定义」时还没勾过任何周,就把当前档位的周次铺进去当起点。 */
+    fun selectWeekType(index: Int) {
+        if (index == 3 && customWeeks.isBlank()) {
+            customWeeks = WeekSpec.encode(WeekSpec.weeksOf(weekSpec, weekCount))
+        }
+        weekTypeIdx = index
+    }
+
     fun submit() {
         val trimmed = name.trim()
-        if (trimmed.isEmpty()) return
-        val (ws, we) = if (weekTypeIdx == 3) {
-            (customStart.toIntOrNull() ?: 1) to (customEnd.toIntOrNull() ?: 16)
-        } else {
-            1 to 16
-        }
+        if (trimmed.isEmpty() || !weekValid) return
         val primaryWeekday = (1..7).firstOrNull { weekdaysMask and (1 shl (it - 1)) != 0 } ?: 1
         if (timeMode == 1) {
             val cs = Schedule.parseClock(customTimeStart) ?: return
@@ -199,9 +230,10 @@ fun CourseFormScreen(
                 weekday = primaryWeekday,
                 startPeriod = 0,
                 endPeriod = 0,
-                weekType = WeekType.entries[weekTypeIdx],
-                weekStart = ws,
-                weekEnd = we,
+                weekType = weekSpec.type,
+                weekStart = weekSpec.start,
+                weekEnd = weekSpec.end,
+                weeks = weekSpec.weeks,
                 semesterId = editing?.semesterId ?: "default",
                 updatedAt = System.currentTimeMillis(),
                 customStartMinute = cs,
@@ -233,9 +265,10 @@ fun CourseFormScreen(
                 weekday = primaryWeekday,
                 startPeriod = periodStart,
                 endPeriod = periodEnd,
-                weekType = WeekType.entries[weekTypeIdx],
-                weekStart = ws,
-                weekEnd = we,
+                weekType = weekSpec.type,
+                weekStart = weekSpec.start,
+                weekEnd = weekSpec.end,
+                weeks = weekSpec.weeks,
                 semesterId = editing?.semesterId ?: "default",
                 updatedAt = System.currentTimeMillis(),
                 customStartMinute = pinnedStart,
@@ -392,27 +425,75 @@ fun CourseFormScreen(
                     YohakuChip(
                         text = nameText,
                         selected = weekTypeIdx == index,
-                        onClick = { weekTypeIdx = index },
+                        onClick = { selectWeekType(index) },
                     )
                 }
             }
-            if (weekTypeIdx == 3) {
+            if (weekTypeIdx == 1 || weekTypeIdx == 2) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     YohakuTextField(
-                        value = customStart,
-                        onValueChange = { customStart = it },
+                        value = rangeStart,
+                        onValueChange = { rangeStart = it },
                         label = "起始周",
                         modifier = Modifier.weight(1f),
                     )
                     YohakuTextField(
-                        value = customEnd,
-                        onValueChange = { customEnd = it },
+                        value = rangeEnd,
+                        onValueChange = { rangeEnd = it },
                         label = "结束周",
+                        placeholder = "$weekCount",
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Text(
+                    text = "单/双周按学期周次算奇偶,只在起止范围内生效 —— 如「3-19 双周」= 第 4、6、…、18 周。",
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
+            if (weekTypeIdx == 3) {
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (1..weekCount).forEach { w ->
+                        YohakuChip(
+                            text = "$w",
+                            selected = w in pickedWeeks,
+                            onClick = { toggleWeek(w) },
+                        )
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text(
+                        text = "全选",
+                        style = YohakuType.copy13,
+                        color = colors.accent,
+                        modifier = Modifier.clickable {
+                            customWeeks = WeekSpec.encode((1..weekCount).toList())
+                        },
+                    )
+                    Text(
+                        text = "清空",
+                        style = YohakuType.copy13,
+                        color = colors.neutral7,
+                        modifier = Modifier.clickable { customWeeks = "" },
+                    )
+                }
+            }
+            Text(
+                text = if (weekValid) {
+                    "周次:${WeekSpec.text(weekSpec, weekCount)}"
+                } else {
+                    "周次:自定义至少要选一周"
+                },
+                style = YohakuType.label12,
+                color = if (weekValid) colors.neutral7 else colors.error,
+                modifier = Modifier.padding(top = 8.dp),
+            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             if (editing != null) {
@@ -436,6 +517,7 @@ fun CourseFormScreen(
                 text = if (editing != null) "保存修改" else "保存",
                 onClick = ::submit,
                 modifier = Modifier.weight(1f),
+                enabled = weekValid,
             )
         }
     }

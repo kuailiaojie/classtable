@@ -306,7 +306,7 @@ class ReminderPlanner @Inject constructor(
             listOf(
                 c.id, c.name, c.location, c.teacher,
                 c.weekday, c.weekdays, "${c.startPeriod}-${c.endPeriod}",
-                c.weekType.name, c.weekStart, c.weekEnd,
+                c.weekType.name, c.weekStart, c.weekEnd, c.weeks.joinToString(","),
                 c.customStartMinute ?: "-", c.customEndMinute ?: "-",
             ).joinToString(":")
         }

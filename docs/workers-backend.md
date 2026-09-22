@@ -54,11 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_deleted_uid ON deleted(uid);
 {
   "id": "...", "name": "高等数学(上)", "teacher": "张老师", "location": "教1-201",
   "weekday": 1, "weekdays": 3, "startPeriod": 1, "endPeriod": 2,
-  "weekType": "EVERY_WEEK", "weekStart": 1, "weekEnd": 16,
+  "weekType": "EVERY_WEEK", "weekStart": 1, "weekEnd": 16, "weeks": "",
   "semesterId": "default", "updatedAt": 1700000000000,
   "customStartMinute": null, "customEndMinute": null, "note": ""
 }
 ```
+
+`weeks` 是 CSV 字符串(如 `"4,6,8"`),只在 `weekType = "CUSTOM"` 时表示精确周次;空字符串 = 沿用 `weekStart..weekEnd`。
+单/双周(`ODD_WEEK` / `EVEN_WEEK`)的范围由 `weekStart..weekEnd` 限定,奇偶按学期绝对周次算。
 
 ## 4. API 设计
 

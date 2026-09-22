@@ -20,6 +20,7 @@ object OpenAiClient {
         model: String,
         imageBase64: String,
         mimeType: String,
+        weekCount: Int = 0,
     ): Result<AiScheduleResult> = withContext(Dispatchers.IO) {
         runCatching {
             val body = JSONObject()
@@ -56,7 +57,7 @@ object OpenAiClient {
                 .getJSONArray("choices").getJSONObject(0)
                 .getJSONObject("message")
                 .getString("content")
-            parseAiResult(raw)
+            parseAiResult(raw, weekCount)
         }
     }
 }

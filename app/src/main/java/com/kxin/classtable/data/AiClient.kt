@@ -15,12 +15,14 @@ object AiClient {
         model: String,
         imageBase64: String,
         mimeType: String,
+        weekCount: Int = 0,
     ): Result<AiScheduleResult> = when (provider) {
         AiProvider.GEMINI -> GeminiClient.extractSchedule(
             apiKey = apiKey,
             model = model.ifBlank { AiProvider.GEMINI.defaultModel },
             imageBase64 = imageBase64,
             mimeType = mimeType,
+            weekCount = weekCount,
         )
         AiProvider.OPENAI_COMPAT -> OpenAiClient.extractSchedule(
             apiKey = apiKey,
@@ -28,6 +30,7 @@ object AiClient {
             model = model.ifBlank { AiProvider.OPENAI_COMPAT.defaultModel },
             imageBase64 = imageBase64,
             mimeType = mimeType,
+            weekCount = weekCount,
         )
     }
 }

@@ -1,5 +1,6 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import org.json.JSONObject
@@ -16,6 +17,8 @@ data class RemoteCourse(
     val weekType: String = "EVERY_WEEK",
     val weekStart: Int = 1,
     val weekEnd: Int = 16,
+    /** 自定义的精确周次,CSV(如 "4,6,8");空 = 沿用 weekStart..weekEnd。 */
+    val weeks: String = "",
     val semesterId: String = "default",
     val updatedAt: Long = 0L,
     val customStartMinute: Int? = null,
@@ -35,6 +38,7 @@ data class RemoteCourse(
         weekType = runCatching { WeekType.valueOf(weekType) }.getOrDefault(WeekType.EVERY_WEEK),
         weekStart = weekStart,
         weekEnd = weekEnd,
+        weeks = WeekSpec.decode(weeks),
         semesterId = semesterId,
         updatedAt = updatedAt,
         customStartMinute = customStartMinute,
@@ -55,6 +59,7 @@ data class RemoteCourse(
             weekType = c.weekType.name,
             weekStart = c.weekStart,
             weekEnd = c.weekEnd,
+            weeks = WeekSpec.encode(c.weeks),
             semesterId = c.semesterId,
             updatedAt = c.updatedAt,
             customStartMinute = c.customStartMinute,
@@ -82,6 +87,7 @@ data class RemoteCourse(
                 weekType = s("weekType").ifBlank { "EVERY_WEEK" },
                 weekStart = i("weekStart", 1),
                 weekEnd = i("weekEnd", 16),
+                weeks = s("weeks"),
                 semesterId = s("semesterId").ifBlank { "default" },
                 updatedAt = l("updatedAt"),
                 customStartMinute = iOpt("customStartMinute"),
@@ -106,6 +112,7 @@ data class RemoteCourse(
             str("weekType", c.weekType)
             int("weekStart", c.weekStart)
             int("weekEnd", c.weekEnd)
+            str("weeks", c.weeks)
             str("semesterId", c.semesterId)
             long("updatedAt", c.updatedAt)
             c.customStartMinute?.let { int("customStartMinute", it) }

@@ -15,6 +15,7 @@ object GeminiClient {
         model: String,
         imageBase64: String,
         mimeType: String,
+        weekCount: Int = 0,
     ): Result<AiScheduleResult> = withContext(Dispatchers.IO) {
         runCatching {
             val endpoint =
@@ -48,7 +49,7 @@ object GeminiClient {
                 .getJSONArray("candidates").getJSONObject(0)
                 .getJSONObject("content")
             val raw = content.getJSONArray("parts").getString(0)
-            parseAiResult(raw)
+            parseAiResult(raw, weekCount)
         }
     }
 }

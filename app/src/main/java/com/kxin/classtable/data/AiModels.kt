@@ -1,6 +1,7 @@
 package com.kxin.classtable.data
 
 import com.kxin.classtable.data.importer.ImportParser
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
 import org.json.JSONArray
 import org.json.JSONObject
@@ -22,8 +23,8 @@ val AI_SCHEDULE_PROMPT = """
     timeSlots 为每节课的开始/结束时间(图中有作息时间才填,否则给空数组)。
 """.trimIndent()
 
-/** 从模型返回文本中提取 JSON 并解析为课程 + 作息。 */
-fun parseAiResult(raw: String): AiScheduleResult {
+/** 从模型返回文本中提取 JSON 并解析为课程 + 作息。[weekCount] 为当前学期周数,0 = 未知。 */
+fun parseAiResult(raw: String, weekCount: Int = 0): AiScheduleResult {
     val start = raw.indexOf('{')
     val end = raw.lastIndexOf('}')
     val json = JSONObject(raw.substring(start, end + 1))
@@ -42,6 +43,7 @@ fun parseAiResult(raw: String): AiScheduleResult {
         } else {
             emptyList()
         }
+        val spec = WeekSpec.fromWeeks(weeks, weekCount)
         Course(
             id = "ai-${UUID.randomUUID()}",
             name = name,
@@ -50,9 +52,10 @@ fun parseAiResult(raw: String): AiScheduleResult {
             weekday = day,
             startPeriod = startSec,
             endPeriod = endSec,
-            weekType = ImportParser.detectWeekType(weeks),
-            weekStart = weeks.minOrNull() ?: 1,
-            weekEnd = weeks.maxOrNull() ?: 16,
+            weekType = spec.type,
+            weekStart = spec.start,
+            weekEnd = spec.end,
+            weeks = spec.weeks,
         )
     }
 

@@ -44,7 +44,7 @@ import com.kxin.classtable.design.courseMark
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.domain.model.WeekType
+import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -137,7 +137,7 @@ fun CourseDetailScreen(
                 if (c.teacher.isNotBlank()) InfoRow("教师", c.teacher)
                 if (c.location.isNotBlank()) InfoRow("地点", c.location)
                 if (c.note.isNotBlank()) InfoRow("备注", c.note)
-                InfoRow("周次", weekPatternText(c))
+                InfoRow("周次", c.weeksText(settings.semesterWeekCount))
 
                 Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
 
@@ -218,13 +218,6 @@ private fun InfoRow(label: String, value: String) {
         )
         Text(text = value, style = YohakuType.copy15, color = colors.neutral9)
     }
-}
-
-private fun weekPatternText(course: Course): String = when (course.weekType) {
-    WeekType.EVERY_WEEK -> "每周"
-    WeekType.ODD_WEEK -> "单周(1,3,5…)"
-    WeekType.EVEN_WEEK -> "双周(2,4,6…)"
-    WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
 }
 
 /** 课程在学期内的所有上课日期(需已设置学期起始日;未设置返回空列表)。周一对齐,与周视图一致。 */

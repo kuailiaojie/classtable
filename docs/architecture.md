@@ -86,4 +86,6 @@ tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
 
 同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删课程在其它设备复活。
 
-课程字段:`id / name / teacher / location / weekday / weekdays(位掩码)/ startPeriod / endPeriod / weekType / weekStart / weekEnd / customStartMinute / customEndMinute / note / updatedAt`。作息与学期单独存在设置里,课程只引用节次序号,因此改作息会整体平移所有课程的时间。
+课程字段:`id / name / teacher / location / weekday / weekdays(位掩码)/ startPeriod / endPeriod / weekType / weekStart / weekEnd / weeks / customStartMinute / customEndMinute / note / updatedAt`。作息与学期单独存在设置里,课程只引用节次序号,因此改作息会整体平移所有课程的时间。
+
+周次:`weekType` 为 `EVERY_WEEK / ODD_WEEK / EVEN_WEEK / CUSTOM`。单/双周由 `weekStart..weekEnd` 限定范围,奇偶按**学期绝对周次**算 —— 所以「第 3-19 周的双周」= 第 4、6、…、18 周。`CUSTOM` 用 `weeks`(CSV,如 `"4,6,8"`)存精确周次;`weeks` 为空时回退 `weekStart..weekEnd`(旧数据的连续范围形态)。解析与显示统一走 `domain/WeekSpec.kt`。

@@ -2,6 +2,7 @@ package com.kxin.classtable.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 
@@ -17,6 +18,8 @@ data class CourseEntity(
     val weekType: String,
     val weekStart: Int,
     val weekEnd: Int,
+    /** 自定义的精确周次,CSV(如 "4,6,8");空 = 沿用 weekStart..weekEnd。 */
+    val weeks: String = "",
     val semesterId: String,
     val updatedAt: Long,
     val customStartMinute: Int? = null,
@@ -36,6 +39,7 @@ data class CourseEntity(
         weekType = runCatching { WeekType.valueOf(weekType) }.getOrDefault(WeekType.EVERY_WEEK),
         weekStart = weekStart,
         weekEnd = weekEnd,
+        weeks = WeekSpec.decode(weeks),
         semesterId = semesterId,
         updatedAt = updatedAt,
         customStartMinute = customStartMinute,
@@ -56,6 +60,7 @@ data class CourseEntity(
             weekType = c.weekType.name,
             weekStart = c.weekStart,
             weekEnd = c.weekEnd,
+            weeks = WeekSpec.encode(c.weeks),
             semesterId = c.semesterId,
             updatedAt = c.updatedAt,
             customStartMinute = c.customStartMinute,

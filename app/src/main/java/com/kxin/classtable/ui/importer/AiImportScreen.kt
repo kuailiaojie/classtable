@@ -41,6 +41,7 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -84,6 +85,7 @@ class AiImportViewModel @Inject constructor(
                 model = settings.aiModel,
                 imageBase64 = imageBase64,
                 mimeType = mimeType,
+                weekCount = settings.semesterWeekCount,
             )
                 .onSuccess { r ->
                     _result.value = r
@@ -244,9 +246,4 @@ fun AiImportScreen(
     }
 }
 
-private fun weekText(course: Course): String = when (course.weekType) {
-    com.kxin.classtable.domain.model.WeekType.EVERY_WEEK -> "每周"
-    com.kxin.classtable.domain.model.WeekType.ODD_WEEK -> "单周"
-    com.kxin.classtable.domain.model.WeekType.EVEN_WEEK -> "双周"
-    com.kxin.classtable.domain.model.WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
-}
+private fun weekText(course: Course): String = course.weeksText()

@@ -17,6 +17,12 @@ data class Course(
     val weekType: WeekType = WeekType.EVERY_WEEK,
     val weekStart: Int = 1,
     val weekEnd: Int = 16,
+    /**
+     * 精确周次(1-based、升序去重)。只有 [WeekType.CUSTOM] 用它;空表示沿用 [weekStart]..[weekEnd]
+     * 这段连续范围(旧数据的形态)。单/双周请用 [WeekType.ODD_WEEK] / [WeekType.EVEN_WEEK] +
+     * [weekStart]..[weekEnd] 表达,例如「第3-19周的双周」。
+     */
+    val weeks: List<Int> = emptyList(),
     val semesterId: String = "default",
     val updatedAt: Long = 0L,
     /** 非作息时间课程:自定义开始/结束分钟(自 0:00 起),null = 按作息节次。 */
@@ -43,11 +49,17 @@ data class Course(
     /** 星期集合(1..7,升序)。 */
     fun weekdaysList(): List<Int> = (1..7).filter { isOnWeekday(it) }
 
+    /**
+     * 第 [week] 周是否上这门课。
+     *
+     * 单/双周按**学期绝对周次**算奇偶,并在 [weekStart]..[weekEnd] 内生效 ——
+     * 以前范围被忽略,「第3-19周的双周」会在第 2、20 周也显示。
+     */
     fun isActiveOnWeek(week: Int): Boolean = when (weekType) {
         WeekType.EVERY_WEEK -> true
-        WeekType.ODD_WEEK -> week % 2 == 1
-        WeekType.EVEN_WEEK -> week % 2 == 0
-        WeekType.CUSTOM -> week in weekStart..weekEnd
+        WeekType.ODD_WEEK -> week in weekStart..weekEnd && week % 2 == 1
+        WeekType.EVEN_WEEK -> week in weekStart..weekEnd && week % 2 == 0
+        WeekType.CUSTOM -> if (weeks.isNotEmpty()) week in weeks else week in weekStart..weekEnd
     }
 
     /** 是否与 [p1, p2] 小节区间相交(仅按节次课程) */

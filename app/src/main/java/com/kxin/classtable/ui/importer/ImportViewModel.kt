@@ -52,8 +52,13 @@ class ImportViewModel @Inject constructor(
         .map { it.periodTimes }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Schedule.DEFAULT_PERIODS)
 
+    /** 学期周数:解析周次时用来判断「1..N 是不是整学期」。Eagerly 是为了 onCoursesJson 能同步取到。 */
+    private val semesterWeekCount: StateFlow<Int> = settingsRepository.settings
+        .map { it.semesterWeekCount }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 20)
+
     fun onCoursesJson(json: String) {
-        val result = ImportParser.parseCourses(json)
+        val result = ImportParser.parseCourses(json, semesterWeekCount.value)
         _parsedCourses.value = result.courses
         when {
             result.error != null -> onToast("课程数据解析失败:${result.error}")

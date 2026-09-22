@@ -77,7 +77,7 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
-import com.kxin.classtable.domain.model.WeekType
+import com.kxin.classtable.domain.weeksText
 import com.kxin.classtable.ui.navigateToTab
 import kotlinx.coroutines.launch
 import java.net.URL
@@ -1099,12 +1099,7 @@ private fun StepConfirm(
     }
 }
 
-private fun weekSummary(course: Course): String = when (course.weekType) {
-    WeekType.EVERY_WEEK -> "每周"
-    WeekType.ODD_WEEK -> "单周"
-    WeekType.EVEN_WEEK -> "双周"
-    WeekType.CUSTOM -> "第${course.weekStart}-${course.weekEnd}周"
-}
+private fun weekSummary(course: Course): String = course.weeksText()
 
 /** WebView 错误码 → 用户可读的中文原因(避免白屏无提示)。 */
 private fun friendlyLoadError(errorCode: Int, raw: String?): String = when (errorCode) {
