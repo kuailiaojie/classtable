@@ -23,8 +23,6 @@ import javax.inject.Singleton
 data class UsageStats(
     /** 累计打开应用的次数。 */
     val launches: Int,
-    /** 首次打开时间;0 = 还没记过。 */
-    val firstLaunchAt: Long,
     /** 问卷已弹过 / 已处理:不再自动出现。 */
     val surveyHandled: Boolean,
 )
@@ -60,7 +58,6 @@ class SettingsRepository @Inject constructor(
     /** 调休课表(JSON 数组):某天停课 / 某天补另一天的课。 */
     private val KEY_ADJUSTMENTS = stringPreferencesKey("schedule_adjustments")
     private val KEY_LAUNCHES = intPreferencesKey("app_launches")
-    private val KEY_FIRST_LAUNCH = longPreferencesKey("first_launch_at")
     private val KEY_SURVEY_HANDLED = booleanPreferencesKey("survey_handled")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
@@ -196,22 +193,20 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.edit { it[KEY_AUTO_START_VISITED] = true }
     }
 
-    /** 本机使用统计(打开次数 / 首次打开时间 / 问卷是否已处理)。 */
+    /** 本机使用统计(打开次数 / 问卷是否已处理)。 */
     val usageStats: Flow<UsageStats> = context.settingsDataStore.data.map { p ->
         UsageStats(
             launches = p[KEY_LAUNCHES] ?: 0,
-            firstLaunchAt = p[KEY_FIRST_LAUNCH] ?: 0L,
             surveyHandled = p[KEY_SURVEY_HANDLED] ?: false,
         )
     }
 
     /**
-     * 记一次「打开了应用」:首次同时落下起始时间。仅本机,不触发同步时间戳 ——
-     * 这是使用统计而不是用户设置,推上云没有意义,还会平白让别的设备当成「本机改过配置」。
+     * 记一次「打开了应用」。仅本机,不触发同步时间戳 —— 这是使用统计而不是用户设置,
+     * 推上云没有意义,还会平白让别的设备当成「本机改过配置」。
      */
     suspend fun registerAppLaunch() {
         context.settingsDataStore.edit { p ->
-            if (p[KEY_FIRST_LAUNCH] == null) p[KEY_FIRST_LAUNCH] = System.currentTimeMillis()
             p[KEY_LAUNCHES] = (p[KEY_LAUNCHES] ?: 0) + 1
         }
     }

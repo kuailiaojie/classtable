@@ -1,5 +1,7 @@
 package com.kxin.classtable.data
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
@@ -18,9 +20,21 @@ import javax.inject.Singleton
  */
 @Singleton
 class SurveyPrompt @Inject constructor(
+    @ApplicationContext context: Context,
     private val settings: SettingsRepository,
     courses: CourseRepository,
 ) {
+    /**
+     * 「装了多久」取系统记录的**首次安装时间**,不用我们自己记的「第一次打开」:
+     * 前者是跟随安装包的,应用升级不会清零 —— 已经在用的老用户升级上来就能立刻满足
+     * 这一条(只要打开次数够),不必再白等一周。后者对老用户等于从零开始计时。
+     */
+    private val installedAt: Long by lazy {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).firstInstallTime
+        }.getOrDefault(0L)
+    }
+
     /**
      * 进程内只数一次。计数**不能**放在 `Application.onCreate`:推送、桌面小组件、
      * WorkManager 定时任务都会把进程拉起来,那些不算「用户打开过应用」——
@@ -35,8 +49,8 @@ class SurveyPrompt @Inject constructor(
         courses.observeAll(),
     ) { usage, all ->
         !usage.surveyHandled &&
-            usage.firstLaunchAt > 0 &&
-            System.currentTimeMillis() - usage.firstLaunchAt >= MIN_AGE_MS &&
+            installedAt > 0 &&
+            System.currentTimeMillis() - installedAt >= MIN_AGE_MS &&
             usage.launches >= MIN_LAUNCHES &&
             all.isNotEmpty()
     }
