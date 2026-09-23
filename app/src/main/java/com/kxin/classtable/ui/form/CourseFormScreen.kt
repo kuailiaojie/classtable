@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -335,7 +336,10 @@ fun CourseFormScreen(
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("星期(可多选)")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 weekNames.forEachIndexed { index, nameText ->
                     YohakuChip(
                         text = nameText,
@@ -455,12 +459,18 @@ fun CourseFormScreen(
             }
             if (weekTypeIdx == 3) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 逐周勾选:等宽(不按文字自适应)才会成列对齐 —— 否则「1」和「10」宽度不同,
+                // 换行位置随之参差,整块看起来就是歪的。同时补上行间距,不然换行后上下贴死。
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     (1..weekCount).forEach { w ->
                         YohakuChip(
                             text = "$w",
                             selected = w in pickedWeeks,
                             onClick = { toggleWeek(w) },
+                            modifier = Modifier.widthIn(min = WeekChipMinWidth),
                         )
                     }
                 }
@@ -529,3 +539,10 @@ private fun FieldLabel(text: String) {
     Text(text = text, style = YohakuType.label12, color = colors.neutral7)
     Spacer(modifier = Modifier.height(6.dp))
 }
+
+/**
+ * 逐周勾选每个 chip 的最小宽度。取「两位数 + 左右 12dp 内边距」再留一点余量,
+ * 于是 1..9 和 10.. 的块等宽、列能对齐;用 min 而不是固定宽,是为了字体放大后
+ * 宁可放宽也不把数字裁掉(那种情况下宽度差只影响放大后的排版)。
+ */
+private val WeekChipMinWidth = 44.dp

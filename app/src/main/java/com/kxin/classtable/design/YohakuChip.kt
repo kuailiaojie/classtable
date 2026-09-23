@@ -8,6 +8,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -19,6 +20,9 @@ import androidx.compose.ui.unit.dp
  *
  * 自绘而非 Material `Surface(onClick)` 包装:那样会自带 M3 涟漪与默认表面语义;
  * 现在用 `selectable` 表达「已选中」状态,读屏能报出选中与否。
+ *
+ * chip 默认按文字**自适应宽度**,文字居中(等宽时无差别);需要成列对齐时由调用方
+ * 传 `Modifier.widthIn(min = ...)` 统一宽度(见课程编辑页的逐周勾选)。
  */
 @Composable
 fun YohakuChip(
@@ -26,6 +30,7 @@ fun YohakuChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentAlignment: Alignment = Alignment.Center,
 ) {
     val colors = LocalYohakuColors.current
     val shape = RoundedCornerShape(YohakuDimens.radiusChip)
@@ -36,6 +41,7 @@ fun YohakuChip(
             .border(1.dp, if (selected) colors.accent else colors.line, shape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = contentAlignment,
     ) {
         Text(
             text = text,

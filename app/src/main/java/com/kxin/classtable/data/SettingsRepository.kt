@@ -19,6 +19,16 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** 本机使用统计(驱动问卷邀请的时机判断):仅存本机,不参与设置同步。 */
+data class UsageStats(
+    /** 累计打开应用的次数。 */
+    val launches: Int,
+    /** 首次打开时间;0 = 还没记过。 */
+    val firstLaunchAt: Long,
+    /** 问卷已弹过 / 已处理:不再自动出现。 */
+    val surveyHandled: Boolean,
+)
+
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -49,6 +59,9 @@ class SettingsRepository @Inject constructor(
     private val KEY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
     /** 调休课表(JSON 数组):某天停课 / 某天补另一天的课。 */
     private val KEY_ADJUSTMENTS = stringPreferencesKey("schedule_adjustments")
+    private val KEY_LAUNCHES = intPreferencesKey("app_launches")
+    private val KEY_FIRST_LAUNCH = longPreferencesKey("first_launch_at")
+    private val KEY_SURVEY_HANDLED = booleanPreferencesKey("survey_handled")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -181,5 +194,30 @@ class SettingsRepository @Inject constructor(
     /** 记录已进过 ROM「应用启动管理」页:仅本机,不触发同步时间戳。 */
     suspend fun markAutoStartVisited() {
         context.settingsDataStore.edit { it[KEY_AUTO_START_VISITED] = true }
+    }
+
+    /** 本机使用统计(打开次数 / 首次打开时间 / 问卷是否已处理)。 */
+    val usageStats: Flow<UsageStats> = context.settingsDataStore.data.map { p ->
+        UsageStats(
+            launches = p[KEY_LAUNCHES] ?: 0,
+            firstLaunchAt = p[KEY_FIRST_LAUNCH] ?: 0L,
+            surveyHandled = p[KEY_SURVEY_HANDLED] ?: false,
+        )
+    }
+
+    /**
+     * 记一次「打开了应用」:首次同时落下起始时间。仅本机,不触发同步时间戳 ——
+     * 这是使用统计而不是用户设置,推上云没有意义,还会平白让别的设备当成「本机改过配置」。
+     */
+    suspend fun registerAppLaunch() {
+        context.settingsDataStore.edit { p ->
+            if (p[KEY_FIRST_LAUNCH] == null) p[KEY_FIRST_LAUNCH] = System.currentTimeMillis()
+            p[KEY_LAUNCHES] = (p[KEY_LAUNCHES] ?: 0) + 1
+        }
+    }
+
+    /** 问卷已弹过 / 已处理:不再自动出现;仅本机。 */
+    suspend fun markSurveyHandled() {
+        context.settingsDataStore.edit { it[KEY_SURVEY_HANDLED] = true }
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
+import com.kxin.classtable.data.SurveyPrompt
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuBottomNav
 import com.kxin.classtable.design.YohakuDialog
@@ -88,6 +90,7 @@ fun ClasstableRoot(
 ) {
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    val surveyInvite by settingsViewModel.surveyInvite.collectAsStateWithLifecycle()
     val dark = when (settings.themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
@@ -236,6 +239,41 @@ fun ClasstableRoot(
                     Text(
                         text = "当前版本 v${updateViewModel.currentVersion}。" +
                             "「忽略此版本」后不再提示,可在设置里手动检查。",
+                        style = YohakuType.copy14,
+                        color = LocalYohakuColors.current.neutral9,
+                    )
+                }
+            }
+
+            // 记一次「打开过应用」,供问卷邀请判断时机(进程内一次)
+            LaunchedEffect(Unit) { settingsViewModel.onAppOpened() }
+
+            // 用户问卷邀请:够资格才弹,且一次只弹一个 —— 权限引导、更新提示在时先让位
+            val updateDialogShowing = updateState is UpdateState.Available
+            if (surveyInvite && !needsOnboarding && !updateDialogShowing) {
+                val uriHandler = LocalUriHandler.current
+                YohakuDialog(
+                    onDismissRequest = { settingsViewModel.completeSurvey() },
+                    title = "用了一阵子了,想问几句",
+                    actions = {
+                        YohakuDialogAction(
+                            text = "以后再说",
+                            onClick = { settingsViewModel.completeSurvey() },
+                        )
+                        YohakuDialogAction(
+                            text = "去填写",
+                            accent = true,
+                            onClick = {
+                                settingsViewModel.completeSurvey()
+                                runCatching { uriHandler.openUri(SurveyPrompt.FORM_URL) }
+                            },
+                        )
+                    },
+                ) {
+                    Text(
+                        text = "几个小问题,大约两分钟,不收集任何身份信息 —— " +
+                            "你的回答会直接决定下一步先做什么。\n\n" +
+                            "选「以后再说」就不再打扰;之后在「设置 → 关于」里也能随时找到。",
                         style = YohakuType.copy14,
                         color = LocalYohakuColors.current.neutral9,
                     )

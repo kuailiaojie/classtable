@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -42,6 +43,7 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.data.SurveyPrompt
 import com.kxin.classtable.design.AccentOptions
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
@@ -75,6 +77,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val authRepository: AuthRepository,
+    private val surveyPrompt: SurveyPrompt,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -82,6 +85,16 @@ class SettingsViewModel @Inject constructor(
     val userEmail: StateFlow<String?> = authRepository.currentUser
         .map { it?.email }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** 够资格时弹一次用户问卷邀请(判定见 [SurveyPrompt])。 */
+    val surveyInvite: StateFlow<Boolean> = surveyPrompt.shouldInvite
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** 进入界面时记一次「打开过」;进程内只数一次。 */
+    fun onAppOpened() = viewModelScope.launch { surveyPrompt.onAppOpened() }
+
+    /** 问卷已处理:填了或不想填都算,之后不再自动弹。 */
+    fun completeSurvey() = viewModelScope.launch { surveyPrompt.dismiss() }
 
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepository.setThemeMode(mode) }
 
@@ -145,6 +158,7 @@ fun SettingsScreen(
     var showNotifyDialog by remember { mutableStateOf(false) }
     var showAutoCheckDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var aiProvider by remember { mutableStateOf(settings.aiProvider) }
     var aiKey by remember { mutableStateOf(settings.aiApiKey) }
     var aiBaseUrl by remember { mutableStateOf(settings.aiBaseUrl) }
@@ -547,6 +561,13 @@ fun SettingsScreen(
             )
             DividerLine()
             SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
+            DividerLine()
+            // 邀请弹窗关了之后不是死路:这里常驻入口,想填随时能填
+            SettingRow(
+                title = "用户问卷",
+                value = "两分钟 · 帮我们改进",
+                onClick = { runCatching { uriHandler.openUri(SurveyPrompt.FORM_URL) } },
+            )
         }
 
         // 悬浮导航浮在内容之上:列表中途会从栏下穿过,末尾留出栏体高度,
