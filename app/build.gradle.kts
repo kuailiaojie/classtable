@@ -18,8 +18,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 41
-        versionName = "0.3.0-rc13"
+        versionCode = 42
+        versionName = "0.3.1"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")
@@ -36,6 +36,14 @@ android {
             "String",
             "SITE_BASE_URL",
             "\"https://classtablek.netlify.app\"",
+        )
+
+        // uapis.cn 天气接口的 key(日视图顶部的当前天气)。留空即走访客额度 ——
+        // 两者返回的字段一致,填了只是为了走自己的额度;失效时代码会自动降级。
+        buildConfigField(
+            "String",
+            "WEATHER_API_KEY",
+            "\"uapi-ywpozu2v7Bzo82vrK3TRcnVUL5vxuJb8AatC-27t\"",
         )
     }
 

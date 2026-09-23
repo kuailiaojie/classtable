@@ -31,6 +31,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.data.Weather
+import com.kxin.classtable.data.WeatherRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
@@ -46,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -53,6 +56,7 @@ import javax.inject.Inject
 class DayViewModel @Inject constructor(
     courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
+    private val weatherRepository: WeatherRepository,
 ) : ViewModel() {
     /**
      * 订阅全部课程而不是「今天星期几」那一批:调休可能让今天去上**别的星期几**的课
@@ -63,6 +67,27 @@ class DayViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    val weather: StateFlow<Weather?> = weatherRepository.weather
+
+    init {
+        viewModelScope.launch {
+            weatherRepository.refresh()
+            while (true) {
+                delay(WEATHER_REFRESH_INTERVAL_MS)
+                weatherRepository.refresh(force = true)
+            }
+        }
+    }
+
+    fun refreshWeather() {
+        viewModelScope.launch { weatherRepository.refresh(force = true) }
+    }
+
+    private companion object {
+        /** 天气变化慢,半小时一次足够;不必跟着日视图「还有几分钟下课」的 30 秒节拍走。 */
+        const val WEATHER_REFRESH_INTERVAL_MS = 30L * 60 * 1000
+    }
 }
 
 /**
@@ -77,6 +102,7 @@ fun DayScreen(
     val colors = LocalYohakuColors.current
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val weather by viewModel.weather.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val adjustments = remember(settings.scheduleAdjustments) {
         Adjustments.decode(settings.scheduleAdjustments)
@@ -164,6 +190,12 @@ fun DayScreen(
                     color = colors.neutral7,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+            // 天气属于「今天」的一部分,所以跟着日期/状态留在表头(不随课程列表滚走)——
+            // 今天没课时也能看到。还没拉到数据时整块不占位,不留一块空壳。
+            weather?.let {
+                Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+                WeatherCard(weather = it, onRefresh = viewModel::refreshWeather)
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
         }
