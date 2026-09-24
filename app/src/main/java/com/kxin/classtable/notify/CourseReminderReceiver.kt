@@ -7,6 +7,7 @@ import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.model.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -105,9 +106,23 @@ class CourseReminderReceiver : BroadcastReceiver() {
                 location = location,
                 teacher = teacher,
                 leadMinutes = lead,
+                announcement = latestAnnouncement(context, courseId, settings),
             )
         }
         Analytics.log("course_reminder_shown", "course_id" to courseId)
+    }
+
+    /**
+     * 该课程最新一条公告的标题(雨课堂),仅当总开关与「提醒内附公告」都开着时取。
+     *
+     * **只读本地缓存,不联网**:提醒由精确闹钟触发,那一秒必须发出通知,不能等网络;
+     * 缓存由后台任务与「立即刷新」维护。
+     */
+    private fun latestAnnouncement(context: Context, courseId: String, settings: AppSettings): String? {
+        if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) return null
+        return runCatching {
+            runBlocking { AppDatabase.get(context).announcementDao().latestByCourse(courseId)?.title }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     private fun startLiveUpdate(context: Context, payload: LiveCourse): Boolean = runCatching {

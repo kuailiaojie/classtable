@@ -114,9 +114,18 @@ internal fun SettingRowWithSubtitle(title: String, subtitle: String, onClick: ()
     }
 }
 
-/** 卡片内的「标签 + 控件」块:主题、强调色这类需要放 chips / 色板的分组用。 */
+/**
+ * 卡片内的「标签 + 控件」块:主题、强调色这类需要放 chips / 色板的分组用。
+ *
+ * [subtitle] 是给「开关要解释清楚才敢开」的功能用的(如雨课堂公告):说明写在标签下方、
+ * 控件上方,一行到两行,别塞进 [SettingRow] 的值槽位把它挤没。
+ */
 @Composable
-internal fun SettingBlock(title: String, content: @Composable () -> Unit) {
+internal fun SettingBlock(
+    title: String,
+    subtitle: String? = null,
+    content: @Composable () -> Unit,
+) {
     val colors = LocalYohakuColors.current
     Column(
         modifier = Modifier
@@ -124,6 +133,10 @@ internal fun SettingBlock(title: String, content: @Composable () -> Unit) {
             .padding(horizontal = rowHPadding, vertical = 12.dp),
     ) {
         Text(text = title, style = YohakuType.label12, color = colors.neutral7)
+        if (!subtitle.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = subtitle, style = YohakuType.label12, color = colors.neutral6)
+        }
         Spacer(modifier = Modifier.height(8.dp))
         content()
     }

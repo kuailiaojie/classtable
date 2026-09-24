@@ -19,6 +19,7 @@ import com.kxin.classtable.data.FcmTokens
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
+import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
 import com.kxin.classtable.notify.ReminderPlanner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -76,6 +77,20 @@ class ClasstableApp : Application() {
             "update_check",
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<UpdateCheckWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build(),
+                )
+                .build(),
+        )
+
+        // 雨课堂公告:每小时拉一次(仅在联网时跑);开关与登录态在 Worker 里判断,
+        // 拉取只为把公告缓存刷新到本机,有新公告时才另发通知。与课程提醒互不相干。
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "announcement_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<AnnouncementCheckWorker>(1, java.util.concurrent.TimeUnit.HOURS)
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)

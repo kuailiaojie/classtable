@@ -43,6 +43,21 @@ data class AppSettings(
     /** 首次启动权限引导是否已完成(完成/跳过后再也不弹,可随时在设置页重进)。 */
     val onboardingDone: Boolean = false,
     /**
+     * 雨课堂公告相关开关。默认全开:登录前这些能力本来就是空转的(没有会话就没有数据),
+     * 因此不必让用户再去逐个打开。
+     *
+     * 这些是**本机数据**(与账号无关),不进云端设置同步。
+     */
+    val yuketangEnabled: Boolean = true,
+    /** 课前提醒里附上该课程最新一条公告。 */
+    val yuketangIncludeInReminder: Boolean = true,
+    /** 后台定时拉取公告。 */
+    val yuketangBackgroundFetch: Boolean = true,
+    /** 拉取到新公告时发通知。 */
+    val yuketangNotifyNew: Boolean = true,
+    /** 上次成功拉取公告的时间戳(0 = 从未);仅本机。 */
+    val yuketangLastFetchAt: Long = 0L,
+    /**
      * 调休课表(JSON 数组):每条 = 某天停课,或某天补上另一天的课。
      * 存 JSON 而不是结构化字段,是因为它是「若干条安排」的列表,与作息同属运行时数据。
      */

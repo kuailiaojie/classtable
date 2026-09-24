@@ -10,6 +10,8 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 -keep class com.kxin.classtable.ui.importer.ImportBridge { *; }
+# 雨课堂登录页的桥(同上,唯一入口是网页里的 AndroidYuketangNative.*)
+-keep class com.kxin.classtable.ui.yuketang.YuketangLoginBridge { *; }
 
 # Firebase Analytics / Crashlytics / Messaging 依赖反射与清单注册
 -keep class com.google.firebase.messaging.** { *; }

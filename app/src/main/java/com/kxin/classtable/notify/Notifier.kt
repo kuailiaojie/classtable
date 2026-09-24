@@ -22,19 +22,26 @@ import com.kxin.classtable.domain.Schedule
 object Notifier {
     private const val TAG = "ClasstableNotify"
 
+    /** 提醒里附带的公告标题上限:通知只做「有这回事 + 一句话」,详情去应用里看。 */
+    private const val ANNOUNCEMENT_MAX_CHARS = 60
+
     const val CHANNEL_REMINDER = "course_reminder"
     const val CHANNEL_LIVE = "live_updates"
     const val CHANNEL_COURSE_LIVE = "course_live"
     const val CHANNEL_APP_UPDATE = "app_update"
+    const val CHANNEL_ANNOUNCEMENT = "course_announcement"
     const val EXTRA_COURSE_ID = "notify_course_id"
     const val EXTRA_OPEN_UPDATE = "notify_open_update"
+    const val EXTRA_OPEN_RAIN_CLASSROOM = "notify_open_rain_classroom"
 
     /** 实时活动通知固定 id:同一时刻只会有一节课的实时活动。 */
     const val LIVE_NOTIFICATION_ID = 99010
     private const val NOTIFY_ID_UPDATE = 99001
     private const val NOTIFY_ID_TOMORROW = 99003
+    private const val NOTIFY_ID_ANNOUNCEMENT = 99004
     private const val REQ_UPDATE_INTENT = 99002
     private const val REQ_LIVE_CONTENT = 99011
+    private const val REQ_ANNOUNCEMENT_INTENT = 99013
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -61,6 +68,12 @@ object Notifier {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_APP_UPDATE, "应用更新", NotificationManager.IMPORTANCE_DEFAULT)
                     .apply { description = "后台检查到新版本时的提示" },
+            )
+        }
+        if (nm.getNotificationChannel(CHANNEL_ANNOUNCEMENT) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ANNOUNCEMENT, "课程公告", NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = "雨课堂课程有新公告时的提示" },
             )
         }
     }
@@ -94,6 +107,8 @@ object Notifier {
      *
      * @param leadMinutes 提前量(0 = 已到上课时间)
      * @param startMinute 课程开始分钟(自 0:00,-1 = 未知)
+     * @param announcement 该课程最新一条公告的标题(雨课堂);null/空 = 不附。
+     *   只读本地缓存 —— 提醒由精确闹钟触发,那一刻不该联网。
      */
     fun showCourseReminder(
         context: Context,
@@ -104,6 +119,7 @@ object Notifier {
         location: String,
         teacher: String,
         leadMinutes: Int,
+        announcement: String? = null,
     ) {
         if (!canPost(context, CHANNEL_REMINDER)) return
         ensureChannels(context)
@@ -115,6 +131,10 @@ object Notifier {
             if (startText.isNotEmpty()) append(" · $startText 开始")
             if (location.isNotEmpty()) append("\n$location")
             if (teacher.isNotEmpty()) append(" · $teacher")
+            announcement?.takeIf { it.isNotBlank() }?.let {
+                append("\n最新公告:")
+                append(it.take(ANNOUNCEMENT_MAX_CHARS))
+            }
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDER)
@@ -150,6 +170,8 @@ object Notifier {
         leadMinutes: Int,
         muteKey: String,
         now: Long,
+        /** 该课程最新一条公告标题;只进展开文本,不动 bodyText/chipText(胶囊短文案放不下)。 */
+        announcement: String? = null,
     ): Notification {
         ensureChannels(context)
 
@@ -174,7 +196,13 @@ object Notifier {
             else -> "已下课"
         }
         val bodyText = "$statusLine · $timeText"
-        val expandedText = if (location.isBlank()) bodyText else "$bodyText\n$placeText"
+        val expandedText = buildString {
+            append(bodyText)
+            if (location.isNotBlank()) append("\n").append(placeText)
+            announcement?.takeIf { it.isNotBlank() }?.let {
+                append("\n最新公告:").append(it.take(ANNOUNCEMENT_MAX_CHARS))
+            }
+        }
         val progressing = inClass && !finished
 
         val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
@@ -378,6 +406,37 @@ object Notifier {
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .build()
         post(context, NOTIFY_ID_UPDATE, notification)
+    }
+
+    /**
+     * 雨课堂有**新公告**:独立渠道 + 独立通知 id,与课程提醒互不覆盖(也不覆盖对方)。
+     * 点击进入「设置 → 雨课堂」,那里能看到登录状态与逐课程的公告。
+     */
+    fun showNewAnnouncement(context: Context, courseName: String, title: String, count: Int) {
+        if (!canPost(context, CHANNEL_ANNOUNCEMENT)) return
+        ensureChannels(context)
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            REQ_ANNOUNCEMENT_INTENT,
+            Intent(context, MainActivity::class.java).apply {
+                putExtra(EXTRA_OPEN_RAIN_CLASSROOM, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val subject = courseName.ifBlank { "雨课堂" }
+        val heading = if (count > 1) "$subject 有 $count 条新公告" else "$subject 有新公告"
+        val notification = NotificationCompat.Builder(context, CHANNEL_ANNOUNCEMENT)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle(heading)
+            .setContentText(title)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(title))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .build()
+        post(context, NOTIFY_ID_ANNOUNCEMENT, notification)
     }
 
     /** 统一收口:权限被回收时 notify 会抛 SecurityException,不能让它冒到调用方。 */

@@ -16,8 +16,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 /**
  * 课程进行中的常驻通知(实时活动):从「提前量」时刻起持有通知,覆盖
@@ -74,6 +77,8 @@ class CourseLiveUpdateService : Service() {
             leadMinutes = payload.leadMinutes,
             muteKey = payload.muteKey,
             now = now,
+            // 首次上屏时取一次;后续由刷新循环更新(公告可能在课前那几分钟里刚发出来)
+            announcement = runBlocking { latestAnnouncementTitle(payload.courseId) },
         )
         runCatching {
             ServiceCompat.startForeground(
@@ -111,6 +116,7 @@ class CourseLiveUpdateService : Service() {
                     leadMinutes = payload.leadMinutes,
                     muteKey = payload.muteKey,
                     now = now,
+                    announcement = latestAnnouncementTitle(payload.courseId),
                 )
                 val posted = runCatching {
                     NotificationManagerCompat.from(this@CourseLiveUpdateService)
@@ -139,6 +145,20 @@ class CourseLiveUpdateService : Service() {
         AppDatabase.get(applicationContext).courseDao(),
         SettingsRepository(applicationContext),
     )
+
+    /**
+     * 该课程最新一条公告标题(雨课堂)。只读本地缓存,不联网 —— 实时活动每分钟刷新一次,
+     * 不能在这里挂网络请求。开关关掉时直接返回 null。
+     */
+    private suspend fun latestAnnouncementTitle(courseId: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val settings = SettingsRepository(applicationContext).settings.first()
+            if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
+                return@runCatching null
+            }
+            AppDatabase.get(applicationContext).announcementDao().latestByCourse(courseId)?.title
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
 
     override fun onDestroy() {
         refreshJob?.cancel()

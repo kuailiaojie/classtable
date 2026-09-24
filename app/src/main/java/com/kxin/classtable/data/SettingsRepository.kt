@@ -59,6 +59,12 @@ class SettingsRepository @Inject constructor(
     private val KEY_ADJUSTMENTS = stringPreferencesKey("schedule_adjustments")
     private val KEY_LAUNCHES = intPreferencesKey("app_launches")
     private val KEY_SURVEY_HANDLED = booleanPreferencesKey("survey_handled")
+    /** 雨课堂:开关与上次拉取时间。属于本机数据(与账号无关),不进云端设置同步。 */
+    private val KEY_YKT_ENABLED = booleanPreferencesKey("yuketang_enabled")
+    private val KEY_YKT_IN_REMINDER = booleanPreferencesKey("yuketang_include_in_reminder")
+    private val KEY_YKT_BACKGROUND_FETCH = booleanPreferencesKey("yuketang_background_fetch")
+    private val KEY_YKT_NOTIFY_NEW = booleanPreferencesKey("yuketang_notify_new")
+    private val KEY_YKT_LAST_FETCH = longPreferencesKey("yuketang_last_fetch_at")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -85,6 +91,11 @@ class SettingsRepository @Inject constructor(
             lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
             dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
             onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
+            yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
+            yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
+            yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
+            yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
+            yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
             scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
         )
     }
@@ -214,5 +225,30 @@ class SettingsRepository @Inject constructor(
     /** 问卷已弹过 / 已处理:不再自动出现;仅本机。 */
     suspend fun markSurveyHandled() {
         context.settingsDataStore.edit { it[KEY_SURVEY_HANDLED] = true }
+    }
+
+    /**
+     * 雨课堂开关(总开关 / 提醒内附公告 / 后台拉取 / 新公告通知)。
+     *
+     * 与 AI 密钥同理:属于本机能力开关,不打同步时间戳、不进 [applySynced] ——
+     * 推上云没有意义,还会让别的设备白当成「本机改过配置」。
+     */
+    suspend fun setYuketangOptions(
+        enabled: Boolean,
+        includeInReminder: Boolean,
+        backgroundFetch: Boolean,
+        notifyNew: Boolean,
+    ) {
+        context.settingsDataStore.edit { p ->
+            p[KEY_YKT_ENABLED] = enabled
+            p[KEY_YKT_IN_REMINDER] = includeInReminder
+            p[KEY_YKT_BACKGROUND_FETCH] = backgroundFetch
+            p[KEY_YKT_NOTIFY_NEW] = notifyNew
+        }
+    }
+
+    /** 记录一次成功的公告拉取(仅本机,不打同步时间戳)。 */
+    suspend fun markYuketangFetched(at: Long = System.currentTimeMillis()) {
+        context.settingsDataStore.edit { it[KEY_YKT_LAST_FETCH] = at }
     }
 }

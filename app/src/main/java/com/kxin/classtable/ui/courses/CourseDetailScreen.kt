@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -36,6 +37,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.data.yuketang.YuketangAnnouncement
+import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
@@ -46,6 +49,7 @@ import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -57,6 +61,7 @@ import javax.inject.Inject
 class CourseDetailViewModel @Inject constructor(
     private val courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
+    private val yuketangRepository: YuketangRepository,
 ) : ViewModel() {
     /** 课程列表流:详情页响应式呈现;课程被删(本页或编辑页)时该课程随即从列表消失。 */
     val courses: StateFlow<List<Course>> = courseRepository.observeAll()
@@ -64,6 +69,13 @@ class CourseDetailViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    /** 该课程的雨课堂公告(本地缓存,倒序)。 */
+    fun announcements(courseId: String): Flow<List<YuketangAnnouncement>> =
+        yuketangRepository.observeAnnouncements(courseId)
+
+    /** 空态文案要区分「没登录」与「登录了但这门课没有公告」。 */
+    fun isYuketangLoggedIn(): Boolean = yuketangRepository.isLoggedIn()
 
     fun delete(id: String) {
         viewModelScope.launch { runCatching { courseRepository.delete(id) } }
@@ -82,6 +94,10 @@ fun CourseDetailScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val announcementsFlow = remember(courseId) { viewModel.announcements(courseId) }
+    val announcements by announcementsFlow.collectAsStateWithLifecycle(
+        initialValue = emptyList<YuketangAnnouncement>(),
+    )
 
     // 响应式:课程存在过之后一旦从列表消失(本页删除 / 编辑页删除),立即返回上一层。
     // hadCourse 用 rememberSaveable,保证「进编辑页删除后返回」也能识别。
@@ -176,6 +192,39 @@ fun CourseDetailScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+                Text(text = "公告", style = YohakuType.title20, color = colors.neutral10)
+                Spacer(modifier = Modifier.height(6.dp))
+                if (announcements.isEmpty()) {
+                    Text(
+                        text = if (viewModel.isYuketangLoggedIn()) {
+                            "这门课还没有公告。可在「设置 → 雨课堂」里刷新,或确认已绑定对应的雨课堂班级。"
+                        } else {
+                            "在「设置 → 雨课堂」里登录并绑定这门课,这里会按时间列出课程公告。"
+                        },
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                } else {
+                    Text(
+                        text = "共 ${announcements.size} 条 · 最新 ${announcementDate(announcements.first().createdAtMillis)}",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    announcements.forEachIndexed { index, announcement ->
+                        if (index > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(colors.neutral3),
+                            )
+                        }
+                        AnnouncementRow(announcement)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
                 Text(
@@ -199,6 +248,49 @@ fun CourseDetailScreen(
             }
         }
     }
+}
+
+/** 一条公告:左侧等宽日期 + 右侧标题/正文/发布人,逐条竖排即成时间轴。 */
+@Composable
+private fun AnnouncementRow(announcement: YuketangAnnouncement) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+    ) {
+        Text(
+            text = announcementDate(announcement.createdAtMillis),
+            style = YohakuType.timeMono,
+            color = colors.neutral6,
+            modifier = Modifier.width(48.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = announcement.title, style = YohakuType.copy15, color = colors.neutral9)
+            val body = announcement.content.trim()
+            if (body.isNotEmpty() && body != announcement.title) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = body,
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (announcement.publisher.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(text = announcement.publisher, style = YohakuType.label12, color = colors.neutral6)
+            }
+        }
+    }
+}
+
+/** 公告日期(「9/12」);解析不出发布时间时用破折号,不假装知道。 */
+private fun announcementDate(at: Long): String {
+    if (at <= 0L) return "—"
+    val date = LocalDate.ofInstant(java.time.Instant.ofEpochMilli(at), java.time.ZoneId.systemDefault())
+    return "${date.monthValue}/${date.dayOfMonth}"
 }
 
 @Composable

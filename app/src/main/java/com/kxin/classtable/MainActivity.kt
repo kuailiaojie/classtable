@@ -72,6 +72,9 @@ import com.kxin.classtable.ui.settings.UpdateState
 import com.kxin.classtable.ui.settings.UpdateViewModel
 import com.kxin.classtable.ui.settings.WidgetSettingsScreen
 import com.kxin.classtable.ui.week.WeekScreen
+import com.kxin.classtable.ui.yuketang.RainClassroomScreen
+import com.kxin.classtable.ui.yuketang.YuketangBindScreen
+import com.kxin.classtable.ui.yuketang.YuketangLoginScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -128,12 +131,18 @@ fun ClasstableRoot(
             val openUpdate = runCatching {
                 intent?.getBooleanExtra(Notifier.EXTRA_OPEN_UPDATE, false) ?: false
             }.getOrDefault(false)
+            val openRainClassroom = runCatching {
+                intent?.getBooleanExtra(Notifier.EXTRA_OPEN_RAIN_CLASSROOM, false) ?: false
+            }.getOrDefault(false)
             if (!handledDeepLink && !courseId.isNullOrBlank()) {
                 handledDeepLink = true
                 nav.navigate("course_detail/$courseId")
             } else if (!handledDeepLink && openUpdate) {
                 handledDeepLink = true
                 nav.navigate("update")
+            } else if (!handledDeepLink && openRainClassroom) {
+                handledDeepLink = true
+                nav.navigate("rain_classroom")
             }
         }
         // 纸面背景铺满全屏(含状态栏/导航栏区域),内容区再做系统栏内边距
@@ -182,6 +191,9 @@ fun ClasstableRoot(
                 composable("account") { AccountScreen(nav) }
                 composable("adapter_sync") { AdapterSyncScreen(nav) }
                 composable("update") { UpdateScreen(nav) }
+                composable("rain_classroom") { RainClassroomScreen(nav) }
+                composable("yuketang_login") { YuketangLoginScreen(nav) }
+                composable("yuketang_bind") { YuketangBindScreen(nav) }
                 }
             }
             if (showBottomNav) {

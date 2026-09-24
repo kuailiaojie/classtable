@@ -44,6 +44,7 @@ import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SurveyPrompt
+import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.AccentOptions
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
@@ -78,6 +79,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val authRepository: AuthRepository,
     private val surveyPrompt: SurveyPrompt,
+    yuketangRepository: YuketangRepository,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -85,6 +87,9 @@ class SettingsViewModel @Inject constructor(
     val userEmail: StateFlow<String?> = authRepository.currentUser
         .map { it?.email }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** 雨课堂登录态:决定设置页那一行的说明文字。 */
+    val yuketangLoggedIn: StateFlow<Boolean> = yuketangRepository.loggedIn
 
     /** 够资格时弹一次用户问卷邀请(判定见 [SurveyPrompt])。 */
     val surveyInvite: StateFlow<Boolean> = surveyPrompt.shouldInvite
@@ -143,6 +148,7 @@ fun SettingsScreen(
     val colors = LocalYohakuColors.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+    val yuketangLoggedIn by viewModel.yuketangLoggedIn.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val firstPeriodText = if (periods.isNotEmpty()) {
         "第1节 %02d:%02d".format(periods[0].start / 60, periods[0].start % 60)
@@ -533,6 +539,14 @@ fun SettingsScreen(
             )
             DividerLine()
             SettingRow(title = "提醒可靠性", value = "通知 / 闹钟 / 自启动", onClick = { nav.navigate("permissions") })
+        }
+
+        SettingsSection(title = "雨课堂") {
+            SettingRow(
+                title = "雨课堂公告",
+                value = if (yuketangLoggedIn) "已登录" else "未登录",
+                onClick = { nav.navigate("rain_classroom") },
+            )
         }
 
         SettingsSection(title = "桌面") {

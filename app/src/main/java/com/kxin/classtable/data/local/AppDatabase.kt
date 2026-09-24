@@ -8,14 +8,22 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [CourseEntity::class, SemesterEntity::class, DeletedCourseEntity::class],
-    version = 4,
+    entities = [
+        CourseEntity::class,
+        SemesterEntity::class,
+        DeletedCourseEntity::class,
+        YuketangBindingEntity::class,
+        AnnouncementEntity::class,
+    ],
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun semesterDao(): SemesterDao
     abstract fun deletedCourseDao(): DeletedCourseDao
+    abstract fun yuketangBindingDao(): YuketangBindingDao
+    abstract fun announcementDao(): AnnouncementDao
 
     companion object {
         @Volatile
@@ -48,6 +56,44 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v4 → v5:雨课堂的两张**本机**表——课程↔班级绑定、已拉取的课程公告。
+         * 都是新建空表,不涉及旧数据回填。
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `yuketang_bindings` (" +
+                        "`courseId` TEXT NOT NULL, " +
+                        "`classroomId` TEXT NOT NULL, " +
+                        "`classroomName` TEXT NOT NULL, " +
+                        "`teacherName` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`courseId`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `announcements` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`classroomId` TEXT NOT NULL, " +
+                        "`courseId` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`content` TEXT NOT NULL, " +
+                        "`publisher` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_announcements_courseId` " +
+                        "ON `announcements` (`courseId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_announcements_classroomId` " +
+                        "ON `announcements` (`classroomId`)",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -55,7 +101,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "classtable.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

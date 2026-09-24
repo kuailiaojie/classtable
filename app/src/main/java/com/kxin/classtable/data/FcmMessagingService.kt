@@ -2,6 +2,7 @@ package com.kxin.classtable.data
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.notify.Notifier
 import dagger.hilt.EntryPoint
@@ -11,7 +12,9 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * FCM 推送服务:
@@ -98,8 +101,30 @@ class FcmMessagingService : FirebaseMessagingService() {
             location = data["location"].orEmpty(),
             teacher = data["teacher"].orEmpty(),
             leadMinutes = data["leadMinutes"]?.toIntOrNull() ?: 0,
+            announcement = latestAnnouncement(courseId),
         )
         return true
+    }
+
+    /**
+     * 该课程最新一条公告标题(雨课堂),只读本地缓存。
+     *
+     * 服务端推送与本地闹钟的通知 id 相同、互相覆盖,所以这条增强通道也要带上公告 ——
+     * 否则「谁后到谁赢」会让刚附上的公告时有时无。
+     */
+    private fun latestAnnouncement(courseId: String): String? {
+        if (courseId.isBlank()) return null
+        // runBlocking 的 lambda 接收者是 CoroutineScope,所以要先把 Service 自己存下来当 Context 用
+        val context: android.content.Context = this
+        return runCatching {
+            val settings = runBlocking { SettingsRepository(context).settings.first() }
+            if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
+                return@runCatching null
+            }
+            runBlocking {
+                AppDatabase.get(context).announcementDao().latestByCourse(courseId)?.title
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     @EntryPoint
