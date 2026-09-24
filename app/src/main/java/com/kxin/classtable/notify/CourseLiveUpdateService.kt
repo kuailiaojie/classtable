@@ -158,10 +158,7 @@ class CourseLiveUpdateService : Service() {
             if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
                 return@runCatching null
             }
-            YuketangNoticeFilter.latestTitle(
-                AppDatabase.get(applicationContext).announcementDao(),
-                courseId,
-            )
+            YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(applicationContext), courseId)
         }.getOrNull()
     }
 

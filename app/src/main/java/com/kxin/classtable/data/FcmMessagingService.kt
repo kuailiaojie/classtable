@@ -123,10 +123,7 @@ class FcmMessagingService : FirebaseMessagingService() {
                 return@runCatching null
             }
             runBlocking {
-                YuketangNoticeFilter.latestTitle(
-                    AppDatabase.get(context).announcementDao(),
-                    courseId,
-                )
+                YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(context), courseId)
             }
         }.getOrNull()
     }

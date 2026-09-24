@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         YuketangBindingEntity::class,
         AnnouncementEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -94,6 +94,36 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6:公告缓存改为**按雨课堂班级**归属(去掉 courseId 列)。
+         *
+         * 原来公告挂在 App 课程 id 上,而同一门课在课表里可能有多条记录(周一一条、周五一条),
+         * 它们绑定同一个班级 —— 于是同一条公告会被写上两个 courseId,`id` 做主键时后写的把先写的
+         * 顶掉,只有一条记录能看到公告。改成按班级归属后,多条记录共享同一份。
+         *
+         * 公告是纯缓存,直接重建空表即可(下次拉取会补回来),不必逐行搬迁。
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `announcements`")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `announcements` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`classroomId` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`content` TEXT NOT NULL, " +
+                        "`publisher` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_announcements_classroomId_createdAt` " +
+                        "ON `announcements` (`classroomId`, `createdAt`)",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -101,7 +131,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "classtable.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }

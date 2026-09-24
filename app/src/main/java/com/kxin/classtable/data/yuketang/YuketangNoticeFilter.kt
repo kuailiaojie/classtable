@@ -2,6 +2,7 @@ package com.kxin.classtable.data.yuketang
 
 import android.util.Log
 import com.kxin.classtable.data.local.AnnouncementDao
+import com.kxin.classtable.data.local.AppDatabase
 
 /**
  * 区分「雨课堂自己发的上课提醒」与「老师发的课程公告」。
@@ -39,22 +40,33 @@ object YuketangNoticeFilter {
     }
 
     /**
-     * 该课程最新一条**非上课提醒**公告的标题(课前提醒用)。
+     * 某班级最新一条**非上课提醒**公告的标题(课前提醒用)。
      *
      * 往最近 [recentLookback] 条里找:如果最新的几条都是雨课堂的上课提醒,就继续往下找一条
      * 真正的公告;实在没有就返回 null(宁可不附,也不附一条「提醒你上课」)。
      */
     suspend fun latestTitle(
         dao: AnnouncementDao,
-        courseId: String,
+        classroomId: String,
         recentLookback: Int = 8,
     ): String? {
-        val candidates = runCatching { dao.recentByCourse(courseId, recentLookback) }
+        val candidates = runCatching { dao.recentByClassroom(classroomId, recentLookback) }
             .getOrDefault(emptyList())
         val picked = candidates.firstOrNull { !isClassReminder(it.title, it.content) }
         if (picked == null && candidates.isNotEmpty()) {
-            Log.i(TAG, "course=$courseId 最近 ${candidates.size} 条都是雨课堂上课提醒,课前提醒不附公告")
+            Log.i(TAG, "classroom=$classroomId 最近 ${candidates.size} 条都是雨课堂上课提醒,课前提醒不附公告")
         }
         return picked?.title?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * 课前提醒的入口:App 课程 id → 经绑定反查雨课堂班级 → 取最新一条非提醒公告的标题。
+     *
+     * 公告是按班级缓存的,所以提醒侧(闹钟接收器 / 实时活动服务 / FCM)都要先走这一步反查。
+     * 未绑定该课程时返回 null(不附公告),这是正常情况而非错误。
+     */
+    suspend fun latestTitleForCourse(db: AppDatabase, courseId: String): String? {
+        val classroomId = db.yuketangBindingDao().getByCourse(courseId)?.classroomId ?: return null
+        return latestTitle(db.announcementDao(), classroomId)
     }
 }

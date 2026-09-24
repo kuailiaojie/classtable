@@ -9,10 +9,13 @@ import com.kxin.classtable.data.local.YuketangBindingDao
 import com.kxin.classtable.data.local.YuketangBindingEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -75,8 +78,22 @@ class YuketangRepository @Inject constructor(
 
     fun observeBindings(): Flow<List<YuketangBindingEntity>> = bindingDao.observeAll()
 
+    /**
+     * 课程详情页的公告流:先按 App 课程反查雨课堂班级,再取该班级的公告。
+     *
+     * 走绑定而不是直接用 courseId,是因为同一个班级可能被多门课(同名课程的多条记录)绑定;
+     * 公告挂在班级上,多条记录共享同一份,不会互相顶掉。
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun observeAnnouncements(courseId: String): Flow<List<YuketangAnnouncement>> =
-        announcementDao.observeByCourse(courseId).map { list -> list.map { it.toDomain() } }
+        bindingDao.observeByCourse(courseId).flatMapLatest { binding ->
+            if (binding == null) {
+                flowOf(emptyList())
+            } else {
+                announcementDao.observeByClassroom(binding.classroomId)
+                    .map { list -> list.map { it.toDomain() } }
+            }
+        }
 
     /** 拉取课程列表(仅绑定页需要;未登录会抛 [NotLoggedInException])。 */
     suspend fun classrooms(): List<YuketangCourse> = client.courses()
@@ -122,10 +139,12 @@ class YuketangRepository @Inject constructor(
     suspend fun unbind(courseId: String) = bindingDao.deleteByCourse(courseId)
 
     /**
-     * 遍历已绑定课程拉取公告并 upsert。
+     * 拉取已绑定课程的公告并 upsert。
      *
-     * 单个班级失败不影响其它班级;但**登录失效要上抛**——否则后台任务会当作「拉到了 0 条」
-     * 一直静默重试。
+     * **按雨课堂班级分组**:同一个班级可能被多门课绑定(同名课程的多条记录),只拉一次、只判一次
+     * 「首次基线」——逐条绑定循环会把第二次看到的「已有缓存」误判成整批新公告,首次同步就推一串通知。
+     *
+     * 单个班级失败不影响其它班级;但**登录失效要上抛**——否则后台任务会当作「拉到了 0 条」静默重试。
      */
     suspend fun syncAnnouncements(): AnnouncementSyncResult {
         val bindings = bindingDao.getAll()
@@ -141,26 +160,26 @@ class YuketangRepository @Inject constructor(
         var latestTitle: String? = null
         var latestAt = 0L
 
-        for (binding in bindings) {
+        for ((classroomId, boundCourses) in bindings.groupBy { it.classroomId }) {
             val announcements = try {
-                client.announcements(binding.classroomId, overridePath)
+                client.announcements(classroomId, overridePath)
             } catch (e: NotLoggedInException) {
                 throw e
             } catch (e: Exception) {
                 // 单个班级失败不影响其它班级;但失败要留痕,否则「一条都没拉到」无从排查。
                 failed++
-                Log.w(TAG, "classroom=${binding.classroomId} 拉取失败:${e.message}")
+                Log.w(TAG, "classroom=$classroomId 拉取失败:${e.message}")
                 continue
             }
             if (announcements.isEmpty()) continue
 
-            // 首次拉取这个班级:整批当基线,不报「新」。
-            val hadCache = announcementDao.countByClassroom(binding.classroomId) > 0
+            // 首次拉取这个班级:整批当基线,不报「新」。必须在写入前、且每个班级只判一次。
+            val hadCache = announcementDao.countByClassroom(classroomId) > 0
             if (hadCache) {
                 val fresh = announcements.filter { announcementDao.getById(it.id) == null }
                 fresh.forEach { announcement ->
                     val reminder = YuketangNoticeFilter.isClassReminder(announcement.title, announcement.content)
-                    Log.i(TAG, "classroom=${binding.classroomId} 新公告:${announcement.title}" +
+                    Log.i(TAG, "classroom=$classroomId 新公告:${announcement.title}" +
                         if (reminder) "(雨课堂上课提醒,不推送)" else "")
                 }
                 // 雨课堂自己的「上课提醒」不进通知:课表本来就有课前提醒,重复推没有意义。
@@ -172,22 +191,20 @@ class YuketangRepository @Inject constructor(
                     if (newest.createdAtMillis >= latestAt) {
                         latestAt = newest.createdAtMillis
                         latestTitle = newest.title
-                        latestCourseName = courseNames[binding.courseId]
+                        // 通知里报哪门课:同班级绑定多门课时取第一门(它们本来就是同一门课的多条记录)
+                        latestCourseName = courseNames[boundCourses.first().courseId]
                     }
                 }
             }
 
-            announcementDao.upsertAll(
-                announcements.map {
-                    AnnouncementEntity.fromDomain(it, courseId = binding.courseId, fetchedAt = now)
-                },
-            )
+            announcementDao.upsertAll(announcements.map { AnnouncementEntity.fromDomain(it, fetchedAt = now) })
             fetched += announcements.size
-            Log.i(TAG, "classroom=${binding.classroomId} 拉到 ${announcements.size} 条公告")
+            Log.i(TAG, "classroom=$classroomId 拉到 ${announcements.size} 条公告(被 ${boundCourses.size} 门课绑定)")
         }
         Log.i(
             TAG,
-            "公告同步完成:绑定 ${bindings.size} 门 / 拉到 $fetched 条 / 新增 $newCount 条 / 失败 $failed 个班级",
+            "公告同步完成:绑定 ${bindings.size} 门课 / ${bindings.map { it.classroomId }.distinct().size} 个班级 / " +
+                "拉到 $fetched 条 / 新增 $newCount 条 / 失败 $failed 个班级",
         )
         return AnnouncementSyncResult(
             fetched = fetched,

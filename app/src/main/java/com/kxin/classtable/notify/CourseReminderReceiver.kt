@@ -123,9 +123,7 @@ class CourseReminderReceiver : BroadcastReceiver() {
     private fun latestAnnouncement(context: Context, courseId: String, settings: AppSettings): String? {
         if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) return null
         return runCatching {
-            runBlocking {
-                YuketangNoticeFilter.latestTitle(AppDatabase.get(context).announcementDao(), courseId)
-            }
+            runBlocking { YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(context), courseId) }
         }.getOrNull()
     }
 
