@@ -18,8 +18,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 48
-        versionName = "1.0.0-rc1"
+        versionCode = 49
+        versionName = "1.0.0-rc2"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")
@@ -69,11 +69,21 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            ndk {
-                // x86/x86_64 只有模拟器用得到,砍掉可省下 4 份 native 库的复制
-                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-            }
             signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    // 按 CPU 架构拆包:32 位(armeabi-v7a)与 64 位(arm64-v8a)各出一个安装包 ——
+    // 每台设备只用下自己那份 native 库,体积小一截;应用内更新据此只下发匹配本机架构的包。
+    //   - x86 / x86_64 保留给模拟器(没有它们,调试版就跑不了模拟器);
+    //   - 额外的通吃包(isUniversalApk)给「不带架构信息」的老版本升级用:
+    //     老包先升到通吃包,之后每次更新就会认领自己架构的那一个。
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 

@@ -1,6 +1,7 @@
 package com.kxin.classtable.data
 
 import android.content.Context
+import android.os.Build
 import com.kxin.classtable.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -55,6 +56,9 @@ sealed interface DownloadState {
  * 应用更新:经自建 Netlify 反代 `/version` 获取最新版本(服务端代查 GitHub Release,
  * 客户端不直连 GitHub),再经 `/apk` 下载安装包。
  *
+ * 请求会带上本机的 CPU 架构与「接收预发行版」开关:安装包按架构拆开发布,服务端据此
+ * 只返回匹配本机的那一个(通吃包作为兜底),用户不会下到装不上的包。
+ *
  * 下载这条链上踩过的坑,都在这里处理掉:
  * 1. **不要依赖 Content-Length**:代理/边缘会把响应改成 chunked,长度缺失或与解压后长度不一致,
  *    早期实现据此算进度会永远停在 0%,据此做完整性校验还会把好包判成「不完整」。进度改为按
@@ -79,27 +83,67 @@ class UpdateRepository @Inject constructor(
     private val _download = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val download: StateFlow<DownloadState> = _download.asStateFlow()
 
-    /** 查询最新版本并判断是否有更新。 */
+    /** 查询最新版本并判断是否有更新。带上本机架构与预发行版开关。 */
     suspend fun check(): Result<UpdateInfo> = withContext(Dispatchers.IO) {
         runCatching {
-            val json = getJson(versionUrl)
+            val s = settings.currentSettings()
+            val json = getJson(versionRequestUrl(s.includePrerelease))
             val latest = json.optString("versionName").trim().removePrefix("v")
             if (latest.isBlank()) throw IOException("版本信息为空")
-            val rawApkUrl = json.optString("apkUrl").trim()
+            val asset = assetFor(json, deviceAbi())
             UpdateInfo(
                 currentVersion = BuildConfig.VERSION_NAME,
                 latestVersion = latest,
                 isNewer = isNewer(BuildConfig.VERSION_NAME, latest),
                 notes = json.optString("notes"),
-                apkUrl = when {
-                    rawApkUrl.isBlank() -> ""
-                    rawApkUrl.startsWith("http") -> rawApkUrl
-                    else -> proxyBase + if (rawApkUrl.startsWith("/")) rawApkUrl else "/$rawApkUrl"
-                },
-                apkSize = json.optLong("apkSize", 0L),
-                apkSha256 = json.optString("apkSha256").trim(),
+                apkUrl = absoluteUrl(asset.url),
+                apkSize = asset.size,
+                apkSha256 = asset.sha256,
                 releaseUrl = json.optString("releaseUrl"),
             )
+        }
+    }
+
+    private data class ApkAsset(val url: String, val size: Long, val sha256: String)
+
+    /**
+     * 取本机架构对应的安装包信息:服务端在 `apks` 里按架构分别给出地址 / 大小 / 摘要,
+     * 顶层字段则始终是通吃包 —— 老版本服务端只有顶层字段时,照样能升级。
+     */
+    private fun assetFor(json: JSONObject, abi: String): ApkAsset {
+        val entry = if (abi.isBlank()) null else json.optJSONObject("apks")?.optJSONObject(abi)
+        val source = entry ?: json
+        return ApkAsset(
+            url = source.optString("apkUrl").trim(),
+            size = source.optLong("apkSize", 0L),
+            sha256 = source.optString("apkSha256").trim(),
+        )
+    }
+
+    private fun absoluteUrl(raw: String): String = when {
+        raw.isBlank() -> ""
+        raw.startsWith("http") -> raw
+        else -> proxyBase + if (raw.startsWith("/")) raw else "/$raw"
+    }
+
+    /** 版本查询地址:按需带上「接收预发行版」标记。 */
+    private fun versionRequestUrl(includePrerelease: Boolean): String =
+        if (includePrerelease) "$versionUrl?prerelease=1" else versionUrl
+
+    /**
+     * 本机实际安装的 CPU 架构(`arm64-v8a` / `armeabi-v7a` / …)。
+     *
+     * 从 `nativeLibraryDir` 的末段还原:设备上这个目录就是按本包架构建的(短名 arm64 / arm …),
+     * 所以 64 位设备上若装的是 32 位包(或通吃包),依然会拿到同一架构的更新,不会平白换一套。
+     * 不用 `ApplicationInfo.primaryCpuAbi` —— 那是隐藏 API,公开 SDK 里没有。
+     */
+    private fun deviceAbi(): String {
+        val libDir = context.applicationInfo.nativeLibraryDir.orEmpty().substringAfterLast('/')
+        return when (libDir) {
+            "arm64", "arm64-v8a" -> "arm64-v8a"
+            "arm", "armeabi-v7a" -> "armeabi-v7a"
+            "x86", "x86_64" -> libDir
+            else -> Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         }
     }
 

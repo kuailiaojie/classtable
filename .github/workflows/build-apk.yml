@@ -9,12 +9,15 @@
 # 产物:
 #   - debug APK(可直接安装)
 #   - release APK(配置签名密钥后为正式签名版,否则为未签名版)
+#   两者都按 CPU 架构拆开(arm64-v8a / armeabi-v7a / x86 / x86_64),另附一个通吃包
+#   (app-universal-*.apk)—— 应用内更新据此只下发匹配设备架构的那一个。
 #
 # 发布:
 #   - main 推送或手动触发且 APK 构建成功后,自动创建 GitHub Release:
 #     tag 取 app/build.gradle.kts 中的 versionName(如 0.1.5,无需手动打 tag),
 #     Release 正文取 CHANGELOG.md 中对应版本章节。
-#     versionName 带后缀(如 1.0.0-rc1)时发布为 Pre-release,且不会成为 /releases/latest。
+#     versionName 带后缀(如 1.0.0-rc1)时发布为 Pre-release,且不会成为 /releases/latest ——
+#     应用内「检查更新」默认只提示正式版;用户在设置里打开「接收预发行版」后才会收到 RC。
 #   - Pull Request 不会触发发布。
 #
 # 可选签名(Release):
@@ -155,8 +158,8 @@ jobs:
             exit 0
           fi
           # 版本号带后缀(如 1.0.0-rc1)视为预发布:GitHub 上标成 Pre-release,
-          # 同时它不会成为 /releases/latest —— 应用内「检查更新」仍指向最近一个正式版,
-          # RC 只给主动安装的人用。正式版(无后缀)照常发布为 Latest。
+          # 同时它不会成为 /releases/latest —— 应用内「检查更新」默认只提示正式版,
+          # 打开「设置 → 接收预发行版」的人才会收到 RC。正式版(无后缀)照常发布为 Latest。
           PRERELEASE_FLAG=""
           if [[ "$TAG" == *-* ]]; then
             PRERELEASE_FLAG="--prerelease"

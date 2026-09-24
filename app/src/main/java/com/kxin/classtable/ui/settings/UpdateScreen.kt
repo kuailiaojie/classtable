@@ -34,18 +34,23 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.DownloadState
+import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.UpdateInfo
 import com.kxin.classtable.data.UpdateRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
+import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMarkdown
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.domain.model.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
@@ -62,8 +67,13 @@ sealed interface UpdateState {
 @HiltViewModel
 class UpdateViewModel @Inject constructor(
     private val repository: UpdateRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     val currentVersion: String = BuildConfig.VERSION_NAME
+
+    /** 「接收预发行版」开关:与设置页共用同一份数据。 */
+    val settings: StateFlow<AppSettings> = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -112,6 +122,12 @@ class UpdateViewModel @Inject constructor(
         _state.value = UpdateState.Idle
     }
 
+    /** 切换「接收预发行版」,并按新规则立刻重查一次 —— 页面上的结果要跟着变。 */
+    fun setIncludePrerelease(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setIncludePrerelease(enabled)
+        check()
+    }
+
     fun dismiss() {
         _state.value = UpdateState.Idle
     }
@@ -128,6 +144,7 @@ fun UpdateScreen(
     val uriHandler = LocalUriHandler.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val download by viewModel.download.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     // 进入即检查一次
     LaunchedEffect(Unit) { viewModel.check() }
@@ -242,6 +259,33 @@ fun UpdateScreen(
                         .padding(vertical = 4.dp),
                 )
             }
+
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+            Text(text = "更新选项", style = YohakuType.label12, color = colors.neutral7)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YohakuChip(
+                    text = "仅正式版",
+                    selected = !settings.includePrerelease,
+                    onClick = { viewModel.setIncludePrerelease(false) },
+                )
+                YohakuChip(
+                    text = "含预发行版",
+                    selected = settings.includePrerelease,
+                    onClick = { viewModel.setIncludePrerelease(true) },
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "预发行版(RC)是正式版之前的试用版:新功能来得早,偶尔也会有点小毛病。" +
+                    if (settings.includePrerelease) {
+                        "已打开 —— 正式版与 RC 都会提示。"
+                    } else {
+                        "当前只提示正式版;打开上面的开关就会连它一起提示。"
+                    },
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }
 

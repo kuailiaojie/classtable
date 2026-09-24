@@ -48,6 +48,11 @@ data class AppSettings(
     val tomorrowReminderTime: String = "21:30",
     /** 是否在后台自动检查更新(每天一次,有新版发通知)。 */
     val autoCheckUpdate: Boolean = true,
+    /**
+     * 是否接收预发行版(RC)。默认关闭,只推正式版;打开后「检查更新」会把 GitHub 上的
+     * Pre-release 一起纳入比较 —— 想第一时间试新功能、也愿意接受偶尔不稳的人用得上。
+     */
+    val includePrerelease: Boolean = false,
     /** 上次自动检查更新的时间戳(0 = 从未检查)。 */
     val lastUpdateCheckAt: Long = 0L,
     /** 已忽略的版本号:该版本不再主动提示,手动检查仍会显示。 */

@@ -37,8 +37,18 @@ Android 的 Firebase 官方 SDK 硬编码 Google 域名,大陆无法直连,因�
 
 | 路径 | 作用 |
 |---|---|
-| `GET /version` | 服务端代查 GitHub `releases/latest`,返回 `{versionName, notes, releaseUrl, apkUrl, publishedAt}` |
-| `GET /apk` | 流式代理最新 release 的 `app-release.apk`(绝不会发 debug 包) |
+| `GET /version` | 服务端代查 GitHub Release,返回 `{versionName, notes, releaseUrl, apks, apkUrl, apkSize, apkSha256, publishedAt}` |
+| `GET /apk` | 流式代理对应 Release 的安装包(绝不会发 debug 包) |
+
+**按架构下发。** 发布包拆成 `app-arm64-v8a-release.apk` / `app-armeabi-v7a-release.apk`(另有
+x86 / x86_64 与通吃包 `app-universal-release.apk`)。`/version` 的 `apks` 字段按架构分别给出
+`apkUrl` / `apkSize` / `apkSha256`,客户端从本包的 `nativeLibraryDir` 认出自己是哪一套、
+该下哪一个,再去 `GET /apk?abi=<架构>` 取包;顶层 `apkUrl` / `apkSize` / `apkSha256` 始终是
+通吃包 —— 不带架构信息的旧版本靠它先升上来,之后每次更新就会认领自己架构的那一个。
+
+**预发行版。** `GET /version?prerelease=1` 会把 GitHub 的 Pre-release 一并纳入比较(默认走
+`releases/latest`,永远只有正式版)。`/apk` 也要带上同一个 `prerelease=1`,保证版本信息与实际
+下载的包出自同一个 Release。开关在应用内:「设置 → 接收预发行版」。
 
 如需提升 GitHub API 限流额度,可在 Netlify 环境变量设置 `GITHUB_TOKEN`(可选)。
 

@@ -22,6 +22,9 @@ const PREFIX = "/.netlify/functions/proxy";
 // 可选环境变量 GITHUB_TOKEN:提升 GitHub API 限流额度(未授权 60 次/时)。
 const GITHUB_REPO = "kuailiaojie/classtable";
 const RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const RELEASES_LIST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
+// 安装包按 CPU 架构拆开,每台设备只该拿到自己那一种。顺序有意义:"x86" 是 "x86_64" 的子串。
+const ABI_NAMES = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"];
 
 // Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
 // 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
@@ -91,31 +94,84 @@ async function latestRelease() {
   return resp.json();
 }
 
-// 从 Release 资产中挑安装包:必须优先 release,绝不把 debug 包发给用户。
+// 预发行版开关打开时 /releases/latest 用不上 —— GitHub 的 latest 永远不含预发布项,
+// 所以改取 releases 列表(GitHub 按发布时间倒序返回),挑第一个非草稿。
+async function pickRelease(includePrerelease) {
+  if (!includePrerelease) return latestRelease();
+  const resp = await fetch(`${RELEASES_LIST_API}?per_page=20`, { headers: githubHeaders() });
+  if (!resp.ok) throw new Error(`GitHub API HTTP ${resp.status}`);
+  const list = (await resp.json()).filter((r) => !r.draft);
+  if (list.length === 0) throw new Error("没有可用的 Release");
+  return list[0];
+}
+
+/** Release 里可下发给用户的安装包:一律先滤掉 debug 包,绝不把调试包装到用户手机上。 */
+function releaseApks(rel) {
+  return (rel.assets || []).filter((a) => a.name.endsWith(".apk") && !/debug/i.test(a.name));
+}
+
+/** 资产名里的 CPU 架构(`app-arm64-v8a-release.apk` → `arm64-v8a`);认不出返回空串。 */
+function abiOf(name) {
+  return ABI_NAMES.find((abi) => name.includes(abi)) || "";
+}
+
+// 从 Release 资产中挑安装包:先按客户端 CPU 架构精确匹配,再退回通吃包 / 普通 release 包。
 // (未配置签名时 CI 产出 app-release-unsigned.apk,旧的「取第一个 .apk」会误选 app-debug.apk)
-function pickApk(rel) {
-  const apks = (rel.assets || []).filter((a) => a.name.endsWith(".apk"));
-  return apks.find((a) => a.name === "app-release.apk")
+function pickApk(rel, abi) {
+  const apks = releaseApks(rel);
+  if (abi) {
+    const matched = apks.find((a) => abiOf(a.name) === abi);
+    if (matched) return matched;
+  }
+  return apks.find((a) => /universal/i.test(a.name))
+    || apks.find((a) => a.name === "app-release.apk")
     || apks.find((a) => /release/i.test(a.name))
-    || apks.find((a) => !/debug/i.test(a.name))
     || apks[0];
 }
 
+/** 一个安装包在 /version 里的呈现:地址带上 abi / prerelease,之后 /apk 才取得回同一个包。 */
+function apkInfo(asset, { abi, includePrerelease }) {
+  if (!asset) return { apkUrl: "", apkSize: 0, apkSha256: "" };
+  const params = new URLSearchParams();
+  if (abi) params.set("abi", abi);
+  if (includePrerelease) params.set("prerelease", "1");
+  const query = params.toString();
+  return {
+    apkUrl: "/apk" + (query ? `?${query}` : ""),
+    apkSize: asset.size || 0,
+    apkSha256: String(asset.digest || "").replace(/^sha256:/, ""),
+  };
+}
+
+// 按架构列出全部安装包,由客户端认领本机那一个 ——
+// 这样 /version 的响应不随架构变化,CDN 缓存与 GitHub 配额都不会被拆成好几份。
+function apksByAbi(rel, includePrerelease) {
+  const map = {};
+  for (const asset of releaseApks(rel)) {
+    const abi = abiOf(asset.name);
+    if (abi && !map[abi]) map[abi] = apkInfo(asset, { abi, includePrerelease });
+  }
+  return map;
+}
+
 // GET /version → 最新版本信息(客户端据此判断是否更新)。
-// 同时给出安装包大小与 SHA-256:客户端据此显示进度、校验完整性(代理响应的长度不可靠)。
-async function handleVersion() {
+// `apks` 按架构分别给出安装包,顶层字段是通吃包(不带 abi 的老客户端兜底升级用)。
+// 安装包大小与 SHA-256 一并给出:客户端据此显示进度、校验完整性(代理响应的长度不可靠)。
+//
+// ?prerelease=1 时把预发行版也纳入比较(否则 GitHub 的 latest 永远只有正式版)。
+// 预发行版的响应不进缓存:万一 CDN 的缓存键没带上查询串,也不至于把 RC 混给正式版用户。
+async function handleVersion(url) {
+  const includePrerelease = url.searchParams.get("prerelease") === "1";
   try {
-    const rel = await latestRelease();
-    const apk = pickApk(rel);
+    const rel = await pickRelease(includePrerelease);
     return jsonWithCache(200, {
       versionName: String(rel.tag_name || "").replace(/^v/, ""),
       notes: rel.body || "",
       releaseUrl: rel.html_url || `https://github.com/${GITHUB_REPO}/releases`,
-      apkUrl: apk ? "/apk" : "",
-      apkSize: apk ? apk.size || 0 : 0,
-      apkSha256: apk ? String(apk.digest || "").replace(/^sha256:/, "") : "",
+      apks: apksByAbi(rel, includePrerelease),
+      ...apkInfo(pickApk(rel, ""), { includePrerelease }),
       publishedAt: rel.published_at || "",
-    }, 600);
+    }, includePrerelease ? 0 : 600);
   } catch (e) {
     return json(502, { error: { code: 502, message: "获取最新版本失败: " + e.message } });
   }
@@ -125,13 +181,15 @@ async function handleVersion() {
 // 客户端会因此拿到损坏的安装包。因此:整体下载超出上限时,由客户端用 Range 分段拉取,这里透传。
 const MAX_INLINE_BYTES = 5 * 1024 * 1024;
 
-// GET /apk → 代理最新 release 的 APK。
+// GET /apk → 代理对应版本的 APK(?abi= 指定架构,缺省给通吃包)。
 // - 带 Range 时透传 Range,并把上游的 206 / Content-Range 原样返回(每段都远小于响应上限);
 // - 不带 Range 且整包超过上限时明确报错,绝不返回半截文件。
-async function handleApk(req) {
+async function handleApk(req, url) {
+  const includePrerelease = url.searchParams.get("prerelease") === "1";
+  const abi = (url.searchParams.get("abi") || "").trim();
   try {
-    const rel = await latestRelease();
-    const asset = pickApk(rel);
+    const rel = await pickRelease(includePrerelease);
+    const asset = pickApk(rel, abi);
     if (!asset) {
       return json(404, { error: { code: 404, message: "最新版本没有可下载的 APK" } });
     }
@@ -185,10 +243,10 @@ export default async (req) => {
     return handlePush(req);
   }
   if (rest === "/version") {
-    return handleVersion();
+    return handleVersion(url);
   }
   if (rest === "/apk") {
-    return handleApk(req);
+    return handleApk(req, url);
   }
 
   let upstream = null;
@@ -239,13 +297,14 @@ function json(status, obj) {
   });
 }
 
+/** maxAge <= 0 表示不进缓存(用于会随开关变化的 /version 响应)。 */
 function jsonWithCache(status, obj, maxAge) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": `public, max-age=${maxAge}`,
+      "Cache-Control": maxAge > 0 ? `public, max-age=${maxAge}` : "no-store",
     },
   });
 }
