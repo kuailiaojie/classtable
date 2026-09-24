@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>没有这一页 · 余课</title>
+<meta name="robots" content="noindex" />
+<link rel="icon" href="/assets/img/app_icon_02.png" />
+<link rel="stylesheet" href="/assets/yohaku.css" />
+<style>
+  body { display: grid; place-items: center; min-height: 100vh; }
+  .notfound { display: grid; gap: 16px; justify-items: start; max-width: 42ch; }
+</style>
+<script>
+  (function () {
+    try {
+      var choice = localStorage.getItem('yohaku-theme') || 'system';
+      var dark = choice === 'dark' ||
+        (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+  <div class="container">
+    <div class="notfound">
+      <p class="eyebrow">404</p>
+      <h1 class="text-title-28 font-medium text-neutral-10">这里没有课。</h1>
+      <p class="text-copy-15 text-neutral-7">
+        这个页面不存在,或者已经搬走了。
+      </p>
+      <a class="btn btn-primary" href="/">回到首页</a>
+    </div>
+  </div>
+</body>
+</html>

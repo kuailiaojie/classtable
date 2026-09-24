@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# 反代端点与适配器 bundle 无需被收录
+Disallow: /.netlify/functions/
+Disallow: /warehouse/

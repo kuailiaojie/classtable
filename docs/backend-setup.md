@@ -27,7 +27,43 @@ Android 的 Firebase 官方 SDK 硬编码 Google 域名,大陆无法直连,因�
    - `SITE_BASE_URL` — 站点根(`https://<site>`,用于适配器 bundle 与更新接口)。
 4. 重新构建并安装 App。
 
-`netlify.toml` 已配置 `[build] command = "node tools/build-netlify.mjs"` 与 `publish = "netlify/static"`,部署时会自动生成 `<site>/warehouse/bundle.json`(适配器同步源)。
+`netlify.toml` 已配置 `[build] command = "node tools/build-netlify.mjs && node tools/build-site.mjs"` 与 `publish = "netlify/static"`,部署时会自动生成 `<site>/warehouse/bundle.json`(适配器同步源)与官网首页。
+
+免费额度为 12.5 万次请求 / 月,登录 + 同步场景绰有余裕。
+
+## 官网
+
+同一个站点根还放着 App 的官网(打开 `https://<site>/` 即是)。页面与反代互不干扰:反代始终在 `/.netlify/functions/proxy/*`,官网是静态文件,没有任何路径重写。
+
+| 位置 | 作用 |
+|---|---|
+| `netlify/site/` | 官网源码(HTML / CSS / JS),提交在仓库里 |
+| `netlify/static/` | 发布目录,构建期生成(`.gitignore` 已忽略),官网与 `warehouse/` 都在这里 |
+| `tools/build-site.mjs` | 把 `netlify/site/` 装配进发布目录,并从 `docs/screenshots/` 与 `res/drawable-nodpi/` 取截图和图标 |
+
+两个构建脚本各管各的产物:`build-netlify.mjs` 写 `warehouse/`,`build-site.mjs` 写页面与 `assets/`,先后顺序无所谓。
+
+本地预览(反代不可用时会退回 HTML 里的静态兜底,不影响看版式):
+
+```bash
+node tools/build-site.mjs
+npx serve netlify/static
+```
+
+页面的下载入口默认指向 GitHub Releases。部署上线后,`site.js` 会去读本站既有的 `/.netlify/functions/proxy/version`(先要正式版,拿不到再要 `?prerelease=1`),把版本号、包大小与各架构的下载地址就地填上;取不到就保持兜底,不会出现死链。
+
+样式遵循 `@yohaku/design-system`(仓库外的设计系统包):中性色只用 n-1…n-10,字号只用契约里的 caption / label / copy / title / display 档位,accent 只出现在 CTA、焦点环与引用条上。`netlify/site/assets/yohaku.css` 开头的注释写明了这些约束的出处。
+
+### 部署
+
+站点已连本仓库的话,推到 `master` 就会自动构建。也可以手动部署:
+
+```bash
+node tools/build-netlify.mjs && node tools/build-site.mjs
+npx netlify-cli deploy --prod --dir netlify/static
+```
+
+手动部署那步不会跑构建脚本,改动过 `netlify/site/` 就得先执行上面第一条。
 
 免费额度为 12.5 万次请求 / 月,登录 + 同步场景绰有余裕。
 

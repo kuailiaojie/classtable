@@ -1,13 +1,18 @@
-# Netlify 部署配置:课程表 Firebase 反代
+# Netlify 部署配置:课程表 Firebase 反代 + 官网
 # 用途:让中国大陆客户端通过本中间层访问 Firebase Auth / Firestore(绕过被墙域名)。
 # 部署:Netlify 控制台新建站点 → 连接本仓库 → 部署后得到 https://<site>.netlify.app,
 #       再把该地址填入 Android 端 FirebaseGateway.kt 的 BASE_URL。
 # 建议:绑定自有域名(走 Netlify DNS),netlify.app 域名在大陆可达性一般。
+#
+# 发布目录同时承载两样东西,互不干扰:
+#   · netlify/static/warehouse/bundle.json —— 适配器 bundle,客户端同步源(构建期生成)
+#   · netlify/static/**.html               —— 官网首页 / 404,源在 netlify/site/
+# 反代端点始终在 /.netlify/functions/proxy/*,与官网页面不做路径重写,二者互不影响。
 
 [build]
-  # 构建期生成适配器 bundle(netlify/static/warehouse/bundle.json),由 CDN 静态分发。
-  # 客户端从 <site>/warehouse/bundle.json 同步最新适配器;APK 版本信息走 /version 反代。
-  command = "node tools/build-netlify.mjs"
+  # 构建期生成适配器 bundle(netlify/static/warehouse/bundle.json)并把官网装配进发布目录。
+  # 两个脚本各自维护自己的产物,先后顺序无所谓;APK 版本信息与下载走 /version、/apk 反代。
+  command = "node tools/build-netlify.mjs && node tools/build-site.mjs"
   publish = "netlify/static"
 
 [functions]

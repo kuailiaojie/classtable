@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>余课 · 给国内大学生用的 Android 课程表</title>
+<meta name="description" content="余课把一整周摊在一屏上,横看七天,竖看节次。课表可以从教务系统、Excel、手填或者一张截图弄进来;提醒准点,桌面小组件不进应用也看得见。免费开源,课表默认只存在本机。" />
+<meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)" />
+<link rel="canonical" href="https://classtablek.netlify.app/" />
+<link rel="icon" href="assets/img/app_icon_02.png" />
+<link rel="apple-touch-icon" href="assets/img/app_icon_02.png" />
+<link rel="stylesheet" href="assets/yohaku.css" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="余课 · 极简课程表" />
+<meta property="og:description" content="该留白的地方,就留白。给国内大学生用的 Android 课程表。" />
+<meta property="og:image" content="assets/img/week.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<script>
+  // 提前定主题,避免首帧闪白。site.js 负责后续切换与持久化。
+  (function () {
+    try {
+      var choice = localStorage.getItem('yohaku-theme') || 'system';
+      var dark = choice === 'dark' ||
+        (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.themeChoice = choice;
+      document.documentElement.style.colorScheme = theme;
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container">
+    <a class="wordmark" href="#top" aria-label="余课 yohaku 首页">
+      <span class="wordmark-cjk">余课</span>
+      <span class="wordmark-latin">yohaku</span>
+    </a>
+
+    <nav class="site-nav" aria-label="页面导航">
+      <a href="#shots">界面</a>
+      <a href="#features">功能</a>
+      <a href="#import">导入</a>
+      <a href="#design">设计</a>
+      <a href="#install">安装</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+
+    <div class="header-actions">
+      <!-- 页头常驻按钮用 secondary:每个视野里只留一个 accent CTA(hero / 下载区的那个) -->
+      <a class="btn btn-secondary btn-sm" data-dl-primary href="https://github.com/kuailiaojie/classtable/releases">下载</a>
+      <button class="icon-btn nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-label="展开导航">
+        <span class="text-icon-md">☰</span>
+      </button>
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="切换主题">
+        <span class="text-label-12" data-theme-label>跟随</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="container hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Android 课程表</p>
+
+      <h1 class="hero-title text-display-36">该留白的地方,就留白。</h1>
+
+      <p class="hero-sub text-copy-16">
+        给国内大学生用的 Android 课程表。打开就是一整周,横看七天、竖看节次,不用来回翻页。
+        四种办法能把课表弄进来,提醒准点又不吵。桌面小组件放在那儿,应用都不用打开。
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" data-dl-primary href="https://github.com/kuailiaojie/classtable/releases">
+          下载安装包
+        </a>
+        <a class="btn btn-secondary" data-release-url href="https://github.com/kuailiaojie/classtable/releases">
+          发布说明
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/kuailiaojie/classtable">GitHub</a>
+      </div>
+
+      <div class="hero-meta text-label-12">
+        <span class="chip" data-version-chip data-kind="prerelease">
+          <span class="chip-dot" aria-hidden="true"></span>
+          <span data-version-kind>预发行版</span>
+        </span>
+        <span class="mono" data-hero-version>v1.0.0-rc2</span>
+        <span>Android 8.0+</span>
+        <span>MIT 开源</span>
+        <span>无广告</span>
+      </div>
+    </div>
+
+    <figure class="hero-art">
+      <div class="phone hero-phone">
+        <img src="assets/img/week.jpg" width="640" height="1381" alt="余课周视图:七列一周,纵向按节次等分" fetchpriority="high" />
+      </div>
+      <figcaption class="hero-note text-label-12">周视图 · 一屏看全一周</figcaption>
+    </figure>
+  </section>
+
+  <!-- 界面 -->
+  <section class="section" id="shots">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">界面</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">屏幕上只剩课表</h2>
+        <p class="lede text-copy-15">
+          一抹强调色配三档中性,剩下的地方留给白。开屏广告和签到这里都没有,
+          时间轴竖着排,不用横着滚。
+        </p>
+      </div>
+
+      <div class="shots">
+        <figure class="shot">
+          <div class="phone">
+            <img src="assets/img/week.jpg" width="640" height="1381" alt="周视图" loading="lazy" />
+          </div>
+          <figcaption class="text-label-12">
+            <b>周视图</b>
+            <span>七列一周,今天那列画一条当前时间线</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <div class="phone">
+            <img src="assets/img/courses.jpg" width="640" height="1381" alt="课程列表" loading="lazy" />
+          </div>
+          <figcaption class="text-label-12">
+            <b>课程</b>
+            <span>按星期分组,能多选批量删</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <div class="phone">
+            <img src="assets/img/rain-classroom.jpg" width="640" height="1381" alt="雨课堂公告" loading="lazy" />
+          </div>
+          <figcaption class="text-label-12">
+            <b>雨课堂公告</b>
+            <span>按时间倒序列出这门课的全部公告</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <div class="phone">
+            <img src="assets/img/import.jpg" width="640" height="1381" alt="教务导入" loading="lazy" />
+          </div>
+          <figcaption class="text-label-12">
+            <b>教务导入</b>
+            <span>选中学校,确认完一键导入</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 功能 -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">它能帮上什么</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">课表本该一眼看完</h2>
+        <p class="lede text-copy-15">
+          课表 App 大多喜欢把功能堆在脸上。
+        </p>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <p class="card-index">01</p>
+          <h3 class="text-copy-15">一屏看全一周</h3>
+          <p class="text-copy-13">
+            周一到周日七列,当天所有节次竖着排,不用来回翻页。左右滑动换周,「今天」回到本周。
+            行高按屏幕高度算,一屏装不下就整格上下滚。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">02</p>
+          <h3 class="text-copy-15">四种导入方式</h3>
+          <p class="text-copy-13">
+            教务系统导入、手填一门课、粘贴表格或选 Excel 文件、拍张截图交给 AI 认,
+            四种都在周视图右上角的「添加」里,挑顺手的用。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">03</p>
+          <h3 class="text-copy-15">提醒准点,但不吵</h3>
+          <p class="text-copy-13">
+            每节课开始前提醒,提前量从准点到 60 分钟任选。开着「实时活动」的话,
+            它会从课前一直跟到下课,按分钟告诉你还剩多久。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">04</p>
+          <h3 class="text-copy-15">一眼认出是哪门课</h3>
+          <p class="text-copy-13">
+            每门课有一层很淡的专属色,扫一眼就知道是什么课;正在上的那节另外标出来。
+            颜色跟着课名走,同一门课哪天都是同一个色。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">05</p>
+          <h3 class="text-copy-15">桌面小组件</h3>
+          <p class="text-copy-13">
+            今日课表、明日课程、下节课三块,尺寸分别是 4×2、2×2、1×1,放在桌面上,
+            不打开应用也看得见。显示时刻还是节次、列出几门课、行距和底色都能改,改完立刻刷新。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">06</p>
+          <h3 class="text-copy-15">雨课堂公告</h3>
+          <p class="text-copy-13">
+            登录雨课堂,课程详情页按时间倒序列出这门课的全部公告,课前提醒里带上最新一条,
+            新公告另外通知一次。雨课堂自己发的「上课提醒」「开始签到」不转推,
+            课表本来就有课前提醒,喊两遍没意义。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">07</p>
+          <h3 class="text-copy-15">9 张图标任选</h3>
+          <p class="text-copy-13">
+            桌面上那个蓝发角色有 9 种表情,喜欢哪张点哪张,图标立刻跟着换。
+            也可以打开轮播,让它每次打开、每小时或者每天自己换一张。
+          </p>
+        </article>
+
+        <article class="card">
+          <p class="card-index">08</p>
+          <h3 class="text-copy-15">不注册也能用</h3>
+          <p class="text-copy-13">
+            课表默认只存在你自己手机上,不注册也挺完整。要换机或者备份了,再登录账号同步;
+            删掉的课跟着删,不会在别的设备上冒出来。
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 导入 -->
+  <section class="section" id="import">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">导入</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">把课表弄进来</h2>
+        <p class="lede text-copy-15">
+          四条路,总有一条省下你敲一整学期的手。导入之后,单双周和自定义周次会自动归类。
+        </p>
+      </div>
+
+      <div class="grid grid-2">
+        <article class="card">
+          <h3 class="text-copy-15">教务系统导入</h3>
+          <p class="text-copy-13">
+            选中你的学校,读完适配说明再确认。学校账号在应用内登录,脚本把课程、作息时间和
+            开学日期读出来,要不要覆盖本地设置由你点头。<b>密码只在这一次登录会话里用</b>,
+            之后不留在应用数据库。
+          </p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">手动添加</h3>
+          <p class="text-copy-13">
+            自己填一门课,补录或者临时调整都靠它。一页表单填到底:星期能多选,一周上几天都行;
+            节次和周次点一下就好,自定义周次可以逐周勾;时间按节次算或者自己填,
+            晚间讲座、临时加课用后者。
+          </p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">表格 / Excel 导入</h3>
+          <p class="text-copy-13">
+            把 CSV / TSV 粘进来,或者直接选 Excel 文件。表头和中文编码它会自己认;
+            第 8、9 列填上开始和结束时间,就能生成自定义时间的课程。
+          </p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">AI 图片导入</h3>
+          <p class="text-copy-13">
+            接 Google Gemini,也接任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 都行)。
+            在设置里填好自己的密钥,上传课表截图,课程和作息就认出来了。
+            <b>图片直接发给你挑的那家服务商,不经过余课</b>。
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 设计 -->
+  <section class="section" id="design">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">设计取向</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">把课表当纸看</h2>
+        <p class="lede text-copy-15">
+          余课按 <b>Yohaku(余白)</b> 的路子走:把课表当纸,不把界面当装饰。
+        </p>
+      </div>
+
+      <div class="principles">
+        <div class="principle">
+          <h3 class="text-copy-16">一抹强调色</h3>
+          <p class="text-copy-13">
+            全局只用一个强调色,默认梅色,另有五色可选。它只出现在「此刻正在上」和选中态
+            这类真要抢眼的地方。
+          </p>
+        </div>
+
+        <div class="principle">
+          <h3 class="text-copy-16">三档中性</h3>
+          <p class="text-copy-13">
+            浅色和深色各一套暖纸面色板,层次全交给明度。
+          </p>
+        </div>
+
+        <div class="principle">
+          <h3 class="text-copy-16">课程淡彩</h3>
+          <p class="text-copy-13">
+            每门课按课名分到一层彩度很低的底色,方便扫读。它不代表任何意思,
+            课程名照旧写在上面。
+          </p>
+        </div>
+
+        <div class="principle">
+          <h3 class="text-copy-16">余者尽留为白</h3>
+          <p class="text-copy-13">
+            没课的位置什么都不画。那片空本身就是「这里没课」。
+          </p>
+        </div>
+
+        <div class="principle">
+          <h3 class="text-copy-16">衬线纸感</h3>
+          <p class="text-copy-13">
+            内置思源宋体和等宽字体,时间和节次排得像表格一样齐。
+          </p>
+        </div>
+      </div>
+
+      <figure class="quote mt-8">
+        <p class="text-copy-15">
+          这也是「余课」这名字的来头:该留白的地方,就留白。
+        </p>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 外观 -->
+  <section class="section" id="appearance">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">外观</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">和色、图标与小组件</h2>
+      </div>
+
+      <div class="grid grid-2">
+        <article class="card">
+          <h3 class="text-copy-15">主题</h3>
+          <p class="text-copy-13">浅色、深色、跟随系统三种。</p>
+          <p class="text-copy-13 mt-1">
+            深色下暖色阶会重置成纯中性灰。低饱和的暖色压在暗底上会发橄榄,
+            暖意改由纸面色一个人扛。
+          </p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">强调色</h3>
+          <p class="text-copy-13">六个和色任选,克制的,不开放自由取色。</p>
+          <div class="swatches mt-2">
+            <span class="swatch sw-ume" aria-current="true">
+              <i></i>
+              <span>梅</span>
+            </span>
+            <span class="swatch sw-hanada">
+              <i></i>
+              <span>縹</span>
+            </span>
+            <span class="swatch sw-wakatake">
+              <i></i>
+              <span>若竹</span>
+            </span>
+            <span class="swatch sw-kuchiba">
+              <i></i>
+              <span>朽葉</span>
+            </span>
+            <span class="swatch sw-suoh">
+              <i></i>
+              <span>蘇芳</span>
+            </span>
+            <span class="swatch sw-sorairo">
+              <i></i>
+              <span>空色</span>
+            </span>
+          </div>
+        </article>
+      </div>
+
+      <div class="card mt-4">
+        <h3 class="text-copy-15">应用图标</h3>
+        <p class="text-copy-13">
+          9 张角色图任选,点一张桌面图标立刻跟着换。也可以打开轮播,让它按你定的节奏自己换。
+        </p>
+        <div class="icons mt-2">
+          <img src="assets/img/app_icon_01.png" width="512" height="512" alt="角色图标 1" loading="lazy" />
+          <img src="assets/img/app_icon_02.png" width="512" height="512" alt="角色图标 2" loading="lazy" />
+          <img src="assets/img/app_icon_03.png" width="512" height="512" alt="角色图标 3" loading="lazy" />
+          <img src="assets/img/app_icon_04.png" width="512" height="512" alt="角色图标 4" loading="lazy" />
+          <img src="assets/img/app_icon_05.png" width="512" height="512" alt="角色图标 5" loading="lazy" />
+          <img src="assets/img/app_icon_06.png" width="512" height="512" alt="角色图标 6" loading="lazy" />
+          <img src="assets/img/app_icon_07.png" width="512" height="512" alt="角色图标 7" loading="lazy" />
+          <img src="assets/img/app_icon_08.png" width="512" height="512" alt="角色图标 8" loading="lazy" />
+          <img src="assets/img/app_icon_09.png" width="512" height="512" alt="角色图标 9" loading="lazy" />
+        </div>
+      </div>
+
+      <div class="grid mt-4">
+        <article class="card">
+          <h3 class="text-copy-15">今日课表 · 4×2</h3>
+          <p class="text-copy-13">今天要上的课排开,正在上的那节标出来。</p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">明日课程 · 2×2</h3>
+          <p class="text-copy-13">今天就能看见明天上什么,不用等到第二天。</p>
+        </article>
+
+        <article class="card">
+          <h3 class="text-copy-15">下节课 · 1×1</h3>
+          <p class="text-copy-13">下一节课叫什么、几点、在哪。调休的停课补课也照实显示。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 安装 -->
+  <section class="section" id="install">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">安装</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">三步装好</h2>
+      </div>
+
+      <ol class="steps container-narrow mb-8 list-flush">
+        <li class="text-copy-14">
+          <span>
+            下载安装包。发布包按 CPU 架构拆开,<b>拿不准就下通吃包</b>,它认所有机型,
+            只是体积大些。第一次装要在系统里允许「安装未知应用」。
+          </span>
+        </li>
+        <li class="text-copy-14">
+          <span>
+            第一次打开会带你逐项打开通知、精确闹钟、电池白名单和自启动。
+            国产系统的省电策略会在后台清掉闹钟,这几项开齐,提醒才准。
+          </span>
+        </li>
+        <li class="text-copy-14">
+          <span>
+            打开周视图右上角的「添加」,把课表弄进来。
+          </span>
+        </li>
+      </ol>
+
+      <div class="download">
+        <div class="panel">
+          <div class="panel-title">
+            <h3 class="text-title-20 font-medium text-neutral-10">下载最新版</h3>
+            <p class="text-copy-13 text-neutral-7">
+              「设置 → 检查更新」认得你手机上装的是哪种架构,只给你下对应的那一个包。
+            </p>
+          </div>
+
+          <dl class="dl-facts">
+            <div>
+              <dt>版本</dt>
+              <dd><span data-version-name>1.0.0-rc2</span></dd>
+            </div>
+            <div>
+              <dt>发布</dt>
+              <dd><span data-version-date>2026-09-24</span></dd>
+            </div>
+            <div>
+              <dt>通吃包大小</dt>
+              <dd><span data-version-size>—</span></dd>
+            </div>
+            <div>
+              <dt>SHA-256</dt>
+              <dd><span data-version-sha>见发布说明</span></dd>
+            </div>
+          </dl>
+
+          <a class="btn btn-primary btn-block" data-dl-primary href="https://github.com/kuailiaojie/classtable/releases">
+            下载安装包
+          </a>
+
+          <p class="text-label-12 text-neutral-7" data-dl-status>
+            正在读取最新版本…
+          </p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">
+            <h3 class="text-title-20 font-medium text-neutral-10">该下哪一个</h3>
+            <p class="text-copy-13 text-neutral-7">近几年的手机基本都是 64 位。</p>
+          </div>
+
+          <table class="abi-table">
+            <thead>
+              <tr>
+                <th scope="col">架构</th>
+                <th scope="col">适合</th>
+                <th scope="col">包</th>
+              </tr>
+            </thead>
+            <!-- 下面几行是没跑脚本时的兜底;读到版本后由 site.js 按实际存在的安装包重建 -->
+            <tbody data-abi-rows>
+              <tr>
+                <td><code>arm64-v8a</code></td>
+                <td>近几年的 64 位机型</td>
+                <td>
+                  <a class="link-underline text-label-12"
+                     href="https://github.com/kuailiaojie/classtable/releases">在 GitHub 下载</a>
+                </td>
+              </tr>
+              <tr>
+                <td><code>armeabi-v7a</code></td>
+                <td>老一些的 32 位机型</td>
+                <td>
+                  <a class="link-underline text-label-12"
+                     href="https://github.com/kuailiaojie/classtable/releases">在 GitHub 下载</a>
+                </td>
+              </tr>
+              <tr>
+                <td><code>universal</code></td>
+                <td>拿不准就选它,通吃</td>
+                <td>
+                  <a class="link-underline text-label-12"
+                     href="https://github.com/kuailiaojie/classtable/releases">在 GitHub 下载</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="text-label-12 text-neutral-7">
+            装过旧版本的话直接覆盖安装,课表和设置都留着。<a class="link-underline" data-release-url
+            href="https://github.com/kuailiaojie/classtable/releases">Releases 页</a>另有 x86 / x86_64 包。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 隐私 -->
+  <section class="section" id="privacy">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">隐私与数据</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">默认只存在你自己的手机上</h2>
+        <p class="lede text-copy-15">
+          这里没有广告,不推促销,也没接第三方广告 SDK。
+        </p>
+      </div>
+
+      <ul class="plain-list container-narrow mx-auto">
+        <li class="text-copy-14">
+          <span><b>课表和设置默认只在本机</b>。不注册也能用,数据躺在你自己的设备上。</span>
+        </li>
+        <li class="text-copy-14">
+          <span><b>云同步是可选项</b>。注册账号之后,课表和设置在你的设备和云端之间来回同步,删掉的课跟着删。</span>
+        </li>
+        <li class="text-copy-14">
+          <span><b>学校账号只用这一次登录</b>。教务系统登录在应用内的浏览器会话里完成,密码不进应用数据库。</span>
+        </li>
+        <li class="text-copy-14">
+          <span><b>雨课堂的会话同样只留在本机</b>。拿到的是会话 Cookie,加密存在你的设备上,不上云,退出登录就清掉。</span>
+        </li>
+        <li class="text-copy-14">
+          <span><b>AI 图片识别要你先配上密钥才会启用</b>。上传的图片发给你挑的那家服务商,不经过余课。</span>
+        </li>
+        <li class="text-copy-14">
+          <span><b>天气按出口 IP 定位</b>,数据来自第三方接口,请求里不带账号,也不带设备信息。应用不申请系统定位权限。</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 常见问题 -->
+  <section class="section" id="faq">
+    <div class="container container-narrow">
+      <div class="section-head">
+        <p class="eyebrow">常见问题</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">装之前想问的</h2>
+      </div>
+
+      <div class="faq">
+        <details open>
+          <summary class="text-copy-15">提醒没响或不准?</summary>
+          <p class="faq-body text-copy-14">
+            先到「设置 → 提醒可靠性」逐项打开通知、精确闹钟、电池白名单和自启动。
+            国产系统的省电策略会在后台清掉闹钟,这几项开齐通常就稳了。应用还会定期自检,
+            把提醒补排回来。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">我的学校不在列表里怎么办?</summary>
+          <p class="faq-body text-copy-14">
+            先试「手动表格导入」或者「AI 图片导入」。学校教务系统要是比较通用,
+            也可以走教务导入里的通用入口,填上教务网址试试。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">节次时间和我们学校不一样?</summary>
+          <p class="faq-body text-copy-14">
+            到「设置 → 作息时间」逐节改成你们学校的。节次能增能删,不限于 12 节;
+            也可以按开始时间、单节时长、课间和节数自动生成,保存前会校验重叠。
+            从教务系统导入时,脚本要是读到了学校的作息,会先把「覆盖了什么」写在明面上再应用。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">换了图标,桌面怎么没变?</summary>
+          <p class="faq-body text-copy-14">
+            桌面图标由系统缓存,一般几秒就更新了。个别第三方桌面慢一些,
+            或者要把图标从桌面移除再加回去。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">装不上 / 装完打不开?</summary>
+          <p class="faq-body text-copy-14">
+            多半是下载了跟你手机架构对不上的安装包,换成通吃包再装。
+            也可以在「设置 → 检查更新」里让它自己挑,它会按你手机的架构给对应的那一个。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">换手机后课表怎么带过去?</summary>
+          <p class="faq-body text-copy-14">
+            登录同一个账号就同步过去了。没登录的话数据只在本机,卸载或者换机会丢,
+            建议先注册再迁移。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">课程的颜色可以自己改吗?</summary>
+          <p class="faq-body text-copy-14">
+            目前不开放。颜色按课名自动分配,同一门课哪天都是同一个色,不用你手动维护。
+          </p>
+        </details>
+
+        <details>
+          <summary class="text-copy-15">能收到预发行版吗?</summary>
+          <p class="faq-body text-copy-14">
+            默认只推正式版。想第一时间试新功能、也愿意接受偶尔不稳,在「设置 → 接收预发行版」
+            里打开,手动检查和后台自动检查都会把 RC 一起纳入比较。
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 开源 -->
+  <section class="section" id="opensource">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">开源</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">MIT 协议,源码全在 GitHub</h2>
+        <p class="lede text-copy-15">
+          想自己构建,或者翻源码看实现,从这里进去。
+        </p>
+      </div>
+
+      <div class="download">
+        <div class="panel">
+          <h3 class="text-copy-15">构建</h3>
+          <figure class="code">
+            <header>
+              <span>classtable</span>
+            </header>
+            <pre tabindex="0"><code>./gradlew assembleDebug      # 调试版(按架构分别产出,另有通吃包)
+./gradlew assembleRelease    # 发布版(未配置签名时产出未签名 APK)</code></pre>
+          </figure>
+          <p class="text-copy-13 text-neutral-7">
+            产物在 <code class="mono text-label-12">app/build/outputs/apk/&lt;buildType&gt;/</code> 下,
+            每个 CPU 架构一个 APK,外加一个通吃包。
+          </p>
+        </div>
+
+        <div class="panel">
+          <h3 class="text-copy-15">文档</h3>
+          <ul class="plain-list">
+            <li class="text-copy-13">
+              <span><a class="link-underline" href="https://github.com/kuailiaojie/classtable/blob/master/docs/architecture.md">architecture.md</a>,技术栈、架构、数据模型与同步策略</span>
+            </li>
+            <li class="text-copy-13">
+              <span><a class="link-underline" href="https://github.com/kuailiaojie/classtable/blob/master/docs/import-system.md">import-system.md</a>,教务导入的数据流与适配脚本契约</span>
+            </li>
+            <li class="text-copy-13">
+              <span><a class="link-underline" href="https://github.com/kuailiaojie/classtable/blob/master/docs/yuketang-api.md">yuketang-api.md</a>,雨课堂接口使用备忘</span>
+            </li>
+            <li class="text-copy-13">
+              <span><a class="link-underline" href="https://github.com/kuailiaojie/classtable/blob/master/docs/backend-setup.md">backend-setup.md</a>,账号同步推送更新接口的部署</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="stack-2">
+        <a class="wordmark" href="#top" aria-label="回到顶部">
+          <span class="wordmark-cjk">余课</span>
+          <span class="wordmark-latin">yohaku</span>
+        </a>
+        <p class="text-copy-13 text-neutral-7">余课,给国内大学生用的极简课程表</p>
+      </div>
+
+      <ul class="footer-links">
+        <li><a href="https://github.com/kuailiaojie/classtable">源码</a></li>
+        <li><a href="https://github.com/kuailiaojie/classtable/releases">发布</a></li>
+        <li><a href="https://github.com/kuailiaojie/classtable/issues">反馈</a></li>
+        <li><a href="https://github.com/kuailiaojie/classtable/blob/master/LICENSE">许可</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-note text-label-12">
+      <span>基于 MIT 协议开源。教务适配数据来自独立适配仓库,遵循它自己的许可。</span>
+      <span class="mono">© <span data-year>2026</span> 余课</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/site.js" defer></script>
+</body>
+</html>
