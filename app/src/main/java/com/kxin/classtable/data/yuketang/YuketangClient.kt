@@ -23,28 +23,21 @@ open class YuketangException(val code: Int, message: String) : IOException(messa
 /** 登录态失效:需要重新登录。后台任务遇到它必须静默,UI 遇到它提示重新登录。 */
 class NotLoggedInException : YuketangException(-1, "雨课堂登录已失效,请重新登录")
 
-/** 候选端点不存在(404):换下一个候选继续试。 */
+/** 404:端点不存在(接口漂移时留个明确信号,而不是当成业务错误)。 */
 class YuketangNotFoundException(message: String) : YuketangException(404, message)
 
 /**
  * 长江雨课堂只读客户端(课程列表 / 课程公告)。
  *
- * 只用参考文档里已知的端点形状 + 项目既有写法(HttpURLConnection + org.json),
- * 不引入新依赖。Cookie 与自定义头按文档约定携带。
- *
- * **公告端点**:`yuketang-api.md` 未收录公告接口。这里按社区常见的几处 v2/v3 路径
- * **依次探测**,第一个能返回业务成功的路径会被缓存下来(每个进程只探测一次);
- * 真实路径以登录页的抓包探针(tag `YuketangProbe`)为准,抓到后把 [ANNOUNCEMENT_PATHS]
- * 收敛成一条即可。解析写成宽容式:结构不认识时降级为空列表,不抛异常。
+ * 只用真机抓包确认过的端点 + 项目既有写法(HttpURLConnection + org.json),不引入新依赖。
+ * Cookie 与自定义头按参考文档约定携带(`uv_id` / `university_id` 一律从 Cookie 里取实际值,
+ * 不硬编码 —— 不同学校部署的值不一样)。
  */
 @Singleton
 class YuketangClient @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sessionStore: YuketangSessionStore,
 ) {
-    @Volatile
-    private var resolvedAnnouncementPath: String? = null
-
     private val desktopUa: String by lazy { WebUserAgent.desktop(context) }
 
     /**
@@ -81,44 +74,45 @@ class YuketangClient @Inject constructor(
     /**
      * 某课程班级的公告(最新在前)。
      *
-     * @param overridePath 设置里手填的接口路径(「高级」);非空则只用它,不再探测。
-     * @throws YuketangException 所有候选端点都不可用时**抛出**,不悄悄返回空列表 ——
-     *   「这门课没有公告」与「接口找错了」必须分得开,否则后台任务会一直静默地什么都没拉到。
+     * 端点是**真机抓包确认过的**(长江雨课堂网页版 → 课程 → 「公告」标签页):
+     * `GET /v/discussion/v2/announcements/?content=&cid={cid}&limit=&offset=&type=9`
+     *
+     * 为什么在 `/v/discussion/` 而不是 `/v2/api/web/`:雨课堂的「公告」在服务端就是
+     * `topic_type == 9` 的**讨论主题**,所以跟讨论区共用这一组接口。
+     *
+     * @param overridePath 设置里手填的接口路径(「高级」);非空则替换内置路径 —— 接口漂移时的逃生口。
+     * @throws YuketangException 服务端明确报错时抛出;网络不通抛 IOException(由调用方区分处理)。
      */
     suspend fun announcements(
         classroomId: String,
         overridePath: String? = null,
     ): List<YuketangAnnouncement> {
-        overridePath?.takeIf { it.isNotBlank() }?.let { pinned ->
-            Log.i(TAG, "使用设置里指定的公告接口:$pinned")
-            return parseAnnouncements(request(expand(pinned, classroomId), classroomId, logBody = true), classroomId)
+        val path = expand(
+            overridePath?.takeIf { it.isNotBlank() }
+                ?.also { Log.i(TAG, "使用设置里指定的公告接口:$it") }
+                ?: ANNOUNCEMENT_PATH,
+            classroomId,
+        )
+
+        val collected = mutableListOf<YuketangAnnouncement>()
+        var offset = 0
+        // 翻页有上限:公告是「看最新几条」的场景,没必要把历史全捞回来(也少给对方服务器压力)。
+        repeat(ANNOUNCEMENT_MAX_PAGES) { page ->
+            val query = "content=&cid=" + encodePath(classroomId) +
+                "&limit=" + ANNOUNCEMENT_PAGE_SIZE +
+                "&offset=" + offset +
+                "&type=" + ANNOUNCEMENT_TOPIC_TYPE
+            val json = request(path, query = query, classroomId = classroomId, logBody = page == 0)
+            val pageItems = parseAnnouncements(json, classroomId)
+            collected += pageItems
+            offset += ANNOUNCEMENT_PAGE_SIZE
+            // 不满一页 = 到底了;拿满再看是否已达总数
+            if (pageItems.size < ANNOUNCEMENT_PAGE_SIZE) return collected
+            val total = json.optJSONObject("data")?.optInt("count", -1) ?: -1
+            if (total in 0..offset) return collected
         }
-        resolvedAnnouncementPath?.let { path ->
-            return parseAnnouncements(request(expand(path, classroomId), classroomId, logBody = true), classroomId)
-        }
-        var lastFailure: YuketangException? = null
-        for (path in ANNOUNCEMENT_PATHS) {
-            try {
-                val list = parseAnnouncements(
-                    request(expand(path, classroomId), classroomId, logBody = true),
-                    classroomId,
-                )
-                resolvedAnnouncementPath = path
-                Log.i(TAG, "公告接口可用:$path(解析到 ${list.size} 条)")
-                return list
-            } catch (e: NotLoggedInException) {
-                throw e
-            } catch (e: YuketangNotFoundException) {
-                Log.i(TAG, "公告接口不存在(404):$path")
-                lastFailure = e
-            } catch (e: YuketangException) {
-                Log.i(TAG, "公告接口不可用:$path → ${e.message}")
-                lastFailure = e
-            }
-            // IOException(网络不通)不换端点:不是端点的问题。
-        }
-        Log.w(TAG, "公告接口候选全部不可用,最后一次失败:${lastFailure?.message}")
-        throw lastFailure ?: YuketangException(-1, "没找到可用的公告接口")
+        Log.i(TAG, "公告翻页到上限(${ANNOUNCEMENT_MAX_PAGES} 页),已取 ${collected.size} 条")
+        return collected
     }
 
     private fun expand(path: String, classroomId: String): String =
@@ -170,13 +164,14 @@ class YuketangClient @Inject constructor(
                 }
                 val json = runCatching { JSONObject(text) }
                     .getOrElse { throw YuketangException(-1, "雨课堂响应不是 JSON") }
-                val errcode = json.optInt("errcode", json.optInt("code", 0))
-                if (errcode != 0) {
+                // 三套错误约定都要认:`errcode`(v2 web)、`code`(discussion 组)、`{success:false, error_code}`
+                val code = json.optInt("errcode", json.optInt("code", json.optInt("error_code", 0)))
+                if (code != 0 || !json.optBoolean("success", true)) {
                     val message = json.optString("errmsg").ifBlank { json.optString("msg") }
-                    if (looksLikeNotLoggedIn(errcode, message)) throw NotLoggedInException()
-                    throw YuketangException(errcode, message.ifBlank { "雨课堂返回错误码 $errcode" })
+                    if (looksLikeNotLoggedIn(code, message)) throw NotLoggedInException()
+                    throw YuketangException(code, message.ifBlank { "雨课堂返回错误(码 $code)" })
                 }
-                // 公告接口还没定下来时,把原始响应片段留在 logcat 里 —— 这是唯一能据以修解析的线索。
+                // 公告响应片段留痕:结构若再变,这是唯一能据以修解析的线索。
                 if (logBody) Log.i(TAG, "GET $url → ${text.replace('\n', ' ').take(RESPONSE_SNIPPET)}")
                 json
             } finally {
@@ -193,77 +188,47 @@ class YuketangClient @Inject constructor(
             message.contains("请先登录") ||
             message.contains("重新登录")
 
-    // ---- 解析(宽容) ----
+    // ---- 解析 ----
 
+    /**
+     * 解析 `data.results[]`(抓包确认的结构,2026-09)。
+     *
+     * 一条公告形如:
+     * ```json
+     * { "id": 9149234, "topic_type": 9, "topic_name": "听力自主任务1",
+     *   "content": { "text": "微信小程序:听力随身练", "app_text": "…", "upload_images": ["…"] },
+     *   "publish_time": 1790172932000, "create_time": "2026-09-23T14:15:32.937881Z",
+     *   "user_info": { "name": "徐芳" }, "publisher_name": null }
+     * ```
+     * 时间优先取 `publish_time`(epoch 毫秒);它缺失时才退回 `create_time`(ISO8601)。
+     */
     private fun parseAnnouncements(json: JSONObject, classroomId: String): List<YuketangAnnouncement> {
-        val array = extractArray(json) ?: return emptyList()
-        return (0 until array.length()).mapNotNull { index ->
-            val item = array.optJSONObject(index) ?: return@mapNotNull null
-            val title = firstString(item, "title", "name", "subject")
-            val content = firstString(item, "content", "body", "text", "description", "summary")
-            if (title.isBlank() && content.isBlank()) return@mapNotNull null
-            val createdAt = firstTime(
-                item,
-                "created_at", "create_time", "createdAt", "publish_time", "published_at",
-                "timestamp", "created", "time", "date",
-            )
-            val rawId = firstString(item, "id", "announcement_id", "notice_id", "pk")
-            val id = rawId.ifBlank { "$classroomId:$createdAt:${title.hashCode()}" }
+        val results = json.optJSONObject("data")?.optJSONArray("results") ?: return emptyList()
+        return (0 until results.length()).mapNotNull { index ->
+            val item = results.optJSONObject(index) ?: return@mapNotNull null
+            val title = item.optString("topic_name").trim()
+            val body = item.optJSONObject("content")?.optString("text").orEmpty().trim()
+            if (title.isBlank() && body.isBlank()) return@mapNotNull null
+            val createdAt = item.optLong("publish_time", 0L).let { published ->
+                if (published > 0L) normalizeEpoch(published) else parseTimeText(item.optString("create_time"))
+            }
             YuketangAnnouncement(
-                id = id,
+                // id 缺失时退化成一个稳定可复现的键,便于去重比较
+                id = item.optString("id").takeIf { it.isNotBlank() }
+                    ?: "$classroomId:$createdAt:${title.hashCode()}",
                 classroomId = classroomId,
-                title = title.ifBlank { content.take(40) },
-                content = content,
+                title = title.ifBlank { body.take(40) },
+                content = body,
                 createdAtMillis = createdAt,
-                publisher = firstString(item, "publisher", "author", "teacher_name", "sender")
-                    .ifBlank { item.optJSONObject("teacher")?.optString("name").orEmpty() },
+                publisher = item.optJSONObject("user_info")?.optString("name").orEmpty()
+                    .ifBlank { item.optString("publisher_name") },
             )
         }
-    }
-
-    /** 公告列表可能藏在不同键下(端点未定,结构也可能变)。 */
-    private fun extractArray(json: JSONObject): JSONArray? {
-        val candidates = listOf("list", "announcements", "notices", "records", "items", "data", "results")
-        for (key in candidates) {
-            when (val value = json.opt(key)) {
-                is JSONArray -> return value
-                is JSONObject -> {
-                    // 嵌套一层:`data: { list: [...] }`
-                    for (inner in candidates) {
-                        (value.opt(inner) as? JSONArray)?.let { return it }
-                    }
-                }
-                else -> Unit
-            }
-        }
-        return null
-    }
-
-    private fun firstString(json: JSONObject, vararg keys: String): String {
-        for (key in keys) {
-            val value = json.optString(key)
-            if (value.isNotBlank()) return value
-        }
-        return ""
-    }
-
-    /** 时间字段常见三种形态:秒/毫秒时间戳、ISO 字符串、"yyyy-MM-dd HH:mm(:ss)"。 */
-    private fun firstTime(json: JSONObject, vararg keys: String): Long {
-        for (key in keys) {
-            if (!json.has(key) || json.isNull(key)) continue
-            val parsed = when (val value = json.opt(key)) {
-                is Number -> normalizeEpoch(value.toLong())
-                is String -> parseTimeText(value)
-                else -> 0L
-            }
-            if (parsed > 0L) return parsed
-        }
-        return 0L
     }
 
     private fun normalizeEpoch(raw: Long): Long = when {
         raw <= 0L -> 0L
-        // 10 位以内按秒算(雨课堂时间戳为秒级)
+        // 10 位以内按秒算,否则按毫秒(雨课堂两种都出现过)
         raw < 100_000_000_000L -> raw * 1000L
         else -> raw
     }
@@ -289,15 +254,17 @@ class YuketangClient @Inject constructor(
         private const val COURSES_PATH = "/v2/api/web/courses/list"
 
         /**
-         * 公告端点候选(按可能性排序)。抓到真实端点后只留第一条。
-         * `{classroomId}` 会被替换成班级 id。
+         * 公告列表(2026-09 抓包确认,长江雨课堂网页版 → 课程 → 「公告」标签页)。
+         *
+         * 雨课堂的「公告」在服务端就是 `topic_type == 9` 的讨论主题,所以这组接口在
+         * `/v/discussion/` 下、错误约定是 `code`/`success` 而不是 `errcode`。
          */
-        val ANNOUNCEMENT_PATHS = listOf(
-            "/api/v3/classroom/{classroomId}/announcement",
-            "/v2/api/web/classroom/{classroomId}/announcement",
-            "/v2/api/web/classrooms/{classroomId}/announcement",
-            "/api/v3/classroom/{classroomId}/announcements",
-        )
+        const val ANNOUNCEMENT_PATH = "/v/discussion/v2/announcements/"
+
+        /** `type=9` = 公告(讨论区其它类型是别的数字)。 */
+        private const val ANNOUNCEMENT_TOPIC_TYPE = 9
+        private const val ANNOUNCEMENT_PAGE_SIZE = 30
+        private const val ANNOUNCEMENT_MAX_PAGES = 3
 
         private val NOT_LOGGED_IN_CODES = setOf(1001, 1002, 40001)
 

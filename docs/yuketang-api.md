@@ -17,7 +17,7 @@
 | `uv_id` / `university_id` | 站点 / 学校 id,按实际值原样带回,不硬编码 |
 | `xtbz` | 通常 `ykt` |
 
-登录态有效期约两周;失效时接口返回 `errcode` 非 0 或明确「未登录」文案,客户端映射为
+登录态有效期约两周;失效时接口返回业务错误码或明确「未登录」文案,客户端映射为
 `NotLoggedInException`(与「网络不通」区分:后者抛 `IOException`)。
 
 ## 请求头
@@ -31,53 +31,88 @@
 | 用途 | 方法 | 路径 |
 |---|---|---|
 | 校验登录态 / 课程班级列表 | GET | `/v2/api/web/courses/list?identity=2` |
-| 课程公告 | GET | 见下 |
+| 课程公告 | GET | `/v/discussion/v2/announcements/?cid=&limit=&offset=&type=9` |
 
 `courses/list` 的响应关键字段:`data.list[].classroom_id`、`.name`(班级名)、
 `.course.name`(课程名)、`.teacher.name`。
 
-## 公告端点:待抓包确认
+## 公告
 
-参考文档**没有**收录公告接口,公开项目里也没有可靠实现,所以当前实现是「候选路径依次探测 +
-抓到即固化」:
+### 端点(已抓包确认)
 
-1. `YuketangClient.ANNOUNCEMENT_PATHS` 按可能性排序列出若干候选路径;
-2. 逐个请求,第一个返回业务成功(`errcode == 0`)的路径会在进程内缓存(`resolvedAnnouncementPath`),
-   之后不再重复探测;404 会继续试下一个候选;网络错误直接放弃(不是端点的问题);
-3. 响应解析是**宽容式**的:列表可能藏在 `data.list` / `data.announcements` / `data.notices` /
-   `data.records` / 顶层数组,字段名也做多候选匹配(见 `parseAnnouncements`)。**单条端点的**响应
-   结构不认识时按空列表处理(端点仍算可用);候选端点**全部**不可用时则抛出异常,由调用方区分
-   「没公告」与「接口找错了」。
+```http
+GET /v/discussion/v2/announcements/?content=&cid={classroomId}&limit=30&offset=0&type=9
+```
 
-### 怎么把真实端点抓出来
+参考文档**没有**收录公告接口,这一条是 2026-09 在长江雨课堂网页版上抓包确认的
+(课程页 → 「公告」标签页)。
 
-Debug 构建在登录页注入了一段抓包探针(`ui/yuketang/YuketangLoginScreen.kt` 的 `PROBE_JS`):
-包装 `window.fetch` 与 `XMLHttpRequest.prototype.open`,把每个请求的 URL 与 method 经
-`AndroidYuketangNative.reportApi` 报给原生,打到 logcat:
+两个反直觉之处:
+
+1. **不在 `/v2/api/web/` 下,而在 `/v/discussion/v2/` 下** —— 雨课堂的「公告」在服务端就是
+   `topic_type == 9` 的**讨论主题**,和讨论区共用一组接口。
+2. **错误约定是 `{code, msg, success}`**,不是 `/v2/api/web/` 那套 `errcode/errmsg`。客户端
+   三套都认(`errcode` / `code` / `error_code` + `success`)。
+
+参数:`cid` 班级 id、`limit`/`offset` 分页、`type=9` 公告、`content` 关键词(空 = 不过滤)。
+分页翻到 3 页为止(公告是「看最新几条」的场景)。
+
+### 响应结构
+
+```json
+{ "msg": "", "code": 0,
+  "data": { "count": 2, "has_old_notice": false, "previous": null,
+    "results": [{
+      "id": 9149234,
+      "topic_type": 9,
+      "topic_name": "听力自主任务1",
+      "content": { "text": "微信小程序:听力随身练", "app_text": "…", "upload_images": ["…"] },
+      "publish_time": 1790172932000,
+      "create_time": "2026-09-23T14:15:32.937881Z",
+      "app_publish_time": "2026-09-23 22:15",
+      "user_info": { "name": "徐芳", "nickname": "徐芳" },
+      "publisher_name": null,
+      "classroom_id": 26770861,
+      "is_read": true, "is_top": 0, "read_num": "34/64", "chapter_id": null
+    }]}}
+```
+
+字段映射(`YuketangClient.parseAnnouncements`):
+
+| 模型字段 | 来源 |
+|---|---|
+| `id` | `id`(缺失时退化成 `classroomId:时间:标题哈希`) |
+| `title` | `topic_name` |
+| `content` | `content.text` |
+| `createdAtMillis` | `publish_time`(epoch 毫秒);缺失才退回 `create_time`(ISO8601) |
+| `publisher` | `user_info.name`,再退 `publisher_name` |
+
+### 抓包方法(留档)
+
+浏览器**只用来登录和拿 Cookie**;数据只用应用自己的 HTTP 客户端取。
+确认这条端点用的就是「打开课程页 → 点『公告』→ 读请求 URL」这一步(只读 URL,不读响应体)。
+
+Debug 构建在登录页注入抓包探针(`ui/yuketang/YuketangLoginScreen.kt` 的 `PROBE_JS`),
+把网页发出的请求 URL 报到 logcat:
 
 ```bash
 adb logcat -s YuketangProbe YuketangSync YuketangClient
 ```
 
-在真机上登录(设置 → 雨课堂 → 登录雨课堂),然后进入某课程的「公告」页面,日志里出现的
-`/…/announcement…` 那一条就是目标端点。拿到后:
+### 接口漂移时的逃生口
 
-1. 把它作为第一条写进 `ANNOUNCEMENT_PATHS`(其余候选可删);
-2. 用该接口的真实响应结构核对 `parseAnnouncements` 的键名与时间字段,必要时收紧;
-3. 更新本文档。
+「设置 → 雨课堂 → 高级 → 公告接口」可以手填路径替换内置值(留空 = 内置
+`/v/discussion/v2/announcements/`),填完点「立即刷新公告」即可验证,不必等发版。
+查询参数由应用拼,填路径即可。
 
-**不发版也能验证**:「设置 → 雨课堂 → 高级 → 公告接口」可以手填路径(留空 = 自动探测),
-填完点「立即刷新公告」即可。
+### 排查线索
 
-### 拉取失败的排查线索
-
-接口候选全部不可用时客户端**抛出并把每次尝试写进日志**,而不是悄悄返回空列表 —— 否则
-「这门课没有公告」与「接口找错了」无法区分。日志 tag:
+日志 tag:
 
 | tag | 内容 |
 |---|---|
 | `YuketangProbe` | 登录页抓包探针:网页发出的每个请求 URL |
-| `YuketangClient` | 逐候选端点的尝试结果、可用端点、原始响应片段(400 字符) |
+| `YuketangClient` | 请求的 URL、原始响应片段(400 字符) |
 | `YuketangSync` | 逐班级拉取结果、新公告标题、是否被判为「上课提醒」、同步汇总 |
 
 ## 「上课提醒」的过滤

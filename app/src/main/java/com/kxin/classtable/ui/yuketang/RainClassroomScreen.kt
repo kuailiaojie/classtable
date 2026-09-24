@@ -26,6 +26,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
+import com.kxin.classtable.data.yuketang.YuketangClient
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
@@ -219,8 +220,8 @@ fun RainClassroomScreen(
             },
             content = {
                 Text(
-                    text = "雨课堂没有公开的公告接口文档,应用内置了几条候选路径自动探测。如果一直拉不到公告," +
-                        "可以在这里手动指定一条(留空 = 自动探测)。",
+                    text = "公告接口已经抓包确认,一般不需要改。这里是**接口漂移时的逃生口**:雨课堂改了路径," +
+                        "把新路径填进来即可,不必等应用发版。留空就用内置路径。",
                     style = YohakuType.label12,
                     color = colors.neutral7,
                 )
@@ -229,12 +230,12 @@ fun RainClassroomScreen(
                     value = pathInput,
                     onValueChange = { pathInput = it },
                     label = "接口路径",
-                    placeholder = "/api/v3/classroom/{classroomId}/announcement",
+                    placeholder = YuketangClient.ANNOUNCEMENT_PATH,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "用 {classroomId} 占位班级 id(也可直接写完整路径)。保存后点「立即刷新公告」验证;" +
-                        "原始响应片段会记到日志 tag YuketangSync。",
+                    text = "内置:" + YuketangClient.ANNOUNCEMENT_PATH +
+                        " · 参数(cid/limit/offset/type=9)由应用拼;保存后点「立即刷新公告」验证。",
                     style = YohakuType.label12,
                     color = colors.neutral6,
                 )
@@ -351,11 +352,7 @@ fun RainClassroomScreen(
         SettingsSection(title = "高级") {
             SettingRowWithSubtitle(
                 title = "公告接口",
-                subtitle = if (settings.yuketangAnnouncementPath.isBlank()) {
-                    "自动探测"
-                } else {
-                    settings.yuketangAnnouncementPath
-                },
+                subtitle = settings.yuketangAnnouncementPath.ifBlank { YuketangClient.ANNOUNCEMENT_PATH },
                 onClick = { showPathDialog = true },
             )
         }
