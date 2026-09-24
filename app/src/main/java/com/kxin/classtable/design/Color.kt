@@ -71,13 +71,15 @@ val YohakuDarkColors = YohakuColors(
     error = Color(0xFFC06A74),
 )
 
-/** 设置页可选的 5 个和色 accent(克制,不开放自由取色)。 */
+/** 设置页可选的 6 个和色 accent(克制,不开放自由取色)。 */
 val AccentOptions = listOf(
     "梅" to "#C56473",
     "縹" to "#3D6896",
     "若竹" to "#5E9F7E",
     "朽葉" to "#A87A3D",
     "蘇芳" to "#A64953",
+    // 空色(そらいろ):角色图的浅蓝,压深一档才撑得住白字与选中态。
+    "空色" to "#6A96C7",
 )
 
 fun accentColor(hex: String): Color =

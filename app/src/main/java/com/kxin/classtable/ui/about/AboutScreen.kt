@@ -43,7 +43,7 @@ fun AboutScreen(nav: NavHostController) {
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
             Text(
-                text = "课程表 · Yohaku 极简课程表",
+                text = "余课 · Yohaku 极简课程表",
                 style = YohakuType.title28,
                 color = colors.neutral10,
             )

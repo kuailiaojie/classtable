@@ -20,6 +20,8 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
 import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
+import com.kxin.classtable.icon.AppIcon
+import com.kxin.classtable.icon.applyAppIcon
 import com.kxin.classtable.notify.ReminderPlanner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -130,6 +134,15 @@ class ClasstableApp : Application() {
             ) { _, _ -> Unit }.collect {
                 reminderPlanner.rescheduleAll()
             }
+        }
+
+        // 桌面图标:选中的那张(或轮播换到的那张)一变,就把启用的 activity-alias 切过去。
+        // 启动时也会跑一次 —— 等于把 alias 与设置对齐,升级 / 重装后仍然一致。
+        scope.launch {
+            settingsRepository.settings
+                .map { it.appIconIndex }
+                .distinctUntilChanged()
+                .collect { applyAppIcon(this@ClasstableApp, AppIcon.of(it)) }
         }
     }
 

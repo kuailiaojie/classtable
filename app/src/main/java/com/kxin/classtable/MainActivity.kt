@@ -63,6 +63,7 @@ import com.kxin.classtable.ui.importer.ImportScreen
 import com.kxin.classtable.ui.importer.ManualImportScreen
 import com.kxin.classtable.ui.settings.AdapterSyncScreen
 import com.kxin.classtable.ui.settings.AdjustmentsScreen
+import com.kxin.classtable.ui.settings.AppIconScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
 import com.kxin.classtable.ui.settings.SettingsScreen
@@ -183,6 +184,7 @@ fun ClasstableRoot(
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),
                 ) { entry -> CourseDetailScreen(nav, entry.arguments?.getString("courseId") ?: "") }
                 composable("settings") { SettingsScreen(nav) }
+                composable("app_icon") { AppIconScreen(nav) }
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
                 composable("adjustments") { AdjustmentsScreen(nav) }
@@ -259,6 +261,9 @@ fun ClasstableRoot(
 
             // 记一次「打开过应用」,供问卷邀请判断时机(进程内一次)
             LaunchedEffect(Unit) { settingsViewModel.onAppOpened() }
+
+            // 图标轮播的「每次打开」节奏:进程内第一次真正进界面时换下一张
+            LaunchedEffect(Unit) { settingsViewModel.rotateIconOnLaunch() }
 
             // 用户问卷邀请:够资格才弹,且一次只弹一个 —— 权限引导、更新提示在时先让位
             val updateDialogShowing = updateState is UpdateState.Available

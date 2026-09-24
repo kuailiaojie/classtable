@@ -10,8 +10,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
+import com.kxin.classtable.domain.model.IconCadence
 import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
+import com.kxin.classtable.icon.AppIcon
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -66,6 +68,10 @@ class SettingsRepository @Inject constructor(
     private val KEY_YKT_NOTIFY_NEW = booleanPreferencesKey("yuketang_notify_new")
     private val KEY_YKT_LAST_FETCH = longPreferencesKey("yuketang_last_fetch_at")
     private val KEY_YKT_ANNOUNCEMENT_PATH = stringPreferencesKey("yuketang_announcement_path")
+    /** 桌面图标(9 张角色图之一)与轮播:图标是每台设备自己的事,不进云端设置同步。 */
+    private val KEY_APP_ICON = intPreferencesKey("app_icon_index")
+    private val KEY_ICON_CAROUSEL = booleanPreferencesKey("icon_carousel_enabled")
+    private val KEY_ICON_CADENCE = stringPreferencesKey("icon_carousel_cadence")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -99,6 +105,9 @@ class SettingsRepository @Inject constructor(
             yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
             yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
             scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
+            appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
+            iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
+            iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
         )
     }
 
@@ -195,6 +204,21 @@ class SettingsRepository @Inject constructor(
      */
     suspend fun setScheduleAdjustments(json: String) {
         context.settingsDataStore.edit { it[KEY_ADJUSTMENTS] = json }
+    }
+
+    /** 桌面图标(仅本机,不打同步时间戳)。 */
+    suspend fun setAppIconIndex(index: Int) {
+        context.settingsDataStore.edit {
+            it[KEY_APP_ICON] = index.coerceIn(0, AppIcon.entries.size - 1)
+        }
+    }
+
+    /** 图标轮播开关与节奏(仅本机,不打同步时间戳)。 */
+    suspend fun setIconCarousel(enabled: Boolean, cadence: IconCadence) {
+        context.settingsDataStore.edit { p ->
+            p[KEY_ICON_CAROUSEL] = enabled
+            p[KEY_ICON_CADENCE] = cadence.name
+        }
     }
 
     /** 是否已进过 ROM「应用启动管理」页(引导标记,仅本机,不同步)。 */

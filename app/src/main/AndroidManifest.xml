@@ -26,15 +26,141 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Classtable">
 
+        <!--
+          桌面入口交给下面 9 个 activity-alias:每个 alias 一套图标、名字相同,同一时刻只启用一个,
+          用户在「设置 → 外观 → 应用图标」里切换(切换逻辑见 icon/AppIcon.kt)。
+          MainActivity 自身不再挂 LAUNCHER,否则桌面上会出现两个入口。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 图标 1/9:向左看 -->
+        <activity-alias
+            android:name=".IconAlias01"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_01"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- 图标 2/9:正面(出厂默认) -->
+        <activity-alias
+            android:name=".IconAlias02"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_02"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 3/9:睡觉 -->
+        <activity-alias
+            android:name=".IconAlias03"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_03"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 4/9:向右看 -->
+        <activity-alias
+            android:name=".IconAlias04"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_04"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 5/9:看书 -->
+        <activity-alias
+            android:name=".IconAlias05"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_05"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 6/9:惊讶 -->
+        <activity-alias
+            android:name=".IconAlias06"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_06"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 7/9:喝茶 -->
+        <activity-alias
+            android:name=".IconAlias07"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_07"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 8/9:眨眼 -->
+        <activity-alias
+            android:name=".IconAlias08"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_08"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 图标 9/9:背影 -->
+        <activity-alias
+            android:name=".IconAlias09"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/app_icon_09"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- 应用内更新:向系统安装器暴露 filesDir/updates 下的 APK -->
         <provider

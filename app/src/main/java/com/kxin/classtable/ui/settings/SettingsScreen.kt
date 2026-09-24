@@ -57,10 +57,13 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
+import com.kxin.classtable.domain.model.IconCadence
 import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.icon.AppIcon
+import com.kxin.classtable.icon.IconRotationScheduler
 import com.kxin.classtable.notify.LiveCourse
 import com.kxin.classtable.notify.startLiveCourseService
 import com.kxin.classtable.widget.NextClassWidgetReceiver
@@ -136,9 +139,20 @@ class SettingsViewModel @Inject constructor(
     /** 首次启动权限引导完成/跳过标记(只弹一次,设置页可随时重进)。 */
     fun completeOnboarding() =
         viewModelScope.launch { settingsRepository.setOnboardingDone() }
+
+    /**
+     * 「每次打开」节奏的图标轮播:本进程第一次真正进入界面时换下一张。
+     * 后台节奏(每小时 / 每天)由 [com.kxin.classtable.icon.AppIconRotationWorker] 负责。
+     */
+    fun rotateIconOnLaunch() = viewModelScope.launch {
+        val current = settingsRepository.currentSettings()
+        val cadence = IconCadence.of(current.iconCarouselCadence)
+        if (!IconRotationScheduler.claimLaunchRotation(current.iconCarouselEnabled, cadence)) return@launch
+        settingsRepository.setAppIconIndex(AppIcon.nextIndex(current.appIconIndex))
+    }
 }
 
-/** 设置页:主题 / 强调色(5 和色)/ 列表入口。 */
+/** 设置页:主题 / 强调色(6 和色)/ 应用图标 / 列表入口。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -469,7 +483,10 @@ fun SettingsScreen(
             }
             DividerLine()
             SettingBlock(title = "强调色") {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     AccentOptions.forEach { (label, hex) ->
                         val selected = settings.accentHex.equals(hex, ignoreCase = true)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -497,6 +514,14 @@ fun SettingsScreen(
                     }
                 }
             }
+            DividerLine()
+            SettingRow(
+                title = "应用图标",
+                value = AppIcon.of(settings.appIconIndex).label.let {
+                    if (settings.iconCarouselEnabled) "轮播中 · $it" else it
+                },
+                onClick = { nav.navigate("app_icon") },
+            )
         }
 
         SettingsSection(title = "课表") {

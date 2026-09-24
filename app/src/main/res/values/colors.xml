@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#C56473</color>
+    <!-- 角色图自带的深色底:自适应图标用它兜住前景的四周(部分桌面缩放前景时会露边)。 -->
+    <color name="ic_launcher_background">#2A2A2A</color>
 </resources>

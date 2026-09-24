@@ -7,6 +7,18 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 /** 课程提醒形态:标准单次提醒 / 实时活动(课前到下课常驻倒计时)。 */
 enum class NotifyMode { STANDARD, LIVE }
 
+/** 图标轮播节奏:每次打开应用 / 每小时 / 每天。 */
+enum class IconCadence(val label: String) {
+    LAUNCH("每次打开"),
+    HOURLY("每小时"),
+    DAILY("每天"),
+    ;
+
+    companion object {
+        fun of(name: String): IconCadence = runCatching { valueOf(name) }.getOrDefault(LAUNCH)
+    }
+}
+
 /** AI 供应商:Gemini 或任意 OpenAI 兼容接口(DeepSeek/通义千问/Kimi/智谱 GLM 等)。 */
 enum class AiProvider(val label: String, val defaultModel: String, val defaultBaseUrl: String) {
     GEMINI("Gemini", "gemini-3.6-flash", "https://generativelanguage.googleapis.com/v1beta"),
@@ -67,6 +79,18 @@ data class AppSettings(
      * 存 JSON 而不是结构化字段,是因为它是「若干条安排」的列表,与作息同属运行时数据。
      */
     val scheduleAdjustments: String = "",
+    /**
+     * 桌面图标(9 张角色图之一),取 [com.kxin.classtable.icon.AppIcon] 的序号。仅本机 ——
+     * 图标是每台设备自己的事,同步到别的设备没有意义。
+     */
+    val appIconIndex: Int = 1,
+    /**
+     * 图标轮播:自动在 9 张图之间轮换。默认关闭 —— 开着会盖掉手动选的那张,
+     * 想让图标固定的人不该被强制换掉。
+     */
+    val iconCarouselEnabled: Boolean = false,
+    /** 轮播节奏(见 [IconCadence])。 */
+    val iconCarouselCadence: String = IconCadence.LAUNCH.name,
 ) {
     fun provider(): AiProvider = runCatching { AiProvider.valueOf(aiProvider) }
         .getOrDefault(AiProvider.GEMINI)

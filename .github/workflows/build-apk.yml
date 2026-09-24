@@ -14,6 +14,7 @@
 #   - main 推送或手动触发且 APK 构建成功后,自动创建 GitHub Release:
 #     tag 取 app/build.gradle.kts 中的 versionName(如 0.1.5,无需手动打 tag),
 #     Release 正文取 CHANGELOG.md 中对应版本章节。
+#     versionName 带后缀(如 1.0.0-rc1)时发布为 Pre-release,且不会成为 /releases/latest。
 #   - Pull Request 不会触发发布。
 #
 # 可选签名(Release):
@@ -153,6 +154,14 @@ jobs:
             echo "::warning::CHANGELOG.md 中没有版本 $TAG 的条目,跳过发布"
             exit 0
           fi
+          # 版本号带后缀(如 1.0.0-rc1)视为预发布:GitHub 上标成 Pre-release,
+          # 同时它不会成为 /releases/latest —— 应用内「检查更新」仍指向最近一个正式版,
+          # RC 只给主动安装的人用。正式版(无后缀)照常发布为 Latest。
+          PRERELEASE_FLAG=""
+          if [[ "$TAG" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            echo "Pre-release version detected: $TAG"
+          fi
           # 幂等:同名 release/tag 已存在时先删除再重建(部分 gh 版本不支持 --clobber)
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists, deleting and recreating"
@@ -162,6 +171,7 @@ jobs:
             artifacts/apk-debug/*.apk \
             artifacts/apk-release/*.apk \
             --title "$TAG" \
-            --notes-file release-body.md
+            --notes-file release-body.md \
+            $PRERELEASE_FLAG
         env:
           GH_TOKEN: ${{ github.token }}
