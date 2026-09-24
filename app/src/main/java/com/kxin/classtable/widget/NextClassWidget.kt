@@ -78,7 +78,7 @@ fun NextClassContent(
                         Text(
                             text = course.name,
                             style = TextStyle(
-                                fontSize = if (prefs.compact) 13.sp else 14.sp,
+                                fontSize = 14.sp,
                                 color = ColorProvider(skin.ink),
                                 fontWeight = FontWeight.Medium,
                             ),

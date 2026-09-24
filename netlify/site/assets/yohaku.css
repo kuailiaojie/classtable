@@ -504,7 +504,10 @@ b {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 56px;
-  padding: 64px 0 72px;
+  /* 只给纵向留白:横向那 24px 归 .container。写成 padding 简写会把它一起清零,
+     于是 hero 比别的区块多出 24px,手机上就是贴着屏幕边。 */
+  padding-top: 64px;
+  padding-bottom: 72px;
   border-top: 0;
 }
 
@@ -1067,7 +1070,9 @@ b {
   .hero {
     grid-template-columns: minmax(0, 1fr);
     gap: 40px;
-    padding: 40px 0 56px;
+    /* 同上:横向留白留给 .container */
+    padding-top: 40px;
+    padding-bottom: 56px;
   }
 
   .hero-title {

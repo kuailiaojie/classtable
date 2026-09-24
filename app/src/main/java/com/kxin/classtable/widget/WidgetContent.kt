@@ -62,10 +62,10 @@ internal fun CourseLine(
     prefs: WidgetPrefs,
     skin: WidgetSkin,
     highlight: Boolean = false,
-    topPadding: Int = 4,
 ) {
+    // 「紧凑」收紧的是行距,不是字号 —— 字号压小只会让字看着小,并不会让内容更密
     Row(
-        modifier = GlanceModifier.fillMaxWidth().padding(top = topPadding.dp),
+        modifier = GlanceModifier.fillMaxWidth().padding(top = if (prefs.compact) 2.dp else 4.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         if (highlight) {
@@ -75,11 +75,8 @@ internal fun CourseLine(
         if (prefs.showTime) {
             Text(
                 text = Schedule.courseTimeText(course, periods),
-                style = TextStyle(
-                    fontSize = if (prefs.compact) 10.sp else 11.sp,
-                    color = ColorProvider(skin.sub),
-                ),
-                modifier = GlanceModifier.width(if (prefs.compact) 62.dp else 74.dp),
+                style = TextStyle(fontSize = 11.sp, color = ColorProvider(skin.sub)),
+                modifier = GlanceModifier.width(74.dp),
                 maxLines = 1,
             )
         }
@@ -96,7 +93,7 @@ internal fun CourseLine(
             Text(
                 text = course.name,
                 style = TextStyle(
-                    fontSize = if (prefs.compact) 11.sp else 12.sp,
+                    fontSize = 12.sp,
                     color = ColorProvider(skin.ink),
                     fontWeight = FontWeight.Medium,
                 ),

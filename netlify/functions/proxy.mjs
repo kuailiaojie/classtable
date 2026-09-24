@@ -226,6 +226,9 @@ async function handleApk(req, url) {
     if (len) headers["Content-Length"] = len;
     const contentRange = apkResp.headers.get("content-range");
     if (contentRange) headers["Content-Range"] = contentRange;
+    // 透出资产名:官网分段取回后落盘时用它命名(Android 端不看这个头)
+    const disposition = apkResp.headers.get("content-disposition");
+    if (disposition) headers["Content-Disposition"] = disposition;
     return new Response(apkResp.body, {
       status: apkResp.status === 206 ? 206 : 200,
       headers,

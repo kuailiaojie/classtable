@@ -65,7 +65,8 @@ for (const name of icons) {
 
 // 4 · 校验页面引用的本地资源都在发布目录里(漏一个就是线上 404)
 const html = fs.readFileSync(path.join(siteDir, 'index.html'), 'utf8');
-const refs = [...html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)].map((m) => m[1]);
+// 引用可能带缓存破冰的查询串(assets/site.js?v=2),落到磁盘上的是去掉查询串的路径
+const refs = [...html.matchAll(/(?:src|href)="(assets\/[^"?]+)/g)].map((m) => m[1]);
 const missing = refs.filter((rel) => !fs.existsSync(path.join(outDir, rel)));
 if (missing.length > 0) fail(`index.html 引用了不存在的资源:${missing.join(', ')}`);
 

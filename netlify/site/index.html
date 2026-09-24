@@ -10,7 +10,7 @@
 <link rel="canonical" href="https://classtablek.netlify.app/" />
 <link rel="icon" href="assets/img/app_icon_02.png" />
 <link rel="apple-touch-icon" href="assets/img/app_icon_02.png" />
-<link rel="stylesheet" href="assets/yohaku.css" />
+<link rel="stylesheet" href="assets/yohaku.css?v=2" />
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="余课 · 极简课程表" />
@@ -89,11 +89,11 @@
       </div>
 
       <div class="hero-meta text-label-12">
-        <span class="chip" data-version-chip data-kind="prerelease">
+        <span class="chip" data-version-chip data-kind="stable">
           <span class="chip-dot" aria-hidden="true"></span>
-          <span data-version-kind>预发行版</span>
+          <span data-version-kind>正式版</span>
         </span>
-        <span class="mono" data-hero-version>v1.0.0-rc2</span>
+        <span class="mono" data-hero-version>v1.0.0</span>
         <span>Android 8.0+</span>
         <span>MIT 开源</span>
         <span>无广告</span>
@@ -487,7 +487,7 @@
           <dl class="dl-facts">
             <div>
               <dt>版本</dt>
-              <dd><span data-version-name>1.0.0-rc2</span></dd>
+              <dd><span data-version-name>1.0.0</span></dd>
             </div>
             <div>
               <dt>发布</dt>
@@ -751,6 +751,9 @@
   </div>
 </footer>
 
-<script src="assets/site.js" defer></script>
+<!-- ?v= 是缓存破冰:`_headers` 给 /assets/* 定了 immutable 的一年缓存,
+     改了样式或脚本必须换 URL,否则回访用户一年内仍跑旧版。
+     动过 assets/ 下任一文件,就把这里和 <head> 里 yohaku.css 的数字一起加一。 -->
+<script src="assets/site.js?v=2" defer></script>
 </body>
 </html>
