@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -35,6 +36,7 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.CoursePalette
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
@@ -126,6 +128,7 @@ fun CourseFormScreen(
     var timeMode by rememberSaveable { mutableIntStateOf(0) }      // 0=按节次 1=自定义时间
     var customTimeStart by rememberSaveable { mutableStateOf("18:30") }
     var customTimeEnd by rememberSaveable { mutableStateOf("20:00") }
+    var colorHex by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) { viewModel.load(courseId) }
     LaunchedEffect(editing) {
@@ -134,6 +137,7 @@ fun CourseFormScreen(
             teacher = c.teacher
             location = c.location
             note = c.note
+            colorHex = c.colorHex
             weekdaysMask = if (c.weekdays > 0) c.weekdays else 1 shl (c.weekday - 1)
             val spec = WeekSpec.of(c, weekCount)
             weekTypeIdx = WeekType.entries.indexOf(spec.type).coerceAtLeast(0)
@@ -241,6 +245,7 @@ fun CourseFormScreen(
                 customEndMinute = ce,
                 weekdays = weekdaysMask,
                 note = note.trim(),
+                colorHex = colorHex.trim(),
             )
             viewModel.save(course)
         } else {
@@ -276,6 +281,7 @@ fun CourseFormScreen(
                 customEndMinute = pinnedEnd,
                 weekdays = weekdaysMask,
                 note = note.trim(),
+                colorHex = colorHex.trim(),
             )
             viewModel.save(course)
         }
@@ -421,6 +427,47 @@ fun CourseFormScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+
+            FieldLabel("课程颜色")
+            Text(
+                text = "用预设快速区分课程，也可以输入 #RRGGBB 自定义颜色。",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(top = 10.dp),
+            ) {
+                CoursePalette.PRESETS.forEach { (label, hex) ->
+                    val selected = colorHex.equals(hex, ignoreCase = true)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Color(android.graphics.Color.parseColor(hex)))
+                                .clickable { colorHex = hex },
+                        )
+                        Text(
+                            text = label,
+                            style = YohakuType.label12,
+                            color = if (selected) colors.neutral10 else colors.neutral7,
+                        )
+                    }
+                }
+            }
+            YohakuTextField(
+                value = colorHex,
+                onValueChange = { value ->
+                    colorHex = value.take(9)
+                },
+                label = "自定义色值(可选)",
+                placeholder = "留空使用自动配色，如 #C56473",
+                singleLine = true,
+                modifier = Modifier.padding(top = 10.dp),
+            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("周次")

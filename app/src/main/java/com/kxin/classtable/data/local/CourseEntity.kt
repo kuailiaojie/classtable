@@ -27,6 +27,7 @@ data class CourseEntity(
     /** 星期位掩码;0 = 未迁移/旧数据,按 weekday 推导。 */
     val weekdays: Int = 0,
     val note: String = "",
+    val colorHex: String = "",
 ) {
     fun toDomain(): Course = Course(
         id = id,
@@ -46,6 +47,7 @@ data class CourseEntity(
         customEndMinute = customEndMinute,
         weekdays = if (weekdays > 0) weekdays else 1 shl (weekday - 1),
         note = note,
+        colorHex = colorHex,
     )
 
     companion object {
@@ -67,6 +69,7 @@ data class CourseEntity(
             customEndMinute = c.customEndMinute,
             weekdays = c.weekdays,
             note = c.note,
+            colorHex = c.colorHex,
         )
     }
 }

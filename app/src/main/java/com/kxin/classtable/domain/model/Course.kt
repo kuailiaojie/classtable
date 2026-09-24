@@ -3,8 +3,7 @@ package com.kxin.classtable.domain.model
 enum class WeekType { EVERY_WEEK, ODD_WEEK, EVEN_WEEK, CUSTOM }
 
 /**
- * 课程。注意:没有 color 字段——Yohaku 路线不给课程分类上色,
- * 强调只属于「当前这一刻」。
+ * 课程。颜色是可选的:空值继续使用按课程名派生的淡彩。
  */
 data class Course(
     val id: String,
@@ -32,6 +31,8 @@ data class Course(
     val weekdays: Int = 1 shl (weekday - 1),
     /** 备注(选填)。 */
     val note: String = "",
+    /** 用户指定的课程颜色(ARGB hex);空值表示使用预设派生色。 */
+    val colorHex: String = "",
 ) {
     /** 是否带具体时刻。导入/保存时会把时刻钉在课程上,所以「第几节」的课也会是 true。 */
     fun hasCustomTime(): Boolean = customStartMinute != null && customEndMinute != null

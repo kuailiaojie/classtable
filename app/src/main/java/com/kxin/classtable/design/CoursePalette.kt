@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.Course
 
 /**
@@ -14,6 +15,17 @@ import com.kxin.classtable.domain.model.Course
  * (同一门课永远同色),由文字承载语义,所以灰度/色盲下信息不丢。
  */
 object CoursePalette {
+    /** 适合课程卡片的预设色；用户也可以在课程编辑页输入任意 #RRGGBB。 */
+    val PRESETS = listOf(
+        "梅" to "#C56473",
+        "縹" to "#5D83B2",
+        "若竹" to "#65A487",
+        "朽葉" to "#C09455",
+        "藤" to "#9275B5",
+        "浅葱" to "#5D9EA1",
+        "苗" to "#86A85B",
+        "灰青" to "#788B9A",
+    )
     /** 8 个和色色相:梅 / 縹 / 若竹 / 朽葉 / 蘇芳 / 藤 / 浅葱 / 苗 */
     private val HUES = listOf(345f, 210f, 155f, 35f, 5f, 275f, 190f, 95f)
 
@@ -40,7 +52,11 @@ fun courseTint(course: Course): Color {
     val colors = LocalYohakuColors.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
     val seed = CoursePalette.seedOf(course)
-    return remember(seed, dark) { CoursePalette.tint(seed, dark) }
+    return remember(seed, dark, course.colorHex) {
+        course.colorHex.toColorOrNull()?.let { base ->
+            if (dark) base.copy(alpha = 0.28f) else base.copy(alpha = 0.12f)
+        } ?: CoursePalette.tint(seed, dark)
+    }
 }
 
 /** 课程色标(列表色条 / 详情色块)。 */
@@ -49,5 +65,12 @@ fun courseMark(course: Course): Color {
     val colors = LocalYohakuColors.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
     val seed = CoursePalette.seedOf(course)
-    return remember(seed, dark) { CoursePalette.mark(seed, dark) }
+    return remember(seed, dark, course.colorHex) {
+        course.colorHex.toColorOrNull()?.let { base ->
+            if (dark) base.copy(alpha = 0.9f) else base.copy(alpha = 0.72f)
+        } ?: CoursePalette.mark(seed, dark)
+    }
 }
+
+private fun String.toColorOrNull(): Color? =
+    runCatching { Color(android.graphics.Color.parseColor(this)) }.getOrNull()
