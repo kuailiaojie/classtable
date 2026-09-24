@@ -26,6 +26,7 @@ data class RemoteCourse(
     /** 星期位掩码;0 = 旧数据,按 weekday 推导。 */
     val weekdays: Int = 0,
     val note: String = "",
+    val colorHex: String = "",
 ) {
     fun toDomain(): Course = Course(
         id = id,
@@ -45,6 +46,7 @@ data class RemoteCourse(
         customEndMinute = customEndMinute,
         weekdays = if (weekdays > 0) weekdays else 1 shl (weekday - 1),
         note = note,
+        colorHex = colorHex,
     )
 
     companion object {
@@ -66,6 +68,7 @@ data class RemoteCourse(
             customEndMinute = c.customEndMinute,
             weekdays = c.weekdays,
             note = c.note,
+            colorHex = c.colorHex,
         )
 
         // ---- Firestore REST 字段编解码(org.json,零依赖) ----
@@ -94,6 +97,7 @@ data class RemoteCourse(
                 customEndMinute = iOpt("customEndMinute"),
                 weekdays = i("weekdays", 0),
                 note = s("note"),
+                colorHex = s("colorHex"),
             )
         }
 
@@ -119,6 +123,7 @@ data class RemoteCourse(
             c.customEndMinute?.let { int("customEndMinute", it) }
             int("weekdays", c.weekdays)
             str("note", c.note)
+            str("colorHex", c.colorHex)
         }
     }
 }

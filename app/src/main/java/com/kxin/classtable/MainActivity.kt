@@ -75,6 +75,7 @@ import com.kxin.classtable.ui.settings.UpdateState
 import com.kxin.classtable.ui.settings.UpdateViewModel
 import com.kxin.classtable.ui.settings.WidgetSettingsScreen
 import com.kxin.classtable.ui.week.WeekScreen
+import com.kxin.classtable.ui.SplashOverlay
 import com.kxin.classtable.ui.yuketang.RainClassroomScreen
 import com.kxin.classtable.ui.yuketang.YuketangBindScreen
 import com.kxin.classtable.ui.yuketang.YuketangLoginScreen
@@ -223,6 +224,7 @@ fun ClasstableRoot(
                     },
                 )
             }
+            SplashOverlay()
             // 启动静默检查更新(24h 节流);有新版弹非阻断提示
             var updateAutoChecked by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
