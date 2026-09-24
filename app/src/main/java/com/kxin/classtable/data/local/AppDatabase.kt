@@ -123,11 +123,12 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
 
-            /** v6 → v7:课程支持用户自定义颜色。 */
-            val MIGRATION_6_7 = object : Migration(6, 7) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL("ALTER TABLE courses ADD COLUMN colorHex TEXT NOT NULL DEFAULT ''")
-                }
+        }
+
+        /** v6 → v7:课程支持用户自定义颜色。 */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE courses ADD COLUMN colorHex TEXT NOT NULL DEFAULT ''")
             }
         }
 
