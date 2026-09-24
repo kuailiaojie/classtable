@@ -1,5 +1,7 @@
 package com.kxin.classtable.data.yuketang
 
+import android.util.Log
+import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AnnouncementDao
 import com.kxin.classtable.data.local.AnnouncementEntity
 import com.kxin.classtable.data.local.CourseDao
@@ -21,12 +23,17 @@ import javax.inject.Singleton
  *
  * [newCount] 只在**该班级此前已有缓存**时才统计新增:首次登录/首次拉取时把整批历史公告
  * 当「新公告」推给用户会是一次通知风暴,那不是「新」。
+ * 另外它已经**排除了雨课堂自己的上课提醒**(见 [YuketangNoticeFilter])。
  */
 data class AnnouncementSyncResult(
     val fetched: Int = 0,
     val newCount: Int = 0,
     val latestCourseName: String? = null,
     val latestTitle: String? = null,
+    /** 已绑定雨课堂班级的课程数;0 = 还没绑定,拉不到公告与接口无关。 */
+    val boundCourses: Int = 0,
+    /** 拉取失败的班级数(接口没找到 / 服务端报错)。 */
+    val failedClassrooms: Int = 0,
 )
 
 /** 雨课堂绑定与公告的本机仓库。所有写操作都只落本机表,不参与云同步。 */
@@ -37,6 +44,7 @@ class YuketangRepository @Inject constructor(
     private val bindingDao: YuketangBindingDao,
     private val announcementDao: AnnouncementDao,
     private val courseDao: CourseDao,
+    private val settingsRepository: SettingsRepository,
 ) {
     /** [loggedIn] 用:单例仓库自己持一个小作用域,随进程存活。 */
     private val loggedInScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -122,21 +130,26 @@ class YuketangRepository @Inject constructor(
     suspend fun syncAnnouncements(): AnnouncementSyncResult {
         val bindings = bindingDao.getAll()
         if (bindings.isEmpty()) return AnnouncementSyncResult()
+        val overridePath = settingsRepository.currentSettings().yuketangAnnouncementPath
         val courseNames = courseDao.getAll().associate { it.id to it.name }
         val now = System.currentTimeMillis()
 
         var fetched = 0
         var newCount = 0
+        var failed = 0
         var latestCourseName: String? = null
         var latestTitle: String? = null
         var latestAt = 0L
 
         for (binding in bindings) {
             val announcements = try {
-                client.announcements(binding.classroomId)
+                client.announcements(binding.classroomId, overridePath)
             } catch (e: NotLoggedInException) {
                 throw e
             } catch (e: Exception) {
+                // 单个班级失败不影响其它班级;但失败要留痕,否则「一条都没拉到」无从排查。
+                failed++
+                Log.w(TAG, "classroom=${binding.classroomId} 拉取失败:${e.message}")
                 continue
             }
             if (announcements.isEmpty()) continue
@@ -145,8 +158,17 @@ class YuketangRepository @Inject constructor(
             val hadCache = announcementDao.countByClassroom(binding.classroomId) > 0
             if (hadCache) {
                 val fresh = announcements.filter { announcementDao.getById(it.id) == null }
-                newCount += fresh.size
-                fresh.maxByOrNull { it.createdAtMillis }?.let { newest ->
+                fresh.forEach { announcement ->
+                    val reminder = YuketangNoticeFilter.isClassReminder(announcement.title, announcement.content)
+                    Log.i(TAG, "classroom=${binding.classroomId} 新公告:${announcement.title}" +
+                        if (reminder) "(雨课堂上课提醒,不推送)" else "")
+                }
+                // 雨课堂自己的「上课提醒」不进通知:课表本来就有课前提醒,重复推没有意义。
+                val notifyable = fresh.filterNot {
+                    YuketangNoticeFilter.isClassReminder(it.title, it.content)
+                }
+                newCount += notifyable.size
+                notifyable.maxByOrNull { it.createdAtMillis }?.let { newest ->
                     if (newest.createdAtMillis >= latestAt) {
                         latestAt = newest.createdAtMillis
                         latestTitle = newest.title
@@ -161,12 +183,24 @@ class YuketangRepository @Inject constructor(
                 },
             )
             fetched += announcements.size
+            Log.i(TAG, "classroom=${binding.classroomId} 拉到 ${announcements.size} 条公告")
         }
+        Log.i(
+            TAG,
+            "公告同步完成:绑定 ${bindings.size} 门 / 拉到 $fetched 条 / 新增 $newCount 条 / 失败 $failed 个班级",
+        )
         return AnnouncementSyncResult(
             fetched = fetched,
             newCount = newCount,
             latestCourseName = latestCourseName,
             latestTitle = latestTitle,
+            boundCourses = bindings.size,
+            failedClassrooms = failed,
         )
+    }
+
+    private companion object {
+        /** 与 [YuketangNoticeFilter] 同一个 tag:排查时 `adb logcat -s YuketangSync` 一次看全。 */
+        const val TAG = "YuketangSync"
     }
 }

@@ -6,6 +6,7 @@ import android.content.Intent
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
+import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import kotlinx.coroutines.CoroutineScope
@@ -116,13 +117,16 @@ class CourseReminderReceiver : BroadcastReceiver() {
      * 该课程最新一条公告的标题(雨课堂),仅当总开关与「提醒内附公告」都开着时取。
      *
      * **只读本地缓存,不联网**:提醒由精确闹钟触发,那一秒必须发出通知,不能等网络;
-     * 缓存由后台任务与「立即刷新」维护。
+     * 缓存由后台任务与「立即刷新」维护。雨课堂自己的「上课提醒」在这里被筛掉 —— 我们自己
+     * 的提醒已经说了一遍,不必再复述它。
      */
     private fun latestAnnouncement(context: Context, courseId: String, settings: AppSettings): String? {
         if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) return null
         return runCatching {
-            runBlocking { AppDatabase.get(context).announcementDao().latestByCourse(courseId)?.title }
-        }.getOrNull()?.takeIf { it.isNotBlank() }
+            runBlocking {
+                YuketangNoticeFilter.latestTitle(AppDatabase.get(context).announcementDao(), courseId)
+            }
+        }.getOrNull()
     }
 
     private fun startLiveUpdate(context: Context, payload: LiveCourse): Boolean = runCatching {

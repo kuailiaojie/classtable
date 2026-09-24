@@ -3,6 +3,7 @@ package com.kxin.classtable.data
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.kxin.classtable.data.local.AppDatabase
+import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.notify.Notifier
 import dagger.hilt.EntryPoint
@@ -110,7 +111,7 @@ class FcmMessagingService : FirebaseMessagingService() {
      * 该课程最新一条公告标题(雨课堂),只读本地缓存。
      *
      * 服务端推送与本地闹钟的通知 id 相同、互相覆盖,所以这条增强通道也要带上公告 ——
-     * 否则「谁后到谁赢」会让刚附上的公告时有时无。
+     * 否则「谁后到谁赢」会让刚附上的公告时有时无。雨课堂自己的「上课提醒」同样被筛掉。
      */
     private fun latestAnnouncement(courseId: String): String? {
         if (courseId.isBlank()) return null
@@ -122,9 +123,12 @@ class FcmMessagingService : FirebaseMessagingService() {
                 return@runCatching null
             }
             runBlocking {
-                AppDatabase.get(context).announcementDao().latestByCourse(courseId)?.title
+                YuketangNoticeFilter.latestTitle(
+                    AppDatabase.get(context).announcementDao(),
+                    courseId,
+                )
             }
-        }.getOrNull()?.takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     @EntryPoint

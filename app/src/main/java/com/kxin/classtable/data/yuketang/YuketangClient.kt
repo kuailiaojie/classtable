@@ -78,28 +78,47 @@ class YuketangClient @Inject constructor(
         }
     }
 
-    /** 某课程班级的公告(最新在前)。 */
-    suspend fun announcements(classroomId: String): List<YuketangAnnouncement> {
+    /**
+     * 某课程班级的公告(最新在前)。
+     *
+     * @param overridePath 设置里手填的接口路径(「高级」);非空则只用它,不再探测。
+     * @throws YuketangException 所有候选端点都不可用时**抛出**,不悄悄返回空列表 ——
+     *   「这门课没有公告」与「接口找错了」必须分得开,否则后台任务会一直静默地什么都没拉到。
+     */
+    suspend fun announcements(
+        classroomId: String,
+        overridePath: String? = null,
+    ): List<YuketangAnnouncement> {
+        overridePath?.takeIf { it.isNotBlank() }?.let { pinned ->
+            Log.i(TAG, "使用设置里指定的公告接口:$pinned")
+            return parseAnnouncements(request(expand(pinned, classroomId), classroomId, logBody = true), classroomId)
+        }
         resolvedAnnouncementPath?.let { path ->
-            return parseAnnouncements(request(expand(path, classroomId), classroomId), classroomId)
+            return parseAnnouncements(request(expand(path, classroomId), classroomId, logBody = true), classroomId)
         }
         var lastFailure: YuketangException? = null
         for (path in ANNOUNCEMENT_PATHS) {
             try {
-                val list = parseAnnouncements(request(expand(path, classroomId), classroomId), classroomId)
+                val list = parseAnnouncements(
+                    request(expand(path, classroomId), classroomId, logBody = true),
+                    classroomId,
+                )
                 resolvedAnnouncementPath = path
+                Log.i(TAG, "公告接口可用:$path(解析到 ${list.size} 条)")
                 return list
             } catch (e: NotLoggedInException) {
                 throw e
             } catch (e: YuketangNotFoundException) {
+                Log.i(TAG, "公告接口不存在(404):$path")
                 lastFailure = e
             } catch (e: YuketangException) {
+                Log.i(TAG, "公告接口不可用:$path → ${e.message}")
                 lastFailure = e
             }
             // IOException(网络不通)不换端点:不是端点的问题。
         }
-        Log.w(TAG, "公告端点均不可用,最后一次失败: ${lastFailure?.message}")
-        return emptyList()
+        Log.w(TAG, "公告接口候选全部不可用,最后一次失败:${lastFailure?.message}")
+        throw lastFailure ?: YuketangException(-1, "没找到可用的公告接口")
     }
 
     private fun expand(path: String, classroomId: String): String =
@@ -107,7 +126,12 @@ class YuketangClient @Inject constructor(
 
     // ---- 请求 ----
 
-    private suspend fun request(path: String, query: String? = null, classroomId: String? = null): JSONObject =
+    private suspend fun request(
+        path: String,
+        query: String? = null,
+        classroomId: String? = null,
+        logBody: Boolean = false,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             val session = sessionStore.read() ?: throw NotLoggedInException()
             val origin = session.origin.ifBlank { YuketangSession.DEFAULT_ORIGIN }
@@ -152,6 +176,8 @@ class YuketangClient @Inject constructor(
                     if (looksLikeNotLoggedIn(errcode, message)) throw NotLoggedInException()
                     throw YuketangException(errcode, message.ifBlank { "雨课堂返回错误码 $errcode" })
                 }
+                // 公告接口还没定下来时,把原始响应片段留在 logcat 里 —— 这是唯一能据以修解析的线索。
+                if (logBody) Log.i(TAG, "GET $url → ${text.replace('\n', ' ').take(RESPONSE_SNIPPET)}")
                 json
             } finally {
                 conn.disconnect()
@@ -274,6 +300,9 @@ class YuketangClient @Inject constructor(
         )
 
         private val NOT_LOGGED_IN_CODES = setOf(1001, 1002, 40001)
+
+        /** logcat 里保留的响应片段长度(排查公告结构用)。 */
+        private const val RESPONSE_SNIPPET = 400
 
         private val ISO_FORMATS = listOf(
             "yyyy-MM-dd HH:mm:ss",

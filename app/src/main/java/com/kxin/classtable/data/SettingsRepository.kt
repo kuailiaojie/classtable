@@ -65,6 +65,7 @@ class SettingsRepository @Inject constructor(
     private val KEY_YKT_BACKGROUND_FETCH = booleanPreferencesKey("yuketang_background_fetch")
     private val KEY_YKT_NOTIFY_NEW = booleanPreferencesKey("yuketang_notify_new")
     private val KEY_YKT_LAST_FETCH = longPreferencesKey("yuketang_last_fetch_at")
+    private val KEY_YKT_ANNOUNCEMENT_PATH = stringPreferencesKey("yuketang_announcement_path")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -96,6 +97,7 @@ class SettingsRepository @Inject constructor(
             yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
             yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
             yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
+            yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
             scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
         )
     }
@@ -250,5 +252,13 @@ class SettingsRepository @Inject constructor(
     /** 记录一次成功的公告拉取(仅本机,不打同步时间戳)。 */
     suspend fun markYuketangFetched(at: Long = System.currentTimeMillis()) {
         context.settingsDataStore.edit { it[KEY_YKT_LAST_FETCH] = at }
+    }
+
+    /**
+     * 手填的公告接口路径(仅本机):空 = 自动探测内置候选。这是排查用的逃生口 ——
+     * 雨课堂的公告接口不在参考文档里,抓到真实路径后可以立刻填进来验证,不必等发版。
+     */
+    suspend fun setYuketangAnnouncementPath(path: String) {
+        context.settingsDataStore.edit { it[KEY_YKT_ANNOUNCEMENT_PATH] = path.trim() }
     }
 }

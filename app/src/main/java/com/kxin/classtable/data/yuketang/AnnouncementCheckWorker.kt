@@ -1,6 +1,7 @@
 package com.kxin.classtable.data.yuketang
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kxin.classtable.data.SettingsRepository
@@ -40,8 +41,14 @@ class AnnouncementCheckWorker(
         val result = try {
             repository.syncAnnouncements()
         } catch (e: NotLoggedInException) {
+            // 未登录 / 登录失效:静默,不重试也不打扰
+            return Result.success()
+        } catch (e: YuketangException) {
+            // 接口路径找不到、服务端报错这类业务失败:重试也不会自己好,记录后放弃本次。
+            Log.w(TAG, "公告拉取失败:${e.message}")
             return Result.success()
         } catch (e: Exception) {
+            // 网络抖动之类:交给 WorkManager 退避重试
             return Result.retry()
         }
 
@@ -55,6 +62,10 @@ class AnnouncementCheckWorker(
             )
         }
         return Result.success()
+    }
+
+    private companion object {
+        const val TAG = "YuketangSync"
     }
 
     @EntryPoint

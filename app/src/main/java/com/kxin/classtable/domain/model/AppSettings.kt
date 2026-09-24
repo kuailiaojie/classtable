@@ -58,6 +58,11 @@ data class AppSettings(
     /** 上次成功拉取公告的时间戳(0 = 从未);仅本机。 */
     val yuketangLastFetchAt: Long = 0L,
     /**
+     * 手填的公告接口路径(「设置 → 雨课堂 → 高级」)。
+     * 空 = 按内置候选自动探测;填了就只用这一条。仅本机。
+     */
+    val yuketangAnnouncementPath: String = "",
+    /**
      * 调休课表(JSON 数组):每条 = 某天停课,或某天补上另一天的课。
      * 存 JSON 而不是结构化字段,是因为它是「若干条安排」的列表,与作息同属运行时数据。
      */

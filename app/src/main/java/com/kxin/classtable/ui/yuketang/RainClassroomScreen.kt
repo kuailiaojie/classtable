@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,12 +31,14 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
+import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.ui.settings.DividerLine
 import com.kxin.classtable.ui.settings.SettingBlock
 import com.kxin.classtable.ui.settings.SettingRow
+import com.kxin.classtable.ui.settings.SettingRowWithSubtitle
 import com.kxin.classtable.ui.settings.SettingsSection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -90,6 +93,12 @@ class RainClassroomViewModel @Inject constructor(
         settingsRepository.setYuketangOptions(enabled, includeInReminder, backgroundFetch, notifyNew)
     }
 
+    /** 手填公告接口路径(空 = 自动探测)。 */
+    fun setAnnouncementPath(path: String) = viewModelScope.launch {
+        settingsRepository.setYuketangAnnouncementPath(path)
+        message = if (path.isBlank()) "已改为自动探测;点「立即刷新公告」验证" else "已保存;点「立即刷新公告」验证"
+    }
+
     fun logout() = viewModelScope.launch {
         repository.logout()
         message = "已退出雨课堂登录(绑定关系保留)"
@@ -119,10 +128,15 @@ class RainClassroomViewModel @Inject constructor(
         refreshing = false
         message = result.fold(
             onSuccess = { sync ->
-                if (sync.fetched == 0) {
-                    "没有取到公告(可能未绑定课程,或接口未返回数据)"
-                } else {
-                    "已同步 ${sync.fetched} 条公告"
+                when {
+                    sync.boundCourses == 0 ->
+                        "还没有绑定课程:先到「课程对应关系」里加载列表并绑定"
+                    sync.fetched > 0 ->
+                        "已同步 ${sync.fetched} 条公告"
+                    sync.failedClassrooms > 0 ->
+                        "公告接口没找到或服务端报错(详情见日志 tag YuketangSync);可在「高级」里手填接口路径"
+                    else ->
+                        "接口正常,但已绑定的这几门课都没有公告"
                 }
             },
             onFailure = { "同步失败:${it.message ?: "网络错误"}" },
@@ -143,6 +157,11 @@ fun RainClassroomScreen(
     val courseCount by viewModel.courseCount.collectAsStateWithLifecycle()
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showPathDialog by remember { mutableStateOf(false) }
+    var pathInput by remember { mutableStateOf("") }
+    LaunchedEffect(showPathDialog) {
+        if (showPathDialog) pathInput = settings.yuketangAnnouncementPath
+    }
 
     if (showLogoutDialog) {
         YohakuDialog(
@@ -176,6 +195,53 @@ fun RainClassroomScreen(
         )
     }
 
+    if (showPathDialog) {
+        YohakuDialog(
+            onDismissRequest = { showPathDialog = false },
+            title = "公告接口",
+            actions = {
+                YohakuDialogAction(text = "取消", onClick = { showPathDialog = false })
+                YohakuDialogAction(
+                    text = "清空",
+                    onClick = {
+                        showPathDialog = false
+                        viewModel.setAnnouncementPath("")
+                    },
+                )
+                YohakuDialogAction(
+                    text = "保存",
+                    accent = true,
+                    onClick = {
+                        showPathDialog = false
+                        viewModel.setAnnouncementPath(pathInput)
+                    },
+                )
+            },
+            content = {
+                Text(
+                    text = "雨课堂没有公开的公告接口文档,应用内置了几条候选路径自动探测。如果一直拉不到公告," +
+                        "可以在这里手动指定一条(留空 = 自动探测)。",
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                YohakuTextField(
+                    value = pathInput,
+                    onValueChange = { pathInput = it },
+                    label = "接口路径",
+                    placeholder = "/api/v3/classroom/{classroomId}/announcement",
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "用 {classroomId} 占位班级 id(也可直接写完整路径)。保存后点「立即刷新公告」验证;" +
+                        "原始响应片段会记到日志 tag YuketangSync。",
+                    style = YohakuType.label12,
+                    color = colors.neutral6,
+                )
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -193,9 +259,13 @@ fun RainClassroomScreen(
                 },
             )
             DividerLine()
-            SettingRow(
+            SettingRowWithSubtitle(
                 title = "课程对应关系",
-                value = if (courseCount == 0) "没有课程" else "已绑定 $boundCount / 共 $courseCount 门",
+                subtitle = when {
+                    courseCount == 0 -> "还没有课程,先去添加或导入"
+                    boundCount == 0 -> "未绑定 · 点这里绑定雨课堂班级"
+                    else -> "已绑定 $boundCount / 共 $courseCount 门"
+                },
                 onClick = { nav.navigate("yuketang_bind") },
             )
         }
@@ -275,6 +345,18 @@ fun RainClassroomScreen(
                 title = if (viewModel.refreshing) "正在刷新…" else "立即刷新公告",
                 value = fetchedAtText(settings.yuketangLastFetchAt),
                 onClick = { if (!viewModel.refreshing) viewModel.refreshNow() },
+            )
+        }
+
+        SettingsSection(title = "高级") {
+            SettingRowWithSubtitle(
+                title = "公告接口",
+                subtitle = if (settings.yuketangAnnouncementPath.isBlank()) {
+                    "自动探测"
+                } else {
+                    settings.yuketangAnnouncementPath
+                },
+                onClick = { showPathDialog = true },
             )
         }
 

@@ -10,6 +10,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
+import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -148,7 +149,8 @@ class CourseLiveUpdateService : Service() {
 
     /**
      * 该课程最新一条公告标题(雨课堂)。只读本地缓存,不联网 —— 实时活动每分钟刷新一次,
-     * 不能在这里挂网络请求。开关关掉时直接返回 null。
+     * 不能在这里挂网络请求。开关关掉时直接返回 null;雨课堂自己的「上课提醒」也被筛掉
+     * (我们的实时活动已经在说同一件事)。
      */
     private suspend fun latestAnnouncementTitle(courseId: String): String? = withContext(Dispatchers.IO) {
         runCatching {
@@ -156,8 +158,11 @@ class CourseLiveUpdateService : Service() {
             if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
                 return@runCatching null
             }
-            AppDatabase.get(applicationContext).announcementDao().latestByCourse(courseId)?.title
-        }.getOrNull()?.takeIf { it.isNotBlank() }
+            YuketangNoticeFilter.latestTitle(
+                AppDatabase.get(applicationContext).announcementDao(),
+                courseId,
+            )
+        }.getOrNull()
     }
 
     override fun onDestroy() {
