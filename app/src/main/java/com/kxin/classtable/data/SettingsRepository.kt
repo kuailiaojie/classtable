@@ -13,6 +13,7 @@ import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.IconCadence
 import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.domain.model.ThemeMode
+import com.kxin.classtable.domain.model.UpdateCadence
 import com.kxin.classtable.icon.AppIcon
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +52,7 @@ class SettingsRepository @Inject constructor(
     private val KEY_TOMORROW_TIME = stringPreferencesKey("tomorrow_reminder_time")
     private val KEY_AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
     private val KEY_INCLUDE_PRERELEASE = booleanPreferencesKey("include_prerelease")
+    private val KEY_UPDATE_INTERVAL = intPreferencesKey("update_check_interval_days")
     private val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
     private val KEY_DISMISSED_VERSION = stringPreferencesKey("dismissed_version")
     private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -73,6 +75,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_APP_ICON = intPreferencesKey("app_icon_index")
     private val KEY_ICON_CAROUSEL = booleanPreferencesKey("icon_carousel_enabled")
     private val KEY_ICON_CADENCE = stringPreferencesKey("icon_carousel_cadence")
+    /** 上课自动免打扰开关。 */
+    private val KEY_CLASS_DND = booleanPreferencesKey("class_dnd_enabled")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
         AppSettings(
@@ -97,6 +101,7 @@ class SettingsRepository @Inject constructor(
             tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
             autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
             includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
+            updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
             lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
             dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
             onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
@@ -110,6 +115,7 @@ class SettingsRepository @Inject constructor(
             appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
             iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
             iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
+            classDndEnabled = p[KEY_CLASS_DND] ?: true,
         )
     }
 
@@ -187,6 +193,13 @@ class SettingsRepository @Inject constructor(
 
     /** 是否接收预发行版(RC)更新提示。 */
     suspend fun setIncludePrerelease(enabled: Boolean) = editSettings { it[KEY_INCLUDE_PRERELEASE] = enabled }
+
+    /** 后台自动检查更新的频率(天);手动「检查更新」不受影响。 */
+    suspend fun setUpdateCheckInterval(days: Int) =
+        editSettings { it[KEY_UPDATE_INTERVAL] = UpdateCadence.of(days).days }
+
+    /** 上课自动免打扰:与提醒同属提醒类设置,走同步时间戳。 */
+    suspend fun setClassDndEnabled(enabled: Boolean) = editSettings { it[KEY_CLASS_DND] = enabled }
 
     /** 记录一次检查(节流用);仅本机,不触发同步时间戳。 */
     suspend fun markUpdateChecked(at: Long = System.currentTimeMillis()) {

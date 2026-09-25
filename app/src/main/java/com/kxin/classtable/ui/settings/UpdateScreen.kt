@@ -45,6 +45,7 @@ import com.kxin.classtable.design.YohakuMarkdown
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.model.AppSettings
+import com.kxin.classtable.domain.model.UpdateCadence
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -126,6 +127,15 @@ class UpdateViewModel @Inject constructor(
     fun setIncludePrerelease(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.setIncludePrerelease(enabled)
         check()
+    }
+
+    /** 自动检查更新的开关与频率(后台任务每天跑一次,由这里按频率节流)。 */
+    fun setAutoCheckUpdate(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setAutoCheckUpdate(enabled)
+    }
+
+    fun setUpdateCadence(days: Int) = viewModelScope.launch {
+        settingsRepository.setUpdateCheckInterval(days)
     }
 
     fun dismiss() {
@@ -262,6 +272,55 @@ fun UpdateScreen(
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
             Text(text = "更新选项", style = YohakuType.label12, color = colors.neutral7)
+
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Text(text = "自动检查更新", style = YohakuType.copy13, color = colors.neutral9)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YohakuChip(
+                    text = "开启",
+                    selected = settings.autoCheckUpdate,
+                    onClick = { viewModel.setAutoCheckUpdate(true) },
+                )
+                YohakuChip(
+                    text = "关闭",
+                    selected = !settings.autoCheckUpdate,
+                    onClick = { viewModel.setAutoCheckUpdate(false) },
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "在后台按下面的频率检查一次,仅在联网时进行;发现新版本发一条通知。" +
+                    "只提示,不自动下载安装。",
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
+
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Text(text = "检查频率", style = YohakuType.copy13, color = colors.neutral9)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UpdateCadence.entries.forEach { cadence ->
+                    YohakuChip(
+                        text = cadence.label,
+                        selected = settings.updateCadence() == cadence,
+                        onClick = { viewModel.setUpdateCadence(cadence.days) },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (settings.autoCheckUpdate) {
+                    "当前:${settings.updateCadence().label}最多检查一次;手动「检查更新」不受它影响。"
+                } else {
+                    "自动检查已关闭,这个频率暂时不生效;手动「检查更新」不受它影响。"
+                },
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
+
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Text(text = "接收预发行版", style = YohakuType.copy13, color = colors.neutral9)
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 YohakuChip(

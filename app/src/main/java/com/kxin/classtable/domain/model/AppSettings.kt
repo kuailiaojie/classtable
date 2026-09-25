@@ -19,6 +19,18 @@ enum class IconCadence(val label: String) {
     }
 }
 
+/** 后台自动检查更新的频率(手动「检查更新」不受它影响)。 */
+enum class UpdateCadence(val days: Int, val label: String) {
+    DAILY(1, "每天"),
+    EVERY_3_DAYS(3, "每 3 天"),
+    WEEKLY(7, "每周"),
+    ;
+
+    companion object {
+        fun of(days: Int): UpdateCadence = entries.firstOrNull { it.days == days } ?: DAILY
+    }
+}
+
 /** AI 供应商:Gemini 或任意 OpenAI 兼容接口(DeepSeek/通义千问/Kimi/智谱 GLM 等)。 */
 enum class AiProvider(val label: String, val defaultModel: String, val defaultBaseUrl: String) {
     GEMINI("Gemini", "gemini-3.6-flash", "https://generativelanguage.googleapis.com/v1beta"),
@@ -53,6 +65,15 @@ data class AppSettings(
      * Pre-release 一起纳入比较 —— 想第一时间试新功能、也愿意接受偶尔不稳的人用得上。
      */
     val includePrerelease: Boolean = false,
+    /** 后台自动检查更新的频率(天)。 */
+    val updateCheckIntervalDays: Int = UpdateCadence.DAILY.days,
+    /**
+     * 上课自动免打扰:上课进免打扰、下课退出。
+     *
+     * 默认开启 —— 但真正生效还要用户在系统里授予「勿扰访问权限」(见 [com.kxin.classtable.notify.DndController]),
+     * 没授权时它本来就不做任何事,所以不必再让用户先来开一次。
+     */
+    val classDndEnabled: Boolean = true,
     /** 上次自动检查更新的时间戳(0 = 从未检查)。 */
     val lastUpdateCheckAt: Long = 0L,
     /** 已忽略的版本号:该版本不再主动提示,手动检查仍会显示。 */
@@ -99,4 +120,6 @@ data class AppSettings(
 ) {
     fun provider(): AiProvider = runCatching { AiProvider.valueOf(aiProvider) }
         .getOrDefault(AiProvider.GEMINI)
+
+    fun updateCadence(): UpdateCadence = UpdateCadence.of(updateCheckIntervalDays)
 }

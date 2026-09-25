@@ -65,6 +65,7 @@ import com.kxin.classtable.ui.settings.AdapterSyncScreen
 import com.kxin.classtable.ui.settings.AdjustmentsScreen
 import com.kxin.classtable.ui.settings.AiKeyScreen
 import com.kxin.classtable.ui.settings.AppIconScreen
+import com.kxin.classtable.ui.settings.ClassDndScreen
 import com.kxin.classtable.ui.settings.CourseReminderScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
@@ -197,6 +198,7 @@ fun ClasstableRoot(
                 composable("adapter_sync") { AdapterSyncScreen(nav) }
                 composable("ai_key") { AiKeyScreen(nav) }
                 composable("course_reminder") { CourseReminderScreen(nav) }
+                composable("class_dnd") { ClassDndScreen(nav) }
                 composable("update") { UpdateScreen(nav) }
                 composable("rain_classroom") { RainClassroomScreen(nav) }
                 composable("yuketang_login") { YuketangLoginScreen(nav) }

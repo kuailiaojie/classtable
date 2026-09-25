@@ -9,6 +9,8 @@
          非运行时权限,声明即可;用户可在系统「实时活动」设置里单独关闭。 -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 上课自动免打扰:切换系统免打扰状态需要「勿扰访问权限」,由用户在系统设置里授予 -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -176,6 +178,11 @@
         <!-- 课程提醒闹钟接收器(PendingIntent 显式指定,无需 intent-filter) -->
         <receiver
             android:name=".notify.CourseReminderReceiver"
+            android:exported="false" />
+
+        <!-- 上课自动免打扰的进入 / 退出闹钟接收器 -->
+        <receiver
+            android:name=".notify.DndReceiver"
             android:exported="false" />
 
         <!-- 实时活动通知上的操作按钮(取消本节课提醒) -->

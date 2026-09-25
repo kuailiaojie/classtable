@@ -28,10 +28,17 @@ class BootRescheduleReceiver : BroadcastReceiver() {
             action == AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED
         if (!relevant) return
 
+        val rebooted = action == Intent.ACTION_BOOT_COMPLETED ||
+            action == Intent.ACTION_LOCKED_BOOT_COMPLETED
+
         val appContext = context.applicationContext
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // 只有在**重启**后才丢掉免打扰的接管标记:重启后系统已回到默认档,旧标记留着的话,
+                // 一次迟到的「下课」闹钟会把早已过期的档位又写回去。改时间 / 应用更新不该丢 ——
+                // 那两种情况下这节课可能还在上,下课闹钟仍需按原样恢复。
+                if (rebooted) DndController.forget(appContext)
                 ReminderPlanner.withShortWakeLock(appContext, "boot") {
                     ReminderPlanner(
                         appContext,

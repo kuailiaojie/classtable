@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,11 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,8 +39,6 @@ import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.AccentOptions
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
-import com.kxin.classtable.design.YohakuDialog
-import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
@@ -96,13 +90,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setAccent(hex: String) = viewModelScope.launch { settingsRepository.setAccent(hex) }
 
-    fun setAutoCheckUpdate(enabled: Boolean) =
-        viewModelScope.launch { settingsRepository.setAutoCheckUpdate(enabled) }
-
-    /** 是否接收预发行版(RC)更新提示。 */
-    fun setIncludePrerelease(enabled: Boolean) =
-        viewModelScope.launch { settingsRepository.setIncludePrerelease(enabled) }
-
     /** 首次启动权限引导完成/跳过标记(只弹一次,设置页可随时重进)。 */
     fun completeOnboarding() =
         viewModelScope.launch { settingsRepository.setOnboardingDone() }
@@ -146,92 +133,7 @@ fun SettingsScreen(
         Adjustments.decode(settings.scheduleAdjustments).size
     }
 
-    var showAutoCheckDialog by remember { mutableStateOf(false) }
-    var showPrereleaseDialog by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
-    var autoCheck by remember { mutableStateOf(settings.autoCheckUpdate) }
-    var includePrerelease by remember { mutableStateOf(settings.includePrerelease) }
-    LaunchedEffect(showAutoCheckDialog) {
-        if (showAutoCheckDialog) autoCheck = settings.autoCheckUpdate
-    }
-    LaunchedEffect(showPrereleaseDialog) {
-        if (showPrereleaseDialog) includePrerelease = settings.includePrerelease
-    }
-    if (showAutoCheckDialog) {
-        YohakuDialog(
-            onDismissRequest = { showAutoCheckDialog = false },
-            title = "自动检查更新",
-            actions = {
-                YohakuDialogAction(text = "取消", onClick = { showAutoCheckDialog = false })
-                YohakuDialogAction(
-                    text = "保存",
-                    accent = true,
-                    onClick = {
-                        viewModel.setAutoCheckUpdate(autoCheck)
-                        showAutoCheckDialog = false
-                    },
-                )
-            },
-            content = {
-                Text(
-                    text = "每天最多检查一次,仅在联网时进行;发现新版本发一条通知。只提示,不自动下载安装。",
-                    style = YohakuType.label12,
-                    color = colors.neutral7,
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    YohakuChip(
-                        text = "开启",
-                        selected = autoCheck,
-                        onClick = { autoCheck = true },
-                    )
-                    YohakuChip(
-                        text = "关闭",
-                        selected = !autoCheck,
-                        onClick = { autoCheck = false },
-                    )
-                }
-            },
-        )
-    }
-    if (showPrereleaseDialog) {
-        YohakuDialog(
-            onDismissRequest = { showPrereleaseDialog = false },
-            title = "接收预发行版",
-            actions = {
-                YohakuDialogAction(text = "取消", onClick = { showPrereleaseDialog = false })
-                YohakuDialogAction(
-                    text = "保存",
-                    accent = true,
-                    onClick = {
-                        viewModel.setIncludePrerelease(includePrerelease)
-                        showPrereleaseDialog = false
-                    },
-                )
-            },
-            content = {
-                Text(
-                    text = "预发行版(RC)是正式版之前的试用版:新功能来得早,偶尔也会有点小毛病。" +
-                        "打开后,「检查更新」与后台自动检查都会把它一并算进来;关闭则只提示正式版。",
-                    style = YohakuType.label12,
-                    color = colors.neutral7,
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    YohakuChip(
-                        text = "接收",
-                        selected = includePrerelease,
-                        onClick = { includePrerelease = true },
-                    )
-                    YohakuChip(
-                        text = "不接收",
-                        selected = !includePrerelease,
-                        onClick = { includePrerelease = false },
-                    )
-                }
-            },
-        )
-    }
 
     Column(
         modifier = Modifier
@@ -341,6 +243,12 @@ fun SettingsScreen(
             )
             DividerLine()
             SettingRow(title = "提醒可靠性", value = "通知 / 闹钟 / 自启动", onClick = { nav.navigate("permissions") })
+            DividerLine()
+            SettingRow(
+                title = "上课免打扰",
+                value = if (settings.classDndEnabled) "自动进 / 退" else "已关闭",
+                onClick = { nav.navigate("class_dnd") },
+            )
         }
 
         SettingsSection(title = "雨课堂") {
@@ -365,22 +273,6 @@ fun SettingsScreen(
 
         SettingsSection(title = "关于") {
             SettingRow(title = "检查更新", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("update") })
-            DividerLine()
-            SettingRow(
-                title = "自动检查更新",
-                value = if (settings.autoCheckUpdate) {
-                    if (settings.dismissedVersion.isNotBlank()) "每天一次 · 已忽略 v${settings.dismissedVersion}" else "每天一次"
-                } else {
-                    "已关闭"
-                },
-                onClick = { showAutoCheckDialog = true },
-            )
-            DividerLine()
-            SettingRow(
-                title = "接收预发行版",
-                value = if (settings.includePrerelease) "含 RC" else "仅正式版",
-                onClick = { showPrereleaseDialog = true },
-            )
             DividerLine()
             SettingRow(title = "关于", value = "v${BuildConfig.VERSION_NAME}", onClick = { nav.navigate("about") })
             DividerLine()

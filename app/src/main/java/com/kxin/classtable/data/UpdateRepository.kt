@@ -352,13 +352,14 @@ class UpdateRepository @Inject constructor(
     }
 
     /**
-     * 是否该做一次自动检查:开关打开 + 距上次超过 [CHECK_INTERVAL_MS]。
-     * 节流与开关都落在设置里(原来记在 filesDir/update/meta.json,与其余配置分散)。
+     * 是否该做一次自动检查:开关打开 + 距上次超过设定的频率。
+     * 频率与开关都落在设置里(原来记在 filesDir/update/meta.json,与其余配置分散)。
+     * 后台任务本身仍是每天跑一次,由这里按「几天一查」节流。
      */
     suspend fun shouldAutoCheck(): Boolean {
         val s = settings.currentSettings()
         if (!s.autoCheckUpdate) return false
-        return System.currentTimeMillis() - s.lastUpdateCheckAt > CHECK_INTERVAL_MS
+        return System.currentTimeMillis() - s.lastUpdateCheckAt > s.updateCadence().days * DAY_MS
     }
 
     suspend fun markChecked() = settings.markUpdateChecked()
@@ -426,7 +427,7 @@ class UpdateRepository @Inject constructor(
     }
 
     private companion object {
-        const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
+        const val DAY_MS = 24L * 60 * 60 * 1000
         const val APK_NAME = "app-update.apk"
 
         /** 单次请求字节数:留足余量给代理的单响应上限(Netlify 函数约 6MB,超出会被截断)。 */

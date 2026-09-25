@@ -11,6 +11,7 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.NotifyMode
@@ -111,20 +112,16 @@ class ReminderPlanner @Inject constructor(
 
     private fun scheduleWindow(courses: List<Course>, settings: AppSettings, today: LocalDate) {
         cancelLedger()
-        if (!settings.notificationsEnabled) {
-            saveLedger(emptyList())
-            return
-        }
         val now = System.currentTimeMillis()
         val lead = settings.notifyLeadMinutes.coerceIn(0, 180)
         val periods = Schedule.parsePeriods(settings.periodTimes)
         val zone = ZoneId.systemDefault()
         val live = settings.notifyMode == NotifyMode.LIVE.name
         val entries = mutableListOf<Entry>()
-        // 调休:提醒必须和课表看到的一致 —— 停课日不排提醒,补课日按原课程日期那天的课排
+        // 调休:提醒与免打扰都必须和课表看到的一致 —— 停课日不排,补课日按原课程日期那天的课排
         val adjustments = Adjustments.decode(settings.scheduleAdjustments)
 
-        for (offset in 0 until HORIZON_DAYS) {
+        if (settings.notificationsEnabled) for (offset in 0 until HORIZON_DAYS) {
             val date = today.plusDays(offset.toLong())
             val teaching = Adjustments.teachingDay(
                 adjustments,
@@ -212,20 +209,81 @@ class ReminderPlanner @Inject constructor(
             }
         }
 
-        // 自续期:次日 00:05 强制重排,把窗口整体往前滚(不依赖 App 被打开)
-        val maintenanceAt = today.plusDays(1).atTime(0, 5)
-            .atZone(zone).toInstant().toEpochMilli()
-        val maintenanceCode = eventCode(today.plusDays(1).toEpochDay(), REFRESH_KEY, 99)
-        scheduleAlarm(
-            trigger = maintenanceAt,
-            requestCode = maintenanceCode,
-            intent = Intent(context, CourseReminderReceiver::class.java).setAction(ACTION_REFRESH),
-        )
-        entries += Entry(maintenanceCode, ACTION_REFRESH, REFRESH_KEY)
+        if (settings.classDndEnabled) {
+            scheduleDnd(courses, settings, today, periods, zone, adjustments, entries)
+        }
+
+        // 自续期:次日 00:05 强制重排,把窗口整体往前滚(不依赖 App 被打开)。
+        // 提醒与免打扰都关掉时不必留这个闹钟 —— 排它也没有任何事要做。
+        if (settings.notificationsEnabled || settings.classDndEnabled) {
+            val maintenanceAt = today.plusDays(1).atTime(0, 5)
+                .atZone(zone).toInstant().toEpochMilli()
+            val maintenanceCode = eventCode(today.plusDays(1).toEpochDay(), REFRESH_KEY, 99)
+            scheduleAlarm(
+                trigger = maintenanceAt,
+                requestCode = maintenanceCode,
+                intent = Intent(context, CourseReminderReceiver::class.java).setAction(ACTION_REFRESH),
+            )
+            entries += Entry(maintenanceCode, ACTION_REFRESH, REFRESH_KEY)
+        }
 
         saveLedger(entries)
-        Log.i(TAG, "已排 ${entries.size} 个提醒闹钟(窗口 $HORIZON_DAYS 天,模式=${settings.notifyMode})")
+        Log.i(
+            TAG,
+            "已排 ${entries.size} 个闹钟(窗口 $HORIZON_DAYS 天," +
+                "提醒=${settings.notificationsEnabled} 模式=${settings.notifyMode}," +
+                "免打扰=${settings.classDndEnabled})",
+        )
     }
+
+    /**
+     * 上课自动免打扰:每节课排两个闹钟 —— 上课进、下课退。
+     *
+     * 与提醒分开开关:提醒关掉的人照样可以只用免打扰。时刻一律取课程自己的时间
+     * (自定义时间课程按它自己的起止),不再另外加提前量。
+     */
+    private fun scheduleDnd(
+        courses: List<Course>,
+        settings: AppSettings,
+        today: LocalDate,
+        periods: List<Schedule.Period>,
+        zone: ZoneId,
+        adjustments: List<ScheduleAdjustment>,
+        entries: MutableList<Entry>,
+    ) {
+        val now = System.currentTimeMillis()
+        for (offset in 0 until HORIZON_DAYS) {
+            val date = today.plusDays(offset.toLong())
+            val teaching = Adjustments.teachingDay(
+                adjustments,
+                date,
+                settings.semesterStartDay,
+                settings.semesterWeekCount,
+            ) ?: continue
+            courses
+                .filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
+                .forEach { course ->
+                    val startMinute = Schedule.courseStartMinute(course, periods) ?: return@forEach
+                    val endMinute = Schedule.courseEndMinute(course, periods)
+                        ?: (startMinute + Schedule.PERIOD_LENGTH_MIN)
+                    val startAt = millisAt(date, startMinute, zone)
+                    val endAt = millisAt(date, endMinute, zone)
+                    if (startAt > now) {
+                        val code = eventCode(date.toEpochDay(), course.id, DND_ON_INDEX)
+                        scheduleAlarm(startAt, code, dndIntent(ACTION_DND_ON))
+                        entries += Entry(code, ACTION_DND_ON, course.id)
+                    }
+                    if (endAt > now) {
+                        val code = eventCode(date.toEpochDay(), course.id, DND_OFF_INDEX)
+                        scheduleAlarm(endAt, code, dndIntent(ACTION_DND_OFF))
+                        entries += Entry(code, ACTION_DND_OFF, course.id)
+                    }
+                }
+        }
+    }
+
+    private fun dndIntent(action: String): Intent =
+        Intent(context, DndReceiver::class.java).setAction(action)
 
     private fun reminderIntent(payload: LiveCourse, live: Boolean, startMinute: Int): Intent =
         Intent(context, CourseReminderReceiver::class.java)
@@ -321,6 +379,8 @@ class ReminderPlanner @Inject constructor(
             s.notifyMode,
             s.tomorrowReminderEnabled,
             s.tomorrowReminderTime,
+            // 免打扰必须进签名:否则开了这个开关、签名没变,排程会直接 early return,一节都不排
+            s.classDndEnabled,
             // 调休必须进签名:否则改了调休、签名没变,这里会直接 early return,提醒还是旧的
             s.scheduleAdjustments,
             coursePart,
@@ -341,13 +401,16 @@ class ReminderPlanner @Inject constructor(
         private const val KEY_MUTED_KEY = "muted_key"
         private const val KEY_MUTED_UNTIL = "muted_until"
         private const val KEY_LIVE = "live_payload"
-        private const val SIGNATURE_VERSION = "plan-v2"
+        private const val SIGNATURE_VERSION = "plan-v3"
 
         /** 滚动窗口天数(含今天)。 */
         const val HORIZON_DAYS = 8
 
         const val ACTION_REMIND = "com.kxin.classtable.ACTION_COURSE_REMIND"
         const val ACTION_REFRESH = "com.kxin.classtable.ACTION_REFRESH_REMINDERS"
+        /** 上课自动免打扰:上课进、下课退。 */
+        const val ACTION_DND_ON = "com.kxin.classtable.ACTION_DND_ON"
+        const val ACTION_DND_OFF = "com.kxin.classtable.ACTION_DND_OFF"
 
         const val EXTRA_LIVE = "live"
         const val EXTRA_COURSE_ID = "course_id"
@@ -363,6 +426,10 @@ class ReminderPlanner @Inject constructor(
 
         const val TOMORROW_KEY = "tomorrow"
         const val REFRESH_KEY = "refresh"
+
+        /** 免打扰两个闹钟的 requestCode 序号:与提醒(0..3)错开,避免任何混淆。 */
+        private const val DND_ON_INDEX = 5
+        private const val DND_OFF_INDEX = 6
         private const val DEFAULT_TOMORROW_MINUTE = 21 * 60 + 30
 
         /** 短时唤醒锁:接收器要在系统再次休眠前读完数据并发通知。 */
