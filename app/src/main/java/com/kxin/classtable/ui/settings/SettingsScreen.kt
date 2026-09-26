@@ -213,6 +213,12 @@ fun SettingsScreen(
                 value = if (adjustmentDays == 0) "未设置" else "$adjustmentDays 天",
                 onClick = { nav.navigate("adjustments") },
             )
+            DividerLine()
+            SettingRow(
+                title = "课表显示",
+                value = "课程块内容 / 样式",
+                onClick = { nav.navigate("timetable_display") },
+            )
         }
 
         SettingsSection(title = "导入与识别") {

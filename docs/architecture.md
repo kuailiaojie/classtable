@@ -15,6 +15,7 @@
 | 小组件 | Glance 1.1.1 |
 | 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM,BOM 33.7.0)经 Netlify Functions 反代 |
 | 网络 | HttpURLConnection + REST(认证与同步不依赖 Firebase SDK) |
+| 农历 | `cn.6tail:lunar` 1.7.7(纯 Java,无第三方依赖;日历周条的农历 / 节气 / 节日) |
 
 ## 环境要求
 
@@ -62,12 +63,12 @@
 
 ```
 app/src/main/java/com/kxin/classtable/
-  design/      # Yohaku 设计系统(色板 / 字阶 / 间距 / 组件 / 自绘弹窗与日期选择器)
-  domain/      # Course / Semester / Schedule(节次↔时间换算、学期周推导)
+  design/      # Yohaku 设计系统(色板 / 字阶 / 间距 / 组件 / 自绘弹窗与选择器 / 动效 token)
+  domain/      # Course / AgendaEvent / Semester / Schedule(节次↔时间换算、学期周推导)/ LunarDate
   data/        # Room + DataStore + 同步 + 更新检查 + import(WarehouseIndex / ImportParser)
   di/          # Hilt 依赖注入模块
   notify/      # 提醒排程 / 通知构建 / 实时活动服务 / 开机重排
-  ui/          # 周视图 日视图 课程 表单 导入(3 步 + JS 桥) 设置(+ 子页) 账号
+  ui/          # 课表(周+日) 课程 日程 表单 导入 设置(+ 子页) 账号 天气
   widget/      # Glance:1×1 下节课 + 4×2 今日课表
 netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送 / 版本 / APK)
 netlify/static/               # 构建期生成:warehouse/bundle.json(适配器同步源,CDN 分发)
@@ -76,15 +77,29 @@ tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
 .github/workflows/build-apk.yml   # GitHub Actions:自动构建并上传 APK
 ```
 
+**导航信息架构**:四个根标签页 —— 课表(`week`,周/日视图合并、右上角切换)、课程(`courses`)、
+日程(`agenda`)、设置(`settings`)。底部导航只在根标签页显示;二级页占满整屏并带返回箭头。
+
+**动效**:`design/YohakuMotion.kt` 收敛全应用的时长与缓动 token(取自 GSAP 的运动原则:
+`power2.out` / `expo.out` / `back.out` 对应成 `CubicBezierEasing`,只动合成层的
+alpha / translation / scale,同类元素统一缓动、列表与课程块按序号错峰)。导航转场
+(MainActivity 的 `navEnter/navExit/navPopEnter/navPopExit`)、开屏时间线、底部导航指示、
+弹窗与底部面板、按压反馈、切周视差、数字滚动都由它驱动。
+
 ## 数据模型与同步
 
 | 层 | 存储 | 说明 |
 |---|---|---|
 | 本地 | Room:`courses` + `deleted_courses`(墓碑) | 离线优先,真相在本地 |
+| 本地 | Room:`agenda_events` + `deleted_agenda`(墓碑) | 日程 / 倒计时,同样是「本地优先 + 云同步」 |
 | 本地 | DataStore `settings` | 主题 / 强调色 / 作息 / 学期 / 提醒设置 / 更新状态 |
-| 远端 | Firestore:`users/{uid}/courses/{courseId}` + `users/{uid}/deleted/{courseId}` | 云同步 |
+| 本地 | DataStore `settings`(同一份) | 小组件与「课表显示」偏好(仅本机,不参与云同步) |
+| 远端 | Firestore:`users/{uid}/courses/{courseId}` + `users/{uid}/deleted/{courseId}` | 课程云同步 |
+| 远端 | Firestore:`users/{uid}/agenda/{id}` + `users/{uid}/deleted_agenda/{id}` | 日程云同步 |
 
-同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删课程在其它设备复活。
+同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删内容在其它设备复活。课程与日程共用 `SyncRepository.mergeById(...)` 这一套合并逻辑,只是各自走不同的集合。
+
+房间版本:**v8**(v7 → v8 新增 `agenda_events` / `deleted_agenda` 两张空表,手动 `Migration`,无破坏性回退)。
 
 课程字段:`id / name / teacher / location / weekday / weekdays(位掩码)/ startPeriod / endPeriod / weekType / weekStart / weekEnd / weeks / customStartMinute / customEndMinute / note / updatedAt`。作息与学期单独存在设置里,课程只引用节次序号,因此改作息会整体平移所有课程的时间。
 

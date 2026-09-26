@@ -14,8 +14,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DeletedCourseEntity::class,
         YuketangBindingEntity::class,
         AnnouncementEntity::class,
+        AgendaEntity::class,
+        DeletedAgendaEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +26,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun deletedCourseDao(): DeletedCourseDao
     abstract fun yuketangBindingDao(): YuketangBindingDao
     abstract fun announcementDao(): AnnouncementDao
+    abstract fun agendaDao(): AgendaDao
+    abstract fun deletedAgendaDao(): DeletedAgendaDao
 
     companion object {
         @Volatile
@@ -132,6 +136,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 → v8:新增日程 / 倒计时两张**本机+云端**表 —— 条目本身与删除墓碑。
+         * 都是新建空表,不涉及旧数据回填。
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `agenda_events` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`category` TEXT NOT NULL, " +
+                        "`startAt` INTEGER NOT NULL, " +
+                        "`endAt` INTEGER NOT NULL, " +
+                        "`allDay` INTEGER NOT NULL, " +
+                        "`location` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`priority` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `deleted_agenda` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -141,7 +174,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                        MIGRATION_5_6, MIGRATION_6_7,
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
                     )
                     .build()
                     .also { instance = it }

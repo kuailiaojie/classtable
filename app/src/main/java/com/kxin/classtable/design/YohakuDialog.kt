@@ -1,5 +1,6 @@
 package com.kxin.classtable.design
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,9 +18,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 
@@ -42,10 +49,24 @@ fun YohakuDialog(
 ) {
     val colors = LocalYohakuColors.current
     Dialog(onDismissRequest = onDismissRequest) {
+        // 入场:轻微放大 + 淡入(弹窗「出现」的动作,退出交给系统窗口)
+        var shown by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { shown = true }
+        val progress by animateFloatAsState(
+            targetValue = if (shown) 1f else 0f,
+            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+            label = "dialogIn",
+        )
         val shape = RoundedCornerShape(YohakuDimens.radiusSheet)
         Box(
             modifier = modifier
                 .fillMaxWidth()
+                .graphicsLayer {
+                    alpha = progress
+                    val s = 0.94f + 0.06f * progress
+                    scaleX = s
+                    scaleY = s
+                }
                 .clip(shape)
                 .background(colors.raised)
                 .border(1.dp, colors.line, shape)

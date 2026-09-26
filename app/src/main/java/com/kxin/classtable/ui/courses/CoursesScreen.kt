@@ -172,6 +172,7 @@ fun CoursesScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .animateItem()
                                 .background(if (isSelected) colors.neutral1 else Color.Transparent)
                                 .clickable {
                                     if (selecting) {

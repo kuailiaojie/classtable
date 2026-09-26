@@ -1,12 +1,14 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.data.local.AgendaDao
+import com.kxin.classtable.data.local.AgendaEntity
 import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.CourseEntity
+import com.kxin.classtable.data.local.DeletedAgendaDao
 import com.kxin.classtable.data.local.DeletedCourseDao
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.AppSettings
-import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
@@ -29,6 +31,8 @@ import javax.inject.Singleton
 class SyncRepository @Inject constructor(
     private val courseDao: CourseDao,
     private val deletedDao: DeletedCourseDao,
+    private val agendaDao: AgendaDao,
+    private val deletedAgendaDao: DeletedAgendaDao,
     private val gateway: FirebaseGateway,
     private val authRepository: AuthRepository,
     private val settingsRepository: SettingsRepository,
@@ -43,12 +47,22 @@ class SyncRepository @Inject constructor(
 
     private fun deletedCol(uid: String) = "${dbBase()}/users/$uid/deleted"
 
+    /** 日程与它的删除墓碑:与课程各走一套集合,互不影响。 */
+    private fun agendaCol(uid: String) = "${dbBase()}/users/$uid/agenda"
+
+    private fun deletedAgendaCol(uid: String) = "${dbBase()}/users/$uid/deleted_agenda"
+
     /** Firestore 文档路径段必须成对(集合/文档):users/{uid}/settings 只是集合路径,配置单文档固定落在 settings/config。 */
     private fun settingsDoc(uid: String) = "${dbBase()}/users/$uid/settings/config"
 
     private fun coursesDocName(uid: String, id: String) = "${docBase()}/users/$uid/courses/${encodeSegment(id)}"
 
     private fun deletedDocName(uid: String, id: String) = "${docBase()}/users/$uid/deleted/${encodeSegment(id)}"
+
+    private fun agendaDocName(uid: String, id: String) = "${docBase()}/users/$uid/agenda/${encodeSegment(id)}"
+
+    private fun deletedAgendaDocName(uid: String, id: String) =
+        "${docBase()}/users/$uid/deleted_agenda/${encodeSegment(id)}"
 
     private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings/config"
 
@@ -70,18 +84,45 @@ class SyncRepository @Inject constructor(
                 if (id.isBlank() || updatedAt == null) null else id to updatedAt
             }
 
+        // 1') 拉远端:日程 + 删除墓碑(与课程同一套约定,各走各的集合)
+        val remoteAgenda = pullDocuments(agendaCol(uid), token)
+            .mapNotNull { doc ->
+                RemoteAgenda.fromFields(doc.optJSONObject("fields") ?: return@mapNotNull null).toDomain()
+            }
+        val remoteDeletedAgenda = pullDocuments(deletedAgendaCol(uid), token)
+            .mapNotNull { doc ->
+                val id = doc.optString("id")
+                val updatedAt = doc.optJSONObject("fields")
+                    ?.optJSONObject("updatedAt")?.optString("integerValue")?.toLongOrNull()
+                if (id.isBlank() || updatedAt == null) null else id to updatedAt
+            }
+
         // 2) 合并(updatedAt 后者胜),并应用远端 + 本地墓碑
         val local = courseDao.getAll().map { it.toDomain() }
         val localTombstones = deletedDao.getAll().associate { it.id to it.updatedAt }
-        val merged = merge(local, remoteCourses).filterNot { c ->
+        val merged = mergeById(local, remoteCourses, { it.id }, { it.updatedAt }).filterNot { c ->
             remoteDeleted.any { t -> t.first == c.id && t.second >= c.updatedAt } ||
                 (localTombstones[c.id]?.let { it >= c.updatedAt } == true)
         }
+
+        // 2') 日程合并(同样 updatedAt 后者胜 + 两端墓碑过滤)
+        val localAgenda = agendaDao.getAll().map { it.toDomain() }
+        val localAgendaTombs = deletedAgendaDao.getAll().associate { it.id to it.updatedAt }
+        val mergedAgenda = mergeById(localAgenda, remoteAgenda, { it.id }, { it.updatedAt })
+            .filterNot { e ->
+                remoteDeletedAgenda.any { t -> t.first == e.id && t.second >= e.updatedAt } ||
+                    (localAgendaTombs[e.id]?.let { it >= e.updatedAt } == true)
+            }
 
         // 3) 写回本地:覆盖式 upsert + 清理多余行
         courseDao.upsertAll(merged.map { CourseEntity.fromDomain(it) })
         val finalIds = merged.map { it.id }.toSet()
         courseDao.getAll().forEach { e -> if (e.id !in finalIds) courseDao.deleteById(e.id) }
+
+        // 3') 日程写回本地
+        agendaDao.upsertAll(mergedAgenda.map { AgendaEntity.fromDomain(it) })
+        val finalAgendaIds = mergedAgenda.map { it.id }.toSet()
+        agendaDao.getAll().forEach { e -> if (e.id !in finalAgendaIds) agendaDao.deleteById(e.id) }
 
         // 4) 推远端:课程 + 墓碑(幂等,单次 commit)
         val writes = JSONArray()
@@ -101,6 +142,26 @@ class SyncRepository @Inject constructor(
                     "update",
                     JSONObject()
                         .put("name", deletedDocName(uid, t.id))
+                        .put("fields", JSONObject().put("updatedAt", JSONObject().put("integerValue", t.updatedAt.toString()))),
+                ),
+            )
+        }
+        mergedAgenda.forEach { e ->
+            writes.put(
+                JSONObject().put(
+                    "update",
+                    JSONObject()
+                        .put("name", agendaDocName(uid, e.id))
+                        .put("fields", RemoteAgenda.toFields(RemoteAgenda.fromDomain(e))),
+                ),
+            )
+        }
+        deletedAgendaDao.getAll().forEach { t ->
+            writes.put(
+                JSONObject().put(
+                    "update",
+                    JSONObject()
+                        .put("name", deletedAgendaDocName(uid, t.id))
                         .put("fields", JSONObject().put("updatedAt", JSONObject().put("integerValue", t.updatedAt.toString()))),
                 ),
             )
@@ -211,12 +272,18 @@ class SyncRepository @Inject constructor(
 
     private data class RemoteSettings(val settings: AppSettings, val updatedAt: Long)
 
-    private fun merge(local: List<Course>, remote: List<Course>): List<Course> {
-        val byId = HashMap<String, Course>()
-        local.forEach { byId[it.id] = it }
+    /** 按 id 合并:updatedAt 后者胜(课程与日程共用)。 */
+    private fun <T> mergeById(
+        local: List<T>,
+        remote: List<T>,
+        id: (T) -> String,
+        updatedAt: (T) -> Long,
+    ): List<T> {
+        val byId = HashMap<String, T>()
+        local.forEach { byId[id(it)] = it }
         remote.forEach { r ->
-            val l = byId[r.id]
-            if (l == null || r.updatedAt > l.updatedAt) byId[r.id] = r
+            val l = byId[id(r)]
+            if (l == null || updatedAt(r) > updatedAt(l)) byId[id(r)] = r
         }
         return byId.values.toList()
     }

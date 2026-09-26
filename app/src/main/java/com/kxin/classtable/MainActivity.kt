@@ -7,6 +7,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +53,7 @@ import com.kxin.classtable.design.YohakuBottomNav
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuTheme
+import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.model.ThemeMode
@@ -54,9 +63,9 @@ import com.kxin.classtable.ui.onboarding.OnboardingScreen
 import com.kxin.classtable.ui.permissions.PermissionsScreen
 import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
+import com.kxin.classtable.ui.agenda.AgendaScreen
 import com.kxin.classtable.ui.courses.CourseDetailScreen
 import com.kxin.classtable.ui.courses.CoursesScreen
-import com.kxin.classtable.ui.day.DayScreen
 import com.kxin.classtable.ui.form.CourseFormScreen
 import com.kxin.classtable.ui.importer.AiImportScreen
 import com.kxin.classtable.ui.importer.ImportScreen
@@ -71,11 +80,12 @@ import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
 import com.kxin.classtable.ui.settings.SettingsScreen
 import com.kxin.classtable.ui.settings.SettingsViewModel
+import com.kxin.classtable.ui.settings.TimetableDisplayScreen
 import com.kxin.classtable.ui.settings.UpdateScreen
 import com.kxin.classtable.ui.settings.UpdateState
 import com.kxin.classtable.ui.settings.UpdateViewModel
 import com.kxin.classtable.ui.settings.WidgetSettingsScreen
-import com.kxin.classtable.ui.week.WeekScreen
+import com.kxin.classtable.ui.timetable.TimetableScreen
 import com.kxin.classtable.ui.SplashOverlay
 import com.kxin.classtable.ui.yuketang.RainClassroomScreen
 import com.kxin.classtable.ui.yuketang.YuketangBindScreen
@@ -165,9 +175,15 @@ fun ClasstableRoot(
                     .fillMaxSize()
                     .systemBarsPadding(),
             ) {
-                NavHost(navController = nav, startDestination = "week") {
-                composable("week") { WeekScreen(nav) }
-                composable("day") { DayScreen(nav) }
+                NavHost(
+                    navController = nav,
+                    startDestination = "week",
+                    enterTransition = { navEnter(initialState.destination.route, targetState.destination.route) },
+                    exitTransition = { navExit(initialState.destination.route, targetState.destination.route) },
+                    popEnterTransition = { navPopEnter() },
+                    popExitTransition = { navPopExit() },
+                ) {
+                composable("week") { TimetableScreen(nav) }
                 composable(
                     route = "course_form?courseId={courseId}",
                     arguments = listOf(
@@ -183,6 +199,7 @@ fun ClasstableRoot(
                 composable("import_ai") { AiImportScreen(nav) }
                 composable("about") { AboutScreen(nav) }
                 composable("courses") { CoursesScreen(nav) }
+                composable("agenda") { AgendaScreen(nav) }
                 composable(
                     route = "course_detail/{courseId}",
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),
@@ -193,6 +210,7 @@ fun ClasstableRoot(
                 composable("semester") { SemesterScreen(nav) }
                 composable("adjustments") { AdjustmentsScreen(nav) }
                 composable("widget_settings") { WidgetSettingsScreen(nav) }
+                composable("timetable_display") { TimetableDisplayScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
                 composable("adapter_sync") { AdapterSyncScreen(nav) }
@@ -308,8 +326,57 @@ fun ClasstableRoot(
     }
 }
 
-/** 底部导航覆盖的四个根标签页(二级页不显示导航,占满整屏)。 */
-private val ROOT_TABS = setOf("week", "day", "courses", "settings")
+/** 底部导航覆盖的根标签页(二级页不显示导航,占满整屏)。 */
+private val ROOT_TABS = setOf("week", "courses", "agenda", "settings")
+
+private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
+
+/**
+ * 导航转场。
+ *
+ * 两个层级用两套动作:根标签之间是「同层平移」,不该有方向感 —— 淡入 + 轻微缩放;
+ * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
+ */
+private fun navEnter(from: String?, to: String?): EnterTransition =
+    if (isRootTab(from) && isRootTab(to)) {
+        fadeIn(YohakuMotion.tween(YohakuMotion.durBase)) +
+            scaleIn(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
+                initialScale = 0.98f,
+            )
+    } else {
+        slideInHorizontally(
+            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+            initialOffsetX = { it },
+        ) + fadeIn(YohakuMotion.tween(YohakuMotion.durBase))
+    }
+
+private fun navExit(from: String?, to: String?): ExitTransition =
+    if (isRootTab(from) && isRootTab(to)) {
+        fadeOut(YohakuMotion.tween(YohakuMotion.durFast)) +
+            scaleOut(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durBase, YohakuMotion.easeInOut),
+                targetScale = 1.01f,
+            )
+    } else {
+        slideOutHorizontally(
+            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
+            targetOffsetX = { -it / 4 },
+        ) + fadeOut(YohakuMotion.tween(YohakuMotion.durBase))
+    }
+
+/** 返回:被压住的页面从左侧滑回、当前页向右退出。 */
+private fun navPopEnter(): EnterTransition =
+    slideInHorizontally(
+        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+        initialOffsetX = { -it / 4 },
+    ) + fadeIn(YohakuMotion.tween(YohakuMotion.durBase))
+
+private fun navPopExit(): ExitTransition =
+    slideOutHorizontally(
+        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
+        targetOffsetX = { it },
+    ) + fadeOut(YohakuMotion.tween(YohakuMotion.durBase))
 
 /** 沿 ContextWrapper 链向上找宿主 Activity。 */
 private tailrec fun Context.findActivity(): Activity? = when (this) {

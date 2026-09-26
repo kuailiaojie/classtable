@@ -1,4 +1,4 @@
-package com.kxin.classtable.ui.day
+package com.kxin.classtable.ui.weather
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -35,8 +35,63 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * 日视图顶部的当前天气:一行大字温度 + 一行小字要素,右侧定位与今日高低温。
- * 图标是自绘的细笔画(不用 emoji / 图标字体),颜色只取中性档,不占用 accent。
+ * 天气图标:自绘的细笔画(不用 emoji / 图标字体),颜色只取中性档,不占用 accent。
+ * 表头左上角的「当前天气」与 [WeatherCard] 共用同一个图标。
+ */
+@Composable
+fun WeatherIcon(weather: Weather, modifier: Modifier = Modifier) {
+    val colors = LocalYohakuColors.current
+    val ink = colors.neutral7
+    val soft = colors.neutral5
+    val kind = weatherKind(weather)
+    Canvas(modifier) {
+        when (kind) {
+            WeatherKind.CLEAR ->
+                drawSun(Offset(size.width * 0.5f, size.height * 0.5f), size.width * 0.17f, ink)
+
+            WeatherKind.PARTLY -> {
+                // 云是不透明实心,后画就自然遮住太阳的下半——正好是「晴间多云」的遮挡关系
+                drawSun(Offset(size.width * 0.36f, size.height * 0.30f), size.width * 0.115f, ink)
+                drawCloud(ink, scale = 0.88f, shiftY = 0.10f)
+            }
+
+            WeatherKind.OVERCAST -> {
+                drawCloud(soft, scale = 0.88f, shiftX = 0.07f, shiftY = -0.06f)
+                drawCloud(ink, scale = 0.88f, shiftX = -0.03f, shiftY = 0.08f)
+            }
+
+            WeatherKind.RAIN -> {
+                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
+                drawDrops(soft)
+            }
+
+            WeatherKind.THUNDER -> {
+                drawCloud(ink, scale = 0.92f, shiftY = -0.14f)
+                drawBolt(ink)
+            }
+
+            WeatherKind.SNOW -> {
+                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
+                drawFlakes(soft)
+            }
+
+            WeatherKind.SLEET -> {
+                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
+                drawDrops(soft, only = 0)
+                drawFlakes(soft, only = 1)
+            }
+
+            WeatherKind.FOG -> drawFog(ink, soft)
+
+            WeatherKind.WIND -> drawWind(ink, soft)
+
+            WeatherKind.UNKNOWN -> drawCloud(ink)
+        }
+    }
+}
+
+/**
+ * 当前天气卡:一行大字温度 + 一行小字要素,右侧定位与今日高低温。
  * 整块可点,点一下重新拉取。
  */
 @Composable
@@ -59,7 +114,7 @@ fun WeatherCard(
                 .padding(YohakuDimens.cardPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            WeatherGlyph(weather, modifier = Modifier.size(44.dp))
+            WeatherIcon(weather, modifier = Modifier.size(44.dp))
             Spacer(Modifier.width(YohakuDimens.gapCard))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -129,58 +184,6 @@ private fun rangeText(weather: Weather): String? {
     val max = weather.tempMax ?: return null
     val min = weather.tempMin ?: return null
     return "↑${max.roundToInt()}° ↓${min.roundToInt()}°"
-}
-
-@Composable
-private fun WeatherGlyph(weather: Weather, modifier: Modifier = Modifier) {
-    val colors = LocalYohakuColors.current
-    val ink = colors.neutral7
-    val soft = colors.neutral5
-    val kind = weatherKind(weather)
-    Canvas(modifier) {
-        when (kind) {
-            WeatherKind.CLEAR ->
-                drawSun(Offset(size.width * 0.5f, size.height * 0.5f), size.width * 0.17f, ink)
-
-            WeatherKind.PARTLY -> {
-                // 云是不透明实心,后画就自然遮住太阳的下半——正好是「晴间多云」的遮挡关系
-                drawSun(Offset(size.width * 0.36f, size.height * 0.30f), size.width * 0.115f, ink)
-                drawCloud(ink, scale = 0.88f, shiftY = 0.10f)
-            }
-
-            WeatherKind.OVERCAST -> {
-                drawCloud(soft, scale = 0.88f, shiftX = 0.07f, shiftY = -0.06f)
-                drawCloud(ink, scale = 0.88f, shiftX = -0.03f, shiftY = 0.08f)
-            }
-
-            WeatherKind.RAIN -> {
-                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
-                drawDrops(soft)
-            }
-
-            WeatherKind.THUNDER -> {
-                drawCloud(ink, scale = 0.92f, shiftY = -0.14f)
-                drawBolt(ink)
-            }
-
-            WeatherKind.SNOW -> {
-                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
-                drawFlakes(soft)
-            }
-
-            WeatherKind.SLEET -> {
-                drawCloud(ink, scale = 0.92f, shiftY = -0.12f)
-                drawDrops(soft, only = 0)
-                drawFlakes(soft, only = 1)
-            }
-
-            WeatherKind.FOG -> drawFog(ink, soft)
-
-            WeatherKind.WIND -> drawWind(ink, soft)
-
-            WeatherKind.UNKNOWN -> drawCloud(ink)
-        }
-    }
 }
 
 /** 天气现象归类。优先认中文文案(接口的 weather 始终是人话),认不出再退回 weather_icon。 */

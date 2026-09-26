@@ -41,6 +41,9 @@ object YohakuType {
     // 周视图七天同屏后格子很窄,以下字号比 cellName/cellTime 再小一档。
     /** 周视图网格内课程名 */
     val gridName = TextStyle(fontFamily = YohakuFonts.Serif, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp)
+    /** 周视图网格内课程名(小 / 大两档,对应「课表显示 → 字号」) */
+    val gridNameSm = gridName.copy(fontSize = 9.sp, lineHeight = 12.sp)
+    val gridNameLg = gridName.copy(fontSize = 11.sp, lineHeight = 14.sp)
     /** 周视图网格内教室 */
     val gridMeta = TextStyle(fontFamily = YohakuFonts.Mono, fontWeight = FontWeight.Normal, fontSize = 8.sp, lineHeight = 11.sp)
     /** 周视图左侧节次留白列:节号 */
