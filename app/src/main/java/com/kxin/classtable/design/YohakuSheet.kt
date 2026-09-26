@@ -1,5 +1,9 @@
 package com.kxin.classtable.design
 
+import android.view.View
+import android.view.ViewParent
+import android.view.Window
+import android.view.WindowManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,9 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 
 /**
  * 纸面底部面板(「新建日程」那种)。
@@ -60,6 +66,18 @@ fun YohakuSheet(
         // 入场:从下方滑入 + 淡入(关闭由系统窗口退场,故只做入场)
         var shown by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { shown = true }
+
+        // 关键:Dialog 窗口默认按 WRAP_CONTENT 测量,内容拿不到「一屏」的硬约束 ——
+        // 于是 fillMaxSize / 面板的 fillMaxHeight(0.9f) / 子项的 weight 会一起失效,
+        // 面板被内容撑到屏幕外、底部按钮掉到屏幕下方。显式把窗口钉成整屏
+        // (新版 Compose 内部也是这么兜的),约束重新成立。
+        val dialogView = LocalView.current
+        LaunchedEffect(Unit) {
+            dialogView.findDialogWindow()?.setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+            )
+        }
         val progress by animateFloatAsState(
             targetValue = if (shown) 1f else 0f,
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
@@ -108,4 +126,15 @@ fun YohakuSheet(
             )
         }
     }
+}
+
+/** 沿 parent 链找到承载本面板的 Dialog 窗口(DialogLayout 实现了 [DialogWindowProvider])。 */
+private fun View.findDialogWindow(): Window? {
+    if (this is DialogWindowProvider) return window
+    var node: ViewParent? = this.parent
+    while (node != null) {
+        if (node is DialogWindowProvider) return node.window
+        node = node.parent
+    }
+    return null
 }
