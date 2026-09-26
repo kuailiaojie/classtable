@@ -98,11 +98,12 @@ fun AgendaScreen(
                 selected = selected,
                 today = today,
                 onSelect = { selectedEpoch = it.toEpochDay() },
-                onPrevWeek = {
-                    mondayEpoch = LocalDate.ofEpochDay(mondayEpoch).minusWeeks(1).toEpochDay()
-                },
-                onNextWeek = {
-                    mondayEpoch = LocalDate.ofEpochDay(mondayEpoch).plusWeeks(1).toEpochDay()
+                onWeekChange = { newMonday ->
+                    mondayEpoch = newMonday.toEpochDay()
+                    // 换周后选中日平移到同一星期几,时间线跟着周条走
+                    selectedEpoch = newMonday
+                        .plusDays((selected.dayOfWeek.value - 1).toLong())
+                        .toEpochDay()
                 },
                 onToday = {
                     mondayEpoch = Schedule.mondayEpochDay(today.toEpochDay())

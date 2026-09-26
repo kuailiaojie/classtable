@@ -8,10 +8,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,7 +48,12 @@ fun YohakuSheet(
     val colors = LocalYohakuColors.current
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // decorFitsSystemWindows = false:把导航栏/键盘内边距交给内容自己处理,
+        // 否则面板会一直铺到屏幕最下,底部的按钮被导航栏或键盘压住、够不到。
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
         // 入场:从下方滑入 + 淡入(关闭由系统窗口退场,故只做入场)
         var shown by remember { mutableStateOf(false) }
@@ -84,7 +93,8 @@ fun YohakuSheet(
                         indication = null,
                         onClick = {},
                     )
-                    .navigationBarsPadding()
+                    // 底部让开「导航栏」或「键盘」中更高的那个:两者叠加会多顶一截
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     .padding(horizontal = YohakuDimens.screenPadding, vertical = 16.dp),
                 content = content,
             )
