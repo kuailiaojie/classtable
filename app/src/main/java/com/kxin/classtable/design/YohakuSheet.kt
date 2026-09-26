@@ -9,8 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -68,7 +70,13 @@ fun YohakuSheet(
         val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                // Dialog 在部分 Compose 版本下按 WRAP_CONTENT 测量,内容拿不到封顶高度,
+                // 于是 fillMaxSize / 面板的 fillMaxHeight(0.9f) / 子项的 weight 全部失效 ——
+                // 面板被内容撑到屏幕外,底部按钮掉到屏幕下方、还滚不动。
+                // 这里把容器显式钉到「最多一屏」再填满,约束重新成立,面板才受控。
+                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp)
+                .fillMaxHeight()
                 // 点面板之外关闭(无涟漪)
                 .clickable(
                     interactionSource = scrimInteraction,
