@@ -27,6 +27,8 @@ data class RemoteCourse(
     val weekdays: Int = 0,
     val note: String = "",
     val colorHex: String = "",
+    /** 自动配色钉在课程上的色相(0..359);null = 老记录,渲染时按课名现算。 */
+    val colorHue: Int? = null,
 ) {
     fun toDomain(): Course = Course(
         id = id,
@@ -47,6 +49,7 @@ data class RemoteCourse(
         weekdays = if (weekdays > 0) weekdays else 1 shl (weekday - 1),
         note = note,
         colorHex = colorHex,
+        colorHue = colorHue,
     )
 
     companion object {
@@ -69,6 +72,7 @@ data class RemoteCourse(
             weekdays = c.weekdays,
             note = c.note,
             colorHex = c.colorHex,
+            colorHue = c.colorHue,
         )
 
         // ---- Firestore REST 字段编解码(org.json,零依赖) ----
@@ -98,6 +102,7 @@ data class RemoteCourse(
                 weekdays = i("weekdays", 0),
                 note = s("note"),
                 colorHex = s("colorHex"),
+                colorHue = iOpt("colorHue"),
             )
         }
 
@@ -124,6 +129,7 @@ data class RemoteCourse(
             int("weekdays", c.weekdays)
             str("note", c.note)
             str("colorHex", c.colorHex)
+            c.colorHue?.let { int("colorHue", it) }
         }
     }
 }

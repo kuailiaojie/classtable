@@ -3,18 +3,27 @@ package com.kxin.classtable.ui.settings
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -22,20 +31,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.BlockCorner
+import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.GridDensity
 import com.kxin.classtable.data.NameSize
 import com.kxin.classtable.data.TimetablePrefs
 import com.kxin.classtable.data.TimetablePrefsStore
-import com.kxin.classtable.domain.model.CourseColorScheme
+import com.kxin.classtable.design.CoursePalette
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.domain.model.CourseColorScheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -43,13 +59,25 @@ import javax.inject.Inject
 @HiltViewModel
 class TimetableDisplayViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val courseRepository: CourseRepository,
 ) : ViewModel() {
     val prefs: StateFlow<TimetablePrefs> = TimetablePrefsStore.flow(context)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TimetablePrefs())
 
+    /** 「重新配色」完成后给用户的一句回执;null = 这一页还没点过。 */
+    private val _recolorNote = MutableStateFlow<String?>(null)
+    val recolorNote: StateFlow<String?> = _recolorNote.asStateFlow()
+
     /** 改一项就落盘 —— 回到课表页立即生效,不必点保存。 */
     fun update(transform: (TimetablePrefs) -> TimetablePrefs) = viewModelScope.launch {
         TimetablePrefsStore.save(context, transform(prefs.value))
+    }
+
+    fun reassignColors() = viewModelScope.launch {
+        _recolorNote.value = runCatching { courseRepository.reassignAllColors() }.fold(
+            onSuccess = { if (it > 0) "已重新分配 $it 门课程的颜色" else "没有需要重新分配的课程" },
+            onFailure = { "重新配色失败,请重试" },
+        )
     }
 }
 
@@ -58,6 +86,7 @@ class TimetableDisplayViewModel @Inject constructor(
  *
  * 与「桌面小组件」同一套做法 —— 改一项立即落盘、立即生效;选项只存本机,不参与云同步。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TimetableDisplayScreen(
     nav: NavHostController,
@@ -65,6 +94,14 @@ fun TimetableDisplayScreen(
 ) {
     val colors = LocalYohakuColors.current
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    val recolorNote by viewModel.recolorNote.collectAsStateWithLifecycle()
+    var confirmingRecolor by remember { mutableStateOf(false) }
+
+    // 色板预览:当前方案铺开的整圈淡彩。跟着主题与档位走,换档立刻看得到区别。
+    val dark = CoursePalette.isDarkTheme(colors.paper)
+    val swatches = remember(dark, prefs.colorScheme) {
+        CoursePalette.swatches(prefs.colorScheme, dark)
+    }
 
     Column(
         modifier = Modifier
@@ -177,7 +214,8 @@ fun TimetableDisplayScreen(
             SettingsSection(title = "配色方案") {
                 SettingBlock(
                     title = "自动配色",
-                    subtitle = "按课名派生淡彩时用多少个和色色相 —— 色相越多,不同课程越不容易撞色。",
+                    subtitle = "新建 / 导入课程时给它定一个色相并钉在课程上,不同课程不会分到同一个颜色;" +
+                        "色相数就是能排下的课程数。",
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CourseColorScheme.entries.forEach { scheme ->
@@ -187,6 +225,44 @@ fun TimetableDisplayScreen(
                                 onClick = { viewModel.update { it.copy(colorScheme = scheme) } },
                             )
                         }
+                    }
+                    Text(
+                        text = prefs.colorScheme.description,
+                        style = YohakuType.label12,
+                        color = colors.neutral6,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 10.dp),
+                    ) {
+                        swatches.forEach { swatch ->
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                                    .background(swatch),
+                            )
+                        }
+                    }
+                }
+                DividerLine()
+                SettingBlock(
+                    title = "重新配色",
+                    subtitle = "按上面的方案把全部课程的色相重排一遍。自己指定过颜色的课程保持不动。",
+                ) {
+                    YohakuOutlineButton(
+                        text = "重新配色全部课程",
+                        onClick = { confirmingRecolor = true },
+                    )
+                    recolorNote?.let { note ->
+                        Text(
+                            text = note,
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
                     }
                 }
             }
@@ -226,6 +302,34 @@ fun TimetableDisplayScreen(
                         )
                     }
                 }
+            }
+        }
+
+        if (confirmingRecolor) {
+            YohakuDialog(
+                onDismissRequest = { confirmingRecolor = false },
+                title = "重新配色?",
+                actions = {
+                    YohakuDialogAction(
+                        text = "取消",
+                        onClick = { confirmingRecolor = false },
+                    )
+                    YohakuDialogAction(
+                        text = "重新配色",
+                        accent = true,
+                        onClick = {
+                            confirmingRecolor = false
+                            viewModel.reassignColors()
+                        },
+                    )
+                },
+            ) {
+                Text(
+                    text = "会按「${prefs.colorScheme.label}」给所有课程重新分配色相," +
+                        "课表里的颜色可能和你习惯的不一样 —— 之前就分到同一个颜色的课,到这一步才会分开。",
+                    style = YohakuType.copy14,
+                    color = LocalYohakuColors.current.neutral9,
+                )
             }
         }
     }

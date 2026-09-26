@@ -51,7 +51,7 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
-    /** 「课表显示 → 配色方案」:全局派生课程淡彩时用多少个色相。 */
+    /** 「课表显示 → 配色方案」:课程淡彩用哪一档(色相环大小 + 彩度强弱)。 */
     val colorScheme: StateFlow<CourseColorScheme> = TimetablePrefsStore.flow(context)
         .map { it.colorScheme }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CourseColorScheme.STANDARD)

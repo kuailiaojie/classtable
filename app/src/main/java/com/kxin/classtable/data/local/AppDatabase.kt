@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AgendaEntity::class,
         DeletedAgendaEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -165,6 +165,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 → v9:课程增加**钉住的自动配色色相**。
+         *
+         * 老记录保持 NULL(渲染时仍按课名现算),不回填:回填要在迁移里重算哈希,
+         * 而用户点一次设置页的「重新配色」就能拿到一份互不重复的分配 —— 迁移只管加列。
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE courses ADD COLUMN colorHue INTEGER")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -174,7 +186,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                     )
                     .build()
                     .also { instance = it }

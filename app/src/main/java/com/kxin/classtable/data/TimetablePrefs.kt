@@ -38,7 +38,7 @@ data class TimetablePrefs(
     val corner: BlockCorner = BlockCorner.MEDIUM,
     /** 是否铺课程淡彩底;关闭 = 纯文字块(浮起面 + 细边框)。 */
     val showTint: Boolean = true,
-    /** 自动配色的色相方案:色相越多,不同课程越不容易撞色。 */
+    /** 自动配色方案:决定色相环上有几个色相(即能排下多少门各不相同的课)与淡彩的彩度强弱。 */
     val colorScheme: CourseColorScheme = CourseColorScheme.STANDARD,
 )
 

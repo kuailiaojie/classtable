@@ -249,6 +249,8 @@ fun CourseFormScreen(
                 weekdays = weekdaysMask,
                 note = note.trim(),
                 colorHex = colorHex.trim(),
+                // 色相是钉在课程上的(见 CourseRepository),编辑时原样带走
+                colorHue = editing?.colorHue,
             )
             viewModel.save(course)
         } else {
@@ -285,6 +287,8 @@ fun CourseFormScreen(
                 weekdays = weekdaysMask,
                 note = note.trim(),
                 colorHex = colorHex.trim(),
+                // 色相是钉在课程上的(见 CourseRepository),编辑时原样带走
+                colorHue = editing?.colorHue,
             )
             viewModel.save(course)
         }

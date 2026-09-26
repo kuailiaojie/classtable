@@ -33,6 +33,14 @@ data class Course(
     val note: String = "",
     /** 用户指定的课程颜色(ARGB hex);空值表示使用预设派生色。 */
     val colorHex: String = "",
+    /**
+     * 自动配色钉在课程上的色相(0..359,OKLCh 色相角)。
+     *
+     * 分配时保证不与已有课程重复,之后增删课程都不会改变它 —— 与「课程时刻一旦导入就钉死」
+     * 是同一个约定。null = 还没钉过(老记录),渲染时按课名现算;用户在设置里点一次
+     * 「重新配色」就会给所有课程补上互不重复的色相。
+     */
+    val colorHue: Int? = null,
 ) {
     /** 是否带具体时刻。导入/保存时会把时刻钉在课程上,所以「第几节」的课也会是 true。 */
     fun hasCustomTime(): Boolean = customStartMinute != null && customEndMinute != null

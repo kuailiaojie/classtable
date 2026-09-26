@@ -28,6 +28,8 @@ data class CourseEntity(
     val weekdays: Int = 0,
     val note: String = "",
     val colorHex: String = "",
+    /** 自动配色钉在课程上的色相(0..359);null = 老记录,渲染时按课名现算。 */
+    val colorHue: Int? = null,
 ) {
     fun toDomain(): Course = Course(
         id = id,
@@ -48,6 +50,7 @@ data class CourseEntity(
         weekdays = if (weekdays > 0) weekdays else 1 shl (weekday - 1),
         note = note,
         colorHex = colorHex,
+        colorHue = colorHue,
     )
 
     companion object {
@@ -70,6 +73,7 @@ data class CourseEntity(
             weekdays = c.weekdays,
             note = c.note,
             colorHex = c.colorHex,
+            colorHue = c.colorHue,
         )
     }
 }

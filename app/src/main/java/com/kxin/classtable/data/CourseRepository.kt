@@ -6,8 +6,10 @@ import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.CourseEntity
 import com.kxin.classtable.data.local.DeletedCourseDao
 import com.kxin.classtable.data.local.DeletedCourseEntity
+import com.kxin.classtable.domain.CourseHuePlanner
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.domain.model.CourseColorScheme
 import com.kxin.classtable.notify.ReminderPlanner
 import com.kxin.classtable.widget.NextClassWidget
 import com.kxin.classtable.widget.TodayWidget
@@ -17,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,7 +48,8 @@ class CourseRepository @Inject constructor(
 
     suspend fun save(course: Course) {
         val isNew = dao.getById(course.id) == null
-        dao.upsert(CourseEntity.fromDomain(course.copy(updatedAt = System.currentTimeMillis())))
+        val stored = course.withPinnedHue()
+        dao.upsert(CourseEntity.fromDomain(stored.copy(updatedAt = System.currentTimeMillis())))
         postChangeSideEffects()
         Analytics.log(
             if (isNew) "course_created" else "course_updated",
@@ -91,17 +95,96 @@ class CourseRepository @Inject constructor(
         // 导入即钉住时刻:按当前作息(导入前刚被脚本覆盖的那一张)把节次换算成具体时刻存下来,
         // 之后改作息不会再把这些课程的时间点带跑。
         val periods = Schedule.parsePeriods(settingsRepository.currentSettings().periodTimes)
-        dao.upsertAll(courses.map { Schedule.pinCourseTimes(it, periods) }
+
+        // 配色同理,导入即钉住色相:同批同名的课(周一一条、周五一条)分到同一个色相,
+        // 与已有课程也不重复 —— 之后增删课程都不会把它们带跑。
+        val scheme = currentScheme()
+        val assigned = LinkedHashMap<String, Int>()
+        dao.getAll().map { it.toDomain() }.forEach { existing ->
+            val hue = existing.colorHue
+            if (existing.colorHex.isBlank() && hue != null) {
+                assigned.putIfAbsent(CourseHuePlanner.seedOf(existing), hue)
+            }
+        }
+        val taken = assigned.values.toMutableList()
+        val pinned = courses.map { course ->
+            if (course.colorHue != null || course.colorHex.isNotBlank()) {
+                course
+            } else {
+                val seed = CourseHuePlanner.seedOf(course)
+                course.copy(
+                    colorHue = assigned.getOrPut(seed) {
+                        CourseHuePlanner.next(seed, taken, scheme).also { taken.add(it) }
+                    },
+                )
+            }
+        }
+
+        dao.upsertAll(pinned.map { Schedule.pinCourseTimes(it, periods) }
             .map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
         postChangeSideEffects()
         Analytics.log("courses_imported", "count" to courses.size)
         scope.launch { sync.syncNow() }
     }
 
+    /**
+     * 按当前配色方案把全部课程的色相重排一遍,返回改动的课程数。
+     *
+     * 分配从零开始、按课名排序推进,所以同一份课表每次重排的结果完全一样。
+     * **用户自己指定过颜色的课程保持不动** —— 那不是自动配色该改的东西。
+     */
+    suspend fun reassignAllColors(): Int {
+        val targets = dao.getAll().map { it.toDomain() }.filter { it.colorHex.isBlank() }
+        if (targets.isEmpty()) return 0
+
+        val scheme = currentScheme()
+        val seeds = targets.map { CourseHuePlanner.seedOf(it) }.distinct().sorted()
+        val taken = mutableListOf<Int>()
+        val assigned = LinkedHashMap<String, Int>(seeds.size)
+        seeds.forEach { seed ->
+            val hue = CourseHuePlanner.next(seed, taken, scheme)
+            assigned[seed] = hue
+            taken.add(hue)
+        }
+
+        val now = System.currentTimeMillis()
+        val updated = targets.map {
+            it.copy(colorHue = assigned.getValue(CourseHuePlanner.seedOf(it)), updatedAt = now)
+        }
+        dao.upsertAll(updated.map { CourseEntity.fromDomain(it) })
+        postChangeSideEffects()
+        scope.launch { sync.syncNow() }
+        return updated.size
+    }
+
+    /**
+     * 给还没有色相的课程钉一个:自带色相、或用户指定过颜色的课程直接沿用。
+     *
+     * 同名课沿用同一个色相 —— 一门课分成多条记录时它们要能对上号。
+     */
+    private suspend fun Course.withPinnedHue(): Course {
+        if (colorHue != null || colorHex.isNotBlank()) return this
+        val others = dao.getAll().map { it.toDomain() }.filter { it.id != id }
+        val seed = CourseHuePlanner.seedOf(this)
+        val sameName = others.firstOrNull {
+            it.colorHex.isBlank() && it.colorHue != null && CourseHuePlanner.seedOf(it) == seed
+        }
+        val hue = sameName?.colorHue
+            ?: CourseHuePlanner.next(seed, takenHues(others), currentScheme())
+        return copy(colorHue = hue)
+    }
+
+    /** 已被占用的色相:只有走自动配色的课程占位,指定过颜色的课程不占。 */
+    private fun takenHues(courses: List<Course>): List<Int> =
+        courses.filter { it.colorHex.isBlank() }.mapNotNull { it.colorHue }
+
+    private suspend fun currentScheme(): CourseColorScheme =
+        TimetablePrefsStore.flow(context).first().colorScheme
+
     /** 课程数据变更后的副作用:刷新小组件 + 重排提醒(均在 IO,避免阻塞调用线程)。 */
     private fun postChangeSideEffects() {
         refreshWidgets()
-            scope.launch { reminderPlanner.rescheduleAll() }
+        scope.launch { reminderPlanner.rescheduleAll() }
     }
 
     private fun refreshWidgets() {
