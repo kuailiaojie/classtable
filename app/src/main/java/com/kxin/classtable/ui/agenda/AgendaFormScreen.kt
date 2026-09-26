@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,15 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDatePicker
 import com.kxin.classtable.design.YohakuDimens
-import com.kxin.classtable.design.YohakuSheet
 import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTimePicker
+import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
@@ -45,17 +48,65 @@ import java.time.ZoneId
 import java.util.UUID
 
 /**
- * 新建 / 编辑日程面板。
+ * 新建 / 编辑日程:整页表单(与「添加课程」同一套 —— 顶部返回 + 内容滚动 + 底部按钮钉住)。
  *
- * 字段与参考一致:标题、分类、全天开关、开始与结束(日期 + 时间)、地点、备注、优先级。
- * 时间与日期都用项目自绘的选择器,全天时隐藏时间。
+ * 之所以不做成底部弹层:弹层走 Compose `Dialog`,其内容在部分版本里拿不到「一屏」的高度约束,
+ * 面板会被撑到屏幕外、底部按钮掉下去。整页没有这个问题 —— 内容就排在导航栈自己的 Box 里。
+ *
+ * 字段:标题、分类、全天开关、开始与结束(日期 + 时间)、地点、备注、优先级;编辑态可删除。
  */
+@Composable
+fun AgendaFormScreen(
+    nav: NavHostController,
+    eventId: String?,
+    defaultDateEpoch: Long,
+    viewModel: AgendaViewModel = hiltViewModel(),
+) {
+    val colors = LocalYohakuColors.current
+    val events by viewModel.events.collectAsStateWithLifecycle()
+    val editing = remember(eventId, events) {
+        eventId?.let { id -> events.firstOrNull { it.id == id } }
+    }
+    val defaultDate = if (defaultDateEpoch > 0) {
+        LocalDate.ofEpochDay(defaultDateEpoch)
+    } else {
+        LocalDate.now()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.paper),
+    ) {
+        YohakuTopBar(
+            title = if (eventId != null) "编辑日程" else "新建日程",
+            onBack = { nav.popBackStack() },
+        )
+        if (eventId != null && editing == null) {
+            // 编辑态:等目标条目从本地库出来再建表单,避免把「还没读到」当成新建
+            Spacer(modifier = Modifier.weight(1f))
+        } else {
+            AgendaFormBody(
+                initial = editing,
+                defaultDate = defaultDate,
+                onSave = {
+                    viewModel.save(it)
+                    nav.popBackStack()
+                },
+                onDelete = {
+                    viewModel.delete(it)
+                    nav.popBackStack()
+                },
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun AgendaSheet(
+private fun AgendaFormBody(
     initial: AgendaEvent?,
     defaultDate: LocalDate,
-    onDismiss: () -> Unit,
     onSave: (AgendaEvent) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -63,16 +114,18 @@ internal fun AgendaSheet(
     val startInit = initial?.startLocal() ?: defaultDate.atTime(9, 0)
     val endInit = initial?.endLocal() ?: defaultDate.atTime(10, 0)
 
-    var title by remember(initial) { mutableStateOf(initial?.title ?: "") }
-    var category by remember(initial) { mutableStateOf(initial?.category ?: AgendaCategory.TODO) }
-    var priority by remember(initial) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
-    var allDay by remember(initial) { mutableStateOf(initial?.allDay ?: false) }
-    var location by remember(initial) { mutableStateOf(initial?.location ?: "") }
-    var note by remember(initial) { mutableStateOf(initial?.note ?: "") }
-    var startDate by remember(initial) { mutableStateOf(startInit.toLocalDate()) }
-    var startMinute by remember(initial) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
-    var endDate by remember(initial) { mutableStateOf(endInit.toLocalDate()) }
-    var endMinute by remember(initial) { mutableIntStateOf(endInit.hour * 60 + endInit.minute) }
+    // 以条目 id 为键:编辑态读到条目时初始化一次,之后不再被上游刷新冲掉
+    val key = initial?.id
+    var title by remember(key) { mutableStateOf(initial?.title ?: "") }
+    var category by remember(key) { mutableStateOf(initial?.category ?: AgendaCategory.TODO) }
+    var priority by remember(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
+    var allDay by remember(key) { mutableStateOf(initial?.allDay ?: false) }
+    var location by remember(key) { mutableStateOf(initial?.location ?: "") }
+    var note by remember(key) { mutableStateOf(initial?.note ?: "") }
+    var startDate by remember(key) { mutableStateOf(startInit.toLocalDate()) }
+    var startMinute by remember(key) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
+    var endDate by remember(key) { mutableStateOf(endInit.toLocalDate()) }
+    var endMinute by remember(key) { mutableIntStateOf(endInit.hour * 60 + endInit.minute) }
 
     var pickStartDate by remember { mutableStateOf(false) }
     var pickStartTime by remember { mutableStateOf(false) }
@@ -96,33 +149,12 @@ internal fun AgendaSheet(
             .toInstant().toEpochMilli()
     }
 
-    YohakuSheet(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.fillMaxHeight(0.9f),
-    ) {
-        // 面板头
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (initial != null) "编辑日程" else "新建日程",
-                style = YohakuType.title20,
-                color = colors.neutral10,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "✕",
-                style = YohakuType.copy16,
-                color = colors.neutral6,
-                modifier = Modifier
-                    .clickable(onClick = onDismiss)
-                    .padding(6.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-
+    Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             YohakuTextField(
                 value = title,
@@ -131,7 +163,7 @@ internal fun AgendaSheet(
                 placeholder = "如 提交高数作业",
                 serifStyle = true,
             )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("分类")
             FlowRow(
@@ -146,7 +178,7 @@ internal fun AgendaSheet(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -160,7 +192,7 @@ internal fun AgendaSheet(
                     onCheckedChange = { allDay = it },
                 )
             }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PickerField(
@@ -205,7 +237,7 @@ internal fun AgendaSheet(
                 style = YohakuType.label12,
                 color = if (timeValid) colors.neutral7 else colors.error,
             )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             YohakuTextField(
                 value = location,
@@ -213,7 +245,7 @@ internal fun AgendaSheet(
                 label = "地点(选填)",
                 placeholder = "如 教1-201",
             )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             YohakuTextField(
                 value = note,
@@ -223,10 +255,13 @@ internal fun AgendaSheet(
                 singleLine = false,
                 maxLines = 3,
             )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("优先级")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 AgendaPriority.entries.forEach { p ->
                     YohakuChip(
                         text = p.label,
@@ -235,9 +270,9 @@ internal fun AgendaSheet(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
 
             if (initial != null) {
+                Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
                 Text(
                     text = "删除日程",
                     style = YohakuType.copy13,
@@ -247,32 +282,38 @@ internal fun AgendaSheet(
                         .padding(vertical = 8.dp),
                 )
             }
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }
 
-        Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-        YohakuButton(
-            text = if (initial != null) "保存修改" else "创建日程",
-            onClick = {
-                if (valid) {
-                    onSave(
-                        AgendaEvent(
-                            id = initial?.id ?: UUID.randomUUID().toString(),
-                            title = title.trim(),
-                            category = category,
-                            startAt = startAtMillis(),
-                            endAt = endAtMillis(),
-                            allDay = allDay,
-                            location = location.trim(),
-                            note = note.trim(),
-                            priority = priority,
-                            updatedAt = initial?.updatedAt ?: 0L,
-                        ),
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = valid,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(YohakuDimens.screenPadding),
+        ) {
+            YohakuButton(
+                text = if (initial != null) "保存修改" else "创建日程",
+                onClick = {
+                    if (valid) {
+                        onSave(
+                            AgendaEvent(
+                                id = initial?.id ?: UUID.randomUUID().toString(),
+                                title = title.trim(),
+                                category = category,
+                                startAt = startAtMillis(),
+                                endAt = endAtMillis(),
+                                allDay = allDay,
+                                location = location.trim(),
+                                note = note.trim(),
+                                priority = priority,
+                                updatedAt = initial?.updatedAt ?: 0L,
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = valid,
+            )
+        }
     }
 
     if (pickStartDate) {

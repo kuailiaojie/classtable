@@ -63,6 +63,7 @@ import com.kxin.classtable.ui.onboarding.OnboardingScreen
 import com.kxin.classtable.ui.permissions.PermissionsScreen
 import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
+import com.kxin.classtable.ui.agenda.AgendaFormScreen
 import com.kxin.classtable.ui.agenda.AgendaScreen
 import com.kxin.classtable.ui.courses.CourseDetailScreen
 import com.kxin.classtable.ui.courses.CoursesScreen
@@ -200,6 +201,27 @@ fun ClasstableRoot(
                 composable("about") { AboutScreen(nav) }
                 composable("courses") { CoursesScreen(nav) }
                 composable("agenda") { AgendaScreen(nav) }
+                composable(
+                    route = "agenda_form?eventId={eventId}&date={date}",
+                    arguments = listOf(
+                        navArgument("eventId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        // 新建时的默认日期(epochDay);0 = 用今天
+                        navArgument("date") {
+                            type = NavType.LongType
+                            defaultValue = 0L
+                        },
+                    ),
+                ) { entry ->
+                    AgendaFormScreen(
+                        nav = nav,
+                        eventId = entry.arguments?.getString("eventId"),
+                        defaultDateEpoch = entry.arguments?.getLong("date") ?: 0L,
+                    )
+                }
                 composable(
                     route = "course_detail/{courseId}",
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),

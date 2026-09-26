@@ -32,7 +32,7 @@ import java.time.LocalDate
 /**
  * 日程:一份数据两种看法 ——
  * **议程**按天铺日历周条 + 时间线,**倒计时**按剩余天数铺列表;右上角切换。
- * 新建 / 编辑走底部面板(见 [AgendaSheet])。
+ * 新建 / 编辑走独立整页(见 [AgendaFormScreen])。
  */
 @Composable
 fun AgendaScreen(
@@ -58,11 +58,16 @@ fun AgendaScreen(
         }
     }
 
-    var sheetOpen by remember { mutableStateOf(false) }
-    var sheetInitial by remember { mutableStateOf<AgendaEvent?>(null) }
-    fun openSheet(event: AgendaEvent?) {
-        sheetInitial = event
-        sheetOpen = true
+    // 新建 / 编辑都跳独立整页(把当前选中日当作新建时的默认日期)
+    fun openForm(event: AgendaEvent?) {
+        val date = selected.toEpochDay()
+        nav.navigate(
+            if (event == null) {
+                "agenda_form?date=$date"
+            } else {
+                "agenda_form?eventId=${event.id}&date=$date"
+            },
+        )
     }
 
     val dayEvents = remember(events, selected) {
@@ -115,34 +120,18 @@ fun AgendaScreen(
                 date = selected,
                 today = today,
                 events = dayEvents,
-                onAdd = { openSheet(null) },
-                onEventClick = { openSheet(it) },
+                onAdd = { openForm(null) },
+                onEventClick = { openForm(it) },
                 modifier = Modifier.weight(1f),
             )
         } else {
             CountdownList(
                 events = events,
                 now = nowMillis,
-                onAdd = { openSheet(null) },
-                onEventClick = { openSheet(it) },
+                onAdd = { openForm(null) },
+                onEventClick = { openForm(it) },
                 modifier = Modifier.weight(1f),
             )
         }
-    }
-
-    if (sheetOpen) {
-        AgendaSheet(
-            initial = sheetInitial,
-            defaultDate = selected,
-            onDismiss = { sheetOpen = false },
-            onSave = {
-                viewModel.save(it)
-                sheetOpen = false
-            },
-            onDelete = { id ->
-                viewModel.delete(id)
-                sheetOpen = false
-            },
-        )
     }
 }
