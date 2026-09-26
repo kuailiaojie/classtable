@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.kxin.classtable.domain.model.CourseColorScheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -37,6 +38,8 @@ data class TimetablePrefs(
     val corner: BlockCorner = BlockCorner.MEDIUM,
     /** 是否铺课程淡彩底;关闭 = 纯文字块(浮起面 + 细边框)。 */
     val showTint: Boolean = true,
+    /** 自动配色的色相方案:色相越多,不同课程越不容易撞色。 */
+    val colorScheme: CourseColorScheme = CourseColorScheme.STANDARD,
 )
 
 object TimetablePrefsStore {
@@ -49,6 +52,7 @@ object TimetablePrefsStore {
     private val KEY_NAME_SIZE = stringPreferencesKey("timetable_name_size")
     private val KEY_CORNER = stringPreferencesKey("timetable_corner")
     private val KEY_TINT = booleanPreferencesKey("timetable_show_tint")
+    private val KEY_COLOR_SCHEME = stringPreferencesKey("timetable_color_scheme")
 
     fun flow(context: Context): Flow<TimetablePrefs> = context.settingsDataStore.data.map { p ->
         TimetablePrefs(
@@ -64,6 +68,7 @@ object TimetablePrefsStore {
             corner = runCatching { BlockCorner.valueOf(p[KEY_CORNER] ?: "MEDIUM") }
                 .getOrDefault(BlockCorner.MEDIUM),
             showTint = p[KEY_TINT] ?: true,
+            colorScheme = CourseColorScheme.of(p[KEY_COLOR_SCHEME]),
         )
     }
 
@@ -78,6 +83,7 @@ object TimetablePrefsStore {
             p[KEY_NAME_SIZE] = prefs.nameSize.name
             p[KEY_CORNER] = prefs.corner.name
             p[KEY_TINT] = prefs.showTint
+            p[KEY_COLOR_SCHEME] = prefs.colorScheme.name
         }
     }
 }

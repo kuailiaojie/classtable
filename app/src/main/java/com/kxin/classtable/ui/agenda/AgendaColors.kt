@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.kxin.classtable.design.CoursePalette
+import com.kxin.classtable.design.LocalCourseColorScheme
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.domain.model.AgendaCategory
 
@@ -16,14 +17,16 @@ import com.kxin.classtable.domain.model.AgendaCategory
 @Composable
 internal fun categoryTint(category: AgendaCategory): Color {
     val colors = LocalYohakuColors.current
+    val scheme = LocalCourseColorScheme.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
-    return remember(category, dark) { CoursePalette.tint(category.label, dark) }
+    return remember(category, dark, scheme) { CoursePalette.tint(category.label, dark, scheme) }
 }
 
 /** 分类色标(列表小圆点 / 色条)。 */
 @Composable
 internal fun categoryMark(category: AgendaCategory): Color {
     val colors = LocalYohakuColors.current
+    val scheme = LocalCourseColorScheme.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
-    return remember(category, dark) { CoursePalette.mark(category.label, dark) }
+    return remember(category, dark, scheme) { CoursePalette.mark(category.label, dark, scheme) }
 }

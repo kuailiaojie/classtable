@@ -79,6 +79,8 @@ import com.kxin.classtable.ui.settings.ClassDndScreen
 import com.kxin.classtable.ui.settings.CourseReminderScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
+import com.kxin.classtable.ui.settings.SettingsHub
+import com.kxin.classtable.ui.settings.SettingsHubScreen
 import com.kxin.classtable.ui.settings.SettingsScreen
 import com.kxin.classtable.ui.settings.SettingsViewModel
 import com.kxin.classtable.ui.settings.TimetableDisplayScreen
@@ -110,13 +112,18 @@ fun ClasstableRoot(
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val surveyInvite by settingsViewModel.surveyInvite.collectAsStateWithLifecycle()
+    val courseScheme by settingsViewModel.colorScheme.collectAsStateWithLifecycle()
     val dark = when (settings.themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
 
-    YohakuTheme(darkTheme = dark, accent = accentColor(settings.accentHex)) {
+    YohakuTheme(
+        darkTheme = dark,
+        accent = accentColor(settings.accentHex),
+        courseScheme = courseScheme,
+    ) {
         val colors = LocalYohakuColors.current
         // 状态栏/导航栏图标深浅跟随应用主题(透明栏,底色由纸面铺满)
         val view = LocalView.current
@@ -227,6 +234,12 @@ fun ClasstableRoot(
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),
                 ) { entry -> CourseDetailScreen(nav, entry.arguments?.getString("courseId") ?: "") }
                 composable("settings") { SettingsScreen(nav) }
+                composable(
+                    route = "settings_hub/{hub}",
+                    arguments = listOf(navArgument("hub") { type = NavType.StringType }),
+                ) { entry ->
+                    SettingsHubScreen(nav, SettingsHub.of(entry.arguments?.getString("hub")))
+                }
                 composable("app_icon") { AppIconScreen(nav) }
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }

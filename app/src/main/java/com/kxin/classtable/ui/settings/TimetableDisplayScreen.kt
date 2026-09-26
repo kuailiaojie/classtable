@@ -26,6 +26,7 @@ import com.kxin.classtable.data.GridDensity
 import com.kxin.classtable.data.NameSize
 import com.kxin.classtable.data.TimetablePrefs
 import com.kxin.classtable.data.TimetablePrefsStore
+import com.kxin.classtable.domain.model.CourseColorScheme
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
@@ -169,6 +170,23 @@ fun TimetableDisplayScreen(
                             selected = prefs.nameSize == NameSize.LARGE,
                             onClick = { viewModel.update { it.copy(nameSize = NameSize.LARGE) } },
                         )
+                    }
+                }
+            }
+
+            SettingsSection(title = "配色方案") {
+                SettingBlock(
+                    title = "自动配色",
+                    subtitle = "按课名派生淡彩时用多少个和色色相 —— 色相越多,不同课程越不容易撞色。",
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CourseColorScheme.entries.forEach { scheme ->
+                            YohakuChip(
+                                text = scheme.label,
+                                selected = prefs.colorScheme == scheme,
+                                onClick = { viewModel.update { it.copy(colorScheme = scheme) } },
+                            )
+                        }
                     }
                 }
             }

@@ -226,12 +226,9 @@ fun TimetableScreen(
             val currentPage = pagerState.currentPage
             val displayedWeek = if (isDayMode) currentPage / 7 + 1 else currentPage + 1
             val weekRange = Schedule.weekRangeText(settings.semesterStartDay, displayedWeek)
-            // 日模式下表头跟着「正在看的那一天」走;周模式仍显示今天
-            val headerDate = if (!isDayMode) {
-                LocalDate.now()
-            } else {
-                dayDate(settings.semesterStartDay, displayedWeek, currentPage % 7 + 1, today)
-            }
+            val weekLabel = "第 $displayedWeek 周" +
+                (if (weekRange.isNotEmpty()) " · $weekRange" else "") +
+                (if (settings.semesterStartDay <= 0L) " · 未设置开学日" else "")
 
             // 顶栏:左上角当前天气图标,右上角今天 / 视图切换 / 添加
             Row(
@@ -293,23 +290,26 @@ fun TimetableScreen(
                 )
             }
 
-            // 日期 + 周信息(天气挪到左上角后,日期单独一行)
-            Column(
-                modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
-            ) {
-                Text(
-                    text = "${headerDate.monthValue}月${headerDate.dayOfMonth}日 " +
-                        "周${"一二三四五六日"[headerDate.dayOfWeek.value - 1]}",
-                    style = YohakuType.title20,
-                    color = colors.neutral10,
-                )
-                Text(
-                    text = "第 $displayedWeek 周" +
-                        (if (weekRange.isNotEmpty()) " · $weekRange" else "") +
-                        (if (settings.semesterStartDay <= 0L) " · 未设置开学日" else ""),
-                    style = YohakuType.copy13,
-                    color = colors.neutral7,
-                )
+            // 日期 + 周信息(天气挪到左上角后,日期单独一行)。
+            // 日模式下这一天由 DayList 逐页绘制(随翻页一起滑动),这里不再画一遍 ——
+            // 否则表头与列表会各显示一次同一个日期。
+            if (!isDayMode) {
+                val todayDate = LocalDate.now()
+                Column(
+                    modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
+                ) {
+                    Text(
+                        text = "${todayDate.monthValue}月${todayDate.dayOfMonth}日 " +
+                            "周${"一二三四五六日"[todayDate.dayOfWeek.value - 1]}",
+                        style = YohakuType.title20,
+                        color = colors.neutral10,
+                    )
+                    Text(
+                        text = weekLabel,
+                        style = YohakuType.copy13,
+                        color = colors.neutral7,
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -376,6 +376,7 @@ fun TimetableScreen(
                     val date = dayDate(settings.semesterStartDay, pageWeek, weekday, today)
                     DayList(
                         date = date,
+                        weekLabel = weekLabel,
                         courses = courses,
                         periods = periods,
                         adjustments = adjustments,

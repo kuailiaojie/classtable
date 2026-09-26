@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.kxin.classtable.domain.model.CourseColorScheme
 
 val LocalYohakuColors = staticCompositionLocalOf { YohakuLightColors }
 
@@ -27,6 +28,7 @@ private val YohakuShapes = Shapes(
 fun YohakuTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     accent: Color? = null,
+    courseScheme: CourseColorScheme = CourseColorScheme.STANDARD,
     content: @Composable () -> Unit,
 ) {
     val base = if (darkTheme) YohakuDarkColors else YohakuLightColors
@@ -62,7 +64,10 @@ fun YohakuTheme(
         inverseOnSurface = colors.neutral1,
     )
 
-    CompositionLocalProvider(LocalYohakuColors provides colors) {
+    CompositionLocalProvider(
+        LocalYohakuColors provides colors,
+        LocalCourseColorScheme provides courseScheme,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = YohakuMaterialTypography,

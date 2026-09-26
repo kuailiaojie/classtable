@@ -44,6 +44,7 @@ import java.time.LocalDate
 @Composable
 internal fun DayList(
     date: LocalDate,
+    weekLabel: String,
     courses: List<Course>,
     periods: List<Schedule.Period>,
     adjustments: List<ScheduleAdjustment>,
@@ -103,6 +104,12 @@ internal fun DayList(
                     color = colors.neutral7,
                 )
             }
+            Text(
+                text = weekLabel,
+                style = YohakuType.copy13,
+                color = colors.neutral7,
+                modifier = Modifier.padding(top = 2.dp),
+            )
             val status = when {
                 plan.rest -> "调休 · 停课"
                 plan.makeup -> "调休 · 补 ${plan.effectiveDate.monthValue}/${plan.effectiveDate.dayOfMonth} 的课"
