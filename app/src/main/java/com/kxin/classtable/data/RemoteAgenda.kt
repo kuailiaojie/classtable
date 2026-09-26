@@ -16,6 +16,8 @@ data class RemoteAgenda(
     val location: String = "",
     val note: String = "",
     val priority: String = "NONE",
+    val remindEnabled: Boolean = false,
+    val remindLeadMinutes: Int = 10,
     val updatedAt: Long = 0L,
 ) {
     fun toDomain(): AgendaEvent = AgendaEvent(
@@ -28,6 +30,8 @@ data class RemoteAgenda(
         location = location,
         note = note,
         priority = runCatching { AgendaPriority.valueOf(priority) }.getOrDefault(AgendaPriority.NONE),
+        remindEnabled = remindEnabled,
+        remindLeadMinutes = remindLeadMinutes,
         updatedAt = updatedAt,
     )
 
@@ -42,6 +46,8 @@ data class RemoteAgenda(
             location = e.location,
             note = e.note,
             priority = e.priority.name,
+            remindEnabled = e.remindEnabled,
+            remindLeadMinutes = e.remindLeadMinutes,
             updatedAt = e.updatedAt,
         )
 
@@ -51,6 +57,9 @@ data class RemoteAgenda(
             fun s(n: String) = fields.optJSONObject(n)?.optString("stringValue").orEmpty()
             fun l(n: String) = fields.optJSONObject(n)?.optString("integerValue")?.toLongOrNull() ?: 0L
             fun b(n: String) = fields.optJSONObject(n)?.optBoolean("booleanValue") ?: false
+            // 整数要区分「字段不存在」与「值为 0」:提前量 0 = 准点,不能和缺省混为一谈
+            fun i(n: String, default: Int) =
+                fields.optJSONObject(n)?.optString("integerValue")?.toIntOrNull() ?: default
             return RemoteAgenda(
                 id = s("id"),
                 title = s("title"),
@@ -61,6 +70,9 @@ data class RemoteAgenda(
                 location = s("location"),
                 note = s("note"),
                 priority = s("priority").ifBlank { "NONE" },
+                // 老文档没有这两个字段:缺省即「不提醒」,与本机迁移的默认值一致
+                remindEnabled = b("remindEnabled"),
+                remindLeadMinutes = i("remindLeadMinutes", 10),
                 updatedAt = l("updatedAt"),
             )
         }
@@ -78,6 +90,8 @@ data class RemoteAgenda(
             str("location", e.location)
             str("note", e.note)
             str("priority", e.priority)
+            bool("remindEnabled", e.remindEnabled)
+            long("remindLeadMinutes", e.remindLeadMinutes.toLong())
             long("updatedAt", e.updatedAt)
         }
     }

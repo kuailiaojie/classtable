@@ -1,10 +1,15 @@
 package com.kxin.classtable.data
 
+import android.content.Context
+import androidx.glance.appwidget.updateAll
 import com.kxin.classtable.data.local.AgendaDao
 import com.kxin.classtable.data.local.AgendaEntity
 import com.kxin.classtable.data.local.DeletedAgendaDao
 import com.kxin.classtable.data.local.DeletedAgendaEntity
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.notify.ReminderPlanner
+import com.kxin.classtable.widget.AgendaWidget
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,13 +22,15 @@ import javax.inject.Singleton
 /**
  * 日程 / 倒计时的本地仓库(与 [CourseRepository] 同一套路:本地优先,写入后后台触发云同步)。
  *
- * 与课程不同,日程没有小组件与提醒的副作用 —— 它只是用户自己记下的事。
+ * 与课程一样,日程的增删改也有两个副作用:**重排提醒**与**刷新桌面小组件**。
  */
 @Singleton
 class AgendaRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val dao: AgendaDao,
     private val deletedDao: DeletedAgendaDao,
     private val sync: SyncRepository,
+    private val reminderPlanner: ReminderPlanner,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -36,11 +43,19 @@ class AgendaRepository @Inject constructor(
         val stamped = event.copy(updatedAt = System.currentTimeMillis())
         dao.upsert(AgendaEntity.fromDomain(stamped))
         scope.launch { runCatching { sync.syncNow() } }
+        postChangeSideEffects()
     }
 
     suspend fun delete(id: String) {
         dao.deleteById(id)
         deletedDao.upsert(DeletedAgendaEntity(id, System.currentTimeMillis()))
         scope.launch { runCatching { sync.syncNow() } }
+        reminderPlanner.cancelAgenda(id)
+        postChangeSideEffects()
+    }
+
+    private fun postChangeSideEffects() {
+        scope.launch { runCatching { reminderPlanner.rescheduleAll() } }
+        scope.launch { runCatching { AgendaWidget().updateAll(context) } }
     }
 }

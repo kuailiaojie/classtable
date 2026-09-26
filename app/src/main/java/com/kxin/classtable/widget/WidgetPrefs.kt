@@ -88,6 +88,7 @@ object WidgetPrefsStore {
         runCatching { NextClassWidget().updateAll(context) }
         runCatching { TodayWidget().updateAll(context) }
         runCatching { TomorrowWidget().updateAll(context) }
+        runCatching { AgendaWidget().updateAll(context) }
     }
 }
 

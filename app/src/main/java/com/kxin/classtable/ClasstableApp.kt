@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.kxin.classtable.notify.ReminderSelfHealWorker
 import com.kxin.classtable.data.Analytics
+import com.kxin.classtable.data.AgendaRepository
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.FcmTokens
@@ -45,6 +46,9 @@ class ClasstableApp : Application() {
 
     @Inject
     lateinit var courseRepository: CourseRepository
+
+    @Inject
+    lateinit var agendaRepository: AgendaRepository
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
@@ -125,13 +129,14 @@ class ClasstableApp : Application() {
             }
         })
 
-        // 课程或设置(作息/学期/通知开关/提前量/提醒模式)变化 → 重排课程提醒。
+        // 课程 / 日程 / 设置(作息/学期/通知开关/提前量/提醒模式)变化 → 重排提醒。
         // 排程按「签名」幂等:内容没变时直接返回,不再每次发射都全量取消+重排。
         scope.launch {
             combine(
                 courseRepository.observeAll(),
+                agendaRepository.observeAll(),
                 settingsRepository.settings,
-            ) { _, _ -> Unit }.collect {
+            ) { _, _, _ -> Unit }.collect {
                 reminderPlanner.rescheduleAll()
             }
         }

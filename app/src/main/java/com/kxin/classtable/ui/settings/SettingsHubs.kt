@@ -227,6 +227,12 @@ private fun ReminderHub(nav: NavHostController, viewModel: SettingsViewModel) {
     SettingsSection(title = "提醒") {
         SettingRow("课程提醒", reminderSummary(settings)) { nav.navigate("course_reminder") }
         DividerLine()
+        SettingRow(
+            title = "日程提醒",
+            value = if (settings.agendaReminderEnabled) "每条可单独设" else "已关闭",
+            onClick = { nav.navigate("agenda_reminder") },
+        )
+        DividerLine()
         SettingRow("提醒可靠性", "通知 / 闹钟 / 自启动") { nav.navigate("permissions") }
         DividerLine()
         SettingRow(
@@ -252,7 +258,7 @@ private fun YuketangHub(nav: NavHostController, viewModel: SettingsViewModel) {
 @Composable
 private fun DesktopHub(nav: NavHostController) {
     SettingsSection(title = "桌面") {
-        SettingRow("桌面小组件", "今日 / 明日 / 下节课 · 可自定义") { nav.navigate("widget_settings") }
+        SettingRow("桌面小组件", "今日 / 明日 / 下节课 / 日程 · 可自定义") { nav.navigate("widget_settings") }
     }
 }
 

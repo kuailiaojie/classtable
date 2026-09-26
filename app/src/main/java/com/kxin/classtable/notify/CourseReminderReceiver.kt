@@ -37,6 +37,9 @@ class CourseReminderReceiver : BroadcastReceiver() {
                             planner(appContext).rescheduleAll(force = true)
 
                         ReminderPlanner.ACTION_REMIND -> handleReminder(appContext, intent)
+
+                        ReminderPlanner.ACTION_AGENDA_REMIND ->
+                            handleAgendaReminder(appContext, intent)
                     }
                 }
             } finally {
@@ -48,8 +51,34 @@ class CourseReminderReceiver : BroadcastReceiver() {
     private fun planner(context: Context): ReminderPlanner = ReminderPlanner(
         context,
         AppDatabase.get(context).courseDao(),
+        AppDatabase.get(context).agendaDao(),
         SettingsRepository(context),
     )
+
+    /**
+     * 日程提醒:触发时重新读一遍条目(而不是排程时的快照),改过标题 / 地点就显示当下的;
+     * 已删除或已结束的条目直接跳过。
+     */
+    private fun handleAgendaReminder(context: Context, intent: Intent) {
+        val eventId = intent.getStringExtra(ReminderPlanner.EXTRA_AGENDA_ID) ?: return
+        val event = runBlocking {
+            AppDatabase.get(context).agendaDao().getById(eventId)?.toDomain()
+        } ?: return
+        if (event.isPast()) return
+
+        Notifier.showAgendaReminder(
+            context = context,
+            notificationId = Notifier.agendaReminderId(event.id),
+            eventId = event.id,
+            title = event.title,
+            categoryLabel = event.category.label,
+            startAtMillis = event.startAt,
+            endAtMillis = event.endAt,
+            allDay = event.allDay,
+            location = event.location,
+        )
+        Analytics.log("agenda_reminder_shown", "agenda_id" to eventId)
+    }
 
     private fun handleReminder(context: Context, intent: Intent) {
         val planner = planner(context)

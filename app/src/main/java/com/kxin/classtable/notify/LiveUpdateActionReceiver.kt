@@ -29,6 +29,7 @@ class LiveUpdateActionReceiver : BroadcastReceiver() {
                     ReminderPlanner(
                         appContext,
                         AppDatabase.get(appContext).courseDao(),
+                        AppDatabase.get(appContext).agendaDao(),
                         SettingsRepository(appContext),
                     ).mute(muteKey, muteUntil)
                 }

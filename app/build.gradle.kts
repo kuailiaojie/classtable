@@ -18,8 +18,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 60
-        versionName = "2.0.0-rc8"
+        versionCode = 61
+        versionName = "2.0.0"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")

@@ -30,9 +30,12 @@ object Notifier {
     const val CHANNEL_COURSE_LIVE = "course_live"
     const val CHANNEL_APP_UPDATE = "app_update"
     const val CHANNEL_ANNOUNCEMENT = "course_announcement"
+    const val CHANNEL_AGENDA = "agenda_reminder"
     const val EXTRA_COURSE_ID = "notify_course_id"
     const val EXTRA_OPEN_UPDATE = "notify_open_update"
     const val EXTRA_OPEN_RAIN_CLASSROOM = "notify_open_rain_classroom"
+    const val EXTRA_AGENDA_ID = "notify_agenda_id"
+    const val EXTRA_AGENDA_DAY = "notify_agenda_day"
 
     /** 实时活动通知固定 id:同一时刻只会有一节课的实时活动。 */
     const val LIVE_NOTIFICATION_ID = 99010
@@ -42,6 +45,7 @@ object Notifier {
     private const val REQ_UPDATE_INTENT = 99002
     private const val REQ_LIVE_CONTENT = 99011
     private const val REQ_ANNOUNCEMENT_INTENT = 99013
+    private const val REQ_AGENDA_CONTENT = 99014
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -74,6 +78,12 @@ object Notifier {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ANNOUNCEMENT, "课程公告", NotificationManager.IMPORTANCE_DEFAULT)
                     .apply { description = "雨课堂课程有新公告时的提示" },
+            )
+        }
+        if (nm.getNotificationChannel(CHANNEL_AGENDA) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_AGENDA, "日程提醒", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "日程到点前的提醒" },
             )
         }
     }
@@ -298,6 +308,70 @@ object Notifier {
         },
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+
+    /** 普通日程提醒通知 id:按条目区分,不同条目的提醒不会互相覆盖。 */
+    fun agendaReminderId(eventId: String): Int = eventId.hashCode()
+
+    /**
+     * 日程到点提醒。
+     *
+     * 定时的在开始前提醒,正文写起止时刻;全天的在当天固定时刻提醒,正文只写「全天」。
+     * 点击直达该日程的编辑页([agendaContentIntent])。
+     */
+    fun showAgendaReminder(
+        context: Context,
+        notificationId: Int,
+        eventId: String,
+        title: String,
+        categoryLabel: String,
+        startAtMillis: Long,
+        endAtMillis: Long,
+        allDay: Boolean,
+        location: String,
+    ) {
+        if (!canPost(context, CHANNEL_AGENDA)) return
+        ensureChannels(context)
+
+        val heading = if (allDay) "今天:$title" else "$title 即将开始"
+        val body = buildString {
+            append(if (allDay) "全天" else "${clock(startAtMillis)}–${clock(endAtMillis)}")
+            if (categoryLabel.isNotBlank()) append(" · $categoryLabel")
+            if (location.isNotBlank()) append("\n$location")
+        }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_AGENDA)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle(heading)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(agendaContentIntent(context, eventId, startAtMillis))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .build()
+
+        post(context, notificationId, notification)
+    }
+
+    /** 通知被点击 → 打开应用并直达该日程的编辑页。 */
+    private fun agendaContentIntent(context: Context, eventId: String, startAtMillis: Long): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            REQ_AGENDA_CONTENT,
+            Intent(context, MainActivity::class.java).apply {
+                putExtra(EXTRA_AGENDA_ID, eventId)
+                // 条目所在那天当作编辑页的默认日期(epochDay),与 agenda_form 的 date 参数一致
+                putExtra(
+                    EXTRA_AGENDA_DAY,
+                    java.time.Instant.ofEpochMilli(startAtMillis)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate()
+                        .toEpochDay(),
+                )
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /** 实时活动上的「取消本节课提醒」→ [LiveUpdateActionReceiver] 记录静音并收掉通知。 */
     private fun cancelLivePendingIntent(context: Context, muteKey: String, muteUntil: Long): PendingIntent =

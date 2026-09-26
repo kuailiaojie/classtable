@@ -9,6 +9,7 @@ import com.kxin.classtable.data.settingsDataStore
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
+import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.Course
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -92,6 +93,21 @@ object WidgetData {
         val s = settingsOf(context)
         return coursesOf(context, s, LocalDate.now())
             .firstOrNull { Schedule.isCourseOngoing(it, s.periods) }
+    }
+
+    /**
+     * 4×2「日程」:还没结束的日程,按开始时间升序取前 [limit] 条。
+     *
+     * 不分来源(日程 / 倒计时)一律按时间排 —— 小组件的一张卡里,今天的定时条目与
+     * 未来几天的倒数目标自然交错,哪件最近哪件就在最上面。
+     */
+    fun upcomingAgenda(context: Context, limit: Int): List<AgendaEvent> = runBlocking {
+        val now = System.currentTimeMillis()
+        AppDatabase.get(context).agendaDao().getAll()
+            .map { it.toDomain() }
+            .filter { it.endAt >= now }
+            .sortedBy { it.startAt }
+            .take(limit)
     }
 
     /**

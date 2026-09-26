@@ -144,6 +144,7 @@ class CourseLiveUpdateService : Service() {
     private fun planner(): ReminderPlanner = ReminderPlanner(
         applicationContext,
         AppDatabase.get(applicationContext).courseDao(),
+        AppDatabase.get(applicationContext).agendaDao(),
         SettingsRepository(applicationContext),
     )
 

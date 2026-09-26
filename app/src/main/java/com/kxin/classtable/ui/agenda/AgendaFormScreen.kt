@@ -53,13 +53,14 @@ import java.util.UUID
  * 之所以不做成底部弹层:弹层走 Compose `Dialog`,其内容在部分版本里拿不到「一屏」的高度约束,
  * 面板会被撑到屏幕外、底部按钮掉下去。整页没有这个问题 —— 内容就排在导航栈自己的 Box 里。
  *
- * 字段:标题、分类、全天开关、开始与结束(日期 + 时间)、地点、备注、优先级;编辑态可删除。
+ * 字段:标题、分类、全天开关、开始与结束(日期 + 时间)、地点、备注、优先级、提醒;编辑态可删除。
  */
 @Composable
 fun AgendaFormScreen(
     nav: NavHostController,
     eventId: String?,
     defaultDateEpoch: Long,
+    defaultCategory: AgendaCategory? = null,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -89,6 +90,7 @@ fun AgendaFormScreen(
             AgendaFormBody(
                 initial = editing,
                 defaultDate = defaultDate,
+                defaultCategory = defaultCategory,
                 onSave = {
                     viewModel.save(it)
                     nav.popBackStack()
@@ -107,6 +109,7 @@ fun AgendaFormScreen(
 private fun AgendaFormBody(
     initial: AgendaEvent?,
     defaultDate: LocalDate,
+    defaultCategory: AgendaCategory?,
     onSave: (AgendaEvent) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -117,11 +120,15 @@ private fun AgendaFormBody(
     // 以条目 id 为键:编辑态读到条目时初始化一次,之后不再被上游刷新冲掉
     val key = initial?.id
     var title by remember(key) { mutableStateOf(initial?.title ?: "") }
-    var category by remember(key) { mutableStateOf(initial?.category ?: AgendaCategory.TODO) }
+    var category by remember(key) {
+        mutableStateOf(initial?.category ?: defaultCategory ?: AgendaCategory.TODO)
+    }
     var priority by remember(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
     var allDay by remember(key) { mutableStateOf(initial?.allDay ?: false) }
     var location by remember(key) { mutableStateOf(initial?.location ?: "") }
     var note by remember(key) { mutableStateOf(initial?.note ?: "") }
+    var remindEnabled by remember(key) { mutableStateOf(initial?.remindEnabled ?: false) }
+    var remindLeadMinutes by remember(key) { mutableIntStateOf(initial?.remindLeadMinutes ?: 10) }
     var startDate by remember(key) { mutableStateOf(startInit.toLocalDate()) }
     var startMinute by remember(key) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
     var endDate by remember(key) { mutableStateOf(endInit.toLocalDate()) }
@@ -270,6 +277,44 @@ private fun AgendaFormBody(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+
+            FieldLabel("提醒")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YohakuChip(
+                    text = "提醒",
+                    selected = remindEnabled,
+                    onClick = { remindEnabled = true },
+                )
+                YohakuChip(
+                    text = "不提醒",
+                    selected = !remindEnabled,
+                    onClick = { remindEnabled = false },
+                )
+            }
+            if (remindEnabled) {
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                if (allDay) {
+                    Text(
+                        text = "「全天」日程在当天设置里的时刻提醒,可在「设置 → 提醒 → 日程提醒」修改。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        REMIND_LEAD_OPTIONS.forEach { (minutes, label) ->
+                            YohakuChip(
+                                text = label,
+                                selected = remindLeadMinutes == minutes,
+                                onClick = { remindLeadMinutes = minutes },
+                            )
+                        }
+                    }
+                }
+            }
 
             if (initial != null) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
@@ -305,6 +350,8 @@ private fun AgendaFormBody(
                                 location = location.trim(),
                                 note = note.trim(),
                                 priority = priority,
+                                remindEnabled = remindEnabled,
+                                remindLeadMinutes = remindLeadMinutes,
                                 updatedAt = initial?.updatedAt ?: 0L,
                             ),
                         )
@@ -384,6 +431,16 @@ private fun PickerField(
 }
 
 private fun clockText(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
+
+/** 日程提醒的提前量选项(与课程提醒同一套档位,便于理解)。 */
+private val REMIND_LEAD_OPTIONS = listOf(
+    0 to "准点",
+    5 to "5 分钟",
+    10 to "10 分钟",
+    15 to "15 分钟",
+    30 to "30 分钟",
+    60 to "1 小时",
+)
 
 /** "HH:MM" → 分钟;非法返回 null。 */
 private object ScheduleParse {

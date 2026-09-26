@@ -9,6 +9,16 @@ enum class AgendaCategory(val label: String) {
     OTHER("其他"),
 }
 
+/**
+ * 分类决定条目落在「日程」还是「倒计时」页签 —— 这是两个页签唯一的分工依据:
+ * 待办 / 活动是「要做的事」,考试 / 作业是「等着倒数的目标」,其他两边都出现。
+ */
+val AgendaCategory.showsInAgenda: Boolean
+    get() = this != AgendaCategory.EXAM && this != AgendaCategory.HOMEWORK
+
+val AgendaCategory.showsInCountdown: Boolean
+    get() = this != AgendaCategory.TODO && this != AgendaCategory.ACTIVITY
+
 /** 优先级。仅作排序与前缀点缀,不做颜色语义。 */
 enum class AgendaPriority(val label: String) {
     NONE("无"),
@@ -20,7 +30,8 @@ enum class AgendaPriority(val label: String) {
 /**
  * 用户自建的日程 / 倒计时条目。
  *
- * 一条数据两种看法:「议程」按天铺时间线,「倒计时」按剩余天数铺列表 —— 都是它。
+ * 分类决定它落在「日程」还是「倒计时」页签(见 [showsInAgenda] / [showsInCountdown]);
+ * 提醒则是条目自己的属性,与落在哪个页签无关。
  * 全天用 [allDay] 表示,此时时间部分无意义(取当天 0:00 起)。
  */
 data class AgendaEvent(
@@ -33,6 +44,10 @@ data class AgendaEvent(
     val location: String = "",
     val note: String = "",
     val priority: AgendaPriority = AgendaPriority.NONE,
+    /** 到点提醒(默认关闭 —— 不设就不打扰)。 */
+    val remindEnabled: Boolean = false,
+    /** 提前多少分钟提醒;仅非全天且 [remindEnabled] 时有意义(全天按设置里的固定时刻)。 */
+    val remindLeadMinutes: Int = 10,
     val updatedAt: Long = 0L,
 ) {
     /** 是否已经结束。 */

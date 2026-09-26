@@ -32,6 +32,7 @@ import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.widget.AgendaWidgetReceiver
 import com.kxin.classtable.widget.NextClassWidgetReceiver
 import com.kxin.classtable.widget.TodayWidgetReceiver
 import com.kxin.classtable.widget.TomorrowWidgetReceiver
@@ -62,7 +63,7 @@ class WidgetSettingsViewModel @Inject constructor(
 }
 
 /**
- * 小组件设置:三款小组件(今日 / 明日 / 下节课)的显示内容与样式。
+ * 小组件设置:四款小组件(今日 / 明日 / 下节课 / 日程)的显示内容与样式。
  *
  * 选项存在本机 DataStore(与提醒等设置同一个),改完立即 `updateAll` —— 桌面上已放的小组件
  * 会一起变。强调色不在这里单独设,它跟随「设置 → 外观」。
@@ -104,10 +105,12 @@ fun WidgetSettingsScreen(
                 PinRow("明日课程", "2×2 · 明天要上什么", TomorrowWidgetReceiver::class.java)
                 DividerLine()
                 PinRow("下节课", "1×1 · 下一节的名称 / 时间 / 地点", NextClassWidgetReceiver::class.java)
+                DividerLine()
+                PinRow("日程", "4×2 · 近期日程与倒计时", AgendaWidgetReceiver::class.java)
             }
 
             SettingsSection(title = "显示内容") {
-                SettingBlock(title = "课程行") {
+                SettingBlock(title = "列表行") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             YohakuChip(
@@ -136,12 +139,12 @@ fun WidgetSettingsScreen(
                     }
                 }
                 DividerLine()
-                SettingBlock(title = "课表最多显示") {
+                SettingBlock(title = "列表最多显示") {
                     // 五个片在一行会挤爆窄屏(320dp),减到四个
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(2, 4, 6, 8).forEach { n ->
                             YohakuChip(
-                                text = "$n 门",
+                                text = "$n",
                                 selected = prefs.maxRows == n,
                                 onClick = { viewModel.update { it.copy(maxRows = n) } },
                             )

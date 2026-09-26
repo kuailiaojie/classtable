@@ -18,6 +18,8 @@ data class AgendaEntity(
     val location: String,
     val note: String,
     val priority: String,
+    val remindEnabled: Boolean,
+    val remindLeadMinutes: Int,
     val updatedAt: Long,
 ) {
     fun toDomain(): AgendaEvent = AgendaEvent(
@@ -30,6 +32,8 @@ data class AgendaEntity(
         location = location,
         note = note,
         priority = runCatching { AgendaPriority.valueOf(priority) }.getOrDefault(AgendaPriority.NONE),
+        remindEnabled = remindEnabled,
+        remindLeadMinutes = remindLeadMinutes,
         updatedAt = updatedAt,
     )
 
@@ -44,6 +48,8 @@ data class AgendaEntity(
             location = e.location,
             note = e.note,
             priority = e.priority.name,
+            remindEnabled = e.remindEnabled,
+            remindLeadMinutes = e.remindLeadMinutes,
             updatedAt = e.updatedAt,
         )
     }

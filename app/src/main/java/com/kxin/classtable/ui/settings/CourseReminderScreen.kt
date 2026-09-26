@@ -250,7 +250,7 @@ fun CourseReminderScreen(
 
 /** 开 / 关一对 chip(项目没有 Switch,布尔项一律用 chip 对)。 */
 @Composable
-private fun ChipToggle(selected: Boolean, onSelected: (Boolean) -> Unit) {
+internal fun ChipToggle(selected: Boolean, onSelected: (Boolean) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         YohakuChip(text = "开启", selected = selected, onClick = { onSelected(true) })
         YohakuChip(text = "关闭", selected = !selected, onClick = { onSelected(false) })

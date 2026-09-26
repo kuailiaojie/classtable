@@ -56,6 +56,7 @@ import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
+import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
 import com.kxin.classtable.ui.navigateToTab
@@ -73,6 +74,7 @@ import com.kxin.classtable.ui.importer.ImportScreen
 import com.kxin.classtable.ui.importer.ManualImportScreen
 import com.kxin.classtable.ui.settings.AdapterSyncScreen
 import com.kxin.classtable.ui.settings.AdjustmentsScreen
+import com.kxin.classtable.ui.settings.AgendaReminderScreen
 import com.kxin.classtable.ui.settings.AiKeyScreen
 import com.kxin.classtable.ui.settings.AppIconScreen
 import com.kxin.classtable.ui.settings.ClassDndScreen
@@ -151,6 +153,10 @@ fun ClasstableRoot(
         LaunchedEffect(Unit) {
             val intent = context.findActivity()?.intent
             val courseId = runCatching { intent?.getStringExtra(Notifier.EXTRA_COURSE_ID) }.getOrNull()
+            val agendaId = runCatching { intent?.getStringExtra(Notifier.EXTRA_AGENDA_ID) }.getOrNull()
+            val agendaDay = runCatching {
+                intent?.getLongExtra(Notifier.EXTRA_AGENDA_DAY, 0L) ?: 0L
+            }.getOrDefault(0L)
             val openUpdate = runCatching {
                 intent?.getBooleanExtra(Notifier.EXTRA_OPEN_UPDATE, false) ?: false
             }.getOrDefault(false)
@@ -160,6 +166,9 @@ fun ClasstableRoot(
             if (!handledDeepLink && !courseId.isNullOrBlank()) {
                 handledDeepLink = true
                 nav.navigate("course_detail/$courseId")
+            } else if (!handledDeepLink && !agendaId.isNullOrBlank()) {
+                handledDeepLink = true
+                nav.navigate("agenda_form?eventId=$agendaId&date=$agendaDay")
             } else if (!handledDeepLink && openUpdate) {
                 handledDeepLink = true
                 nav.navigate("update")
@@ -209,7 +218,7 @@ fun ClasstableRoot(
                 composable("courses") { CoursesScreen(nav) }
                 composable("agenda") { AgendaScreen(nav) }
                 composable(
-                    route = "agenda_form?eventId={eventId}&date={date}",
+                    route = "agenda_form?eventId={eventId}&date={date}&category={category}",
                     arguments = listOf(
                         navArgument("eventId") {
                             type = NavType.StringType
@@ -221,12 +230,20 @@ fun ClasstableRoot(
                             type = NavType.LongType
                             defaultValue = 0L
                         },
+                        // 新建时的默认分类(如从倒计时页签进来默认「考试」);缺省用「待办」
+                        navArgument("category") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
                     ),
                 ) { entry ->
                     AgendaFormScreen(
                         nav = nav,
                         eventId = entry.arguments?.getString("eventId"),
                         defaultDateEpoch = entry.arguments?.getLong("date") ?: 0L,
+                        defaultCategory = entry.arguments?.getString("category")
+                            ?.let { runCatching { AgendaCategory.valueOf(it) }.getOrNull() },
                     )
                 }
                 composable(
@@ -251,6 +268,7 @@ fun ClasstableRoot(
                 composable("adapter_sync") { AdapterSyncScreen(nav) }
                 composable("ai_key") { AiKeyScreen(nav) }
                 composable("course_reminder") { CourseReminderScreen(nav) }
+                composable("agenda_reminder") { AgendaReminderScreen(nav) }
                 composable("class_dnd") { ClassDndScreen(nav) }
                 composable("update") { UpdateScreen(nav) }
                 composable("rain_classroom") { RainClassroomScreen(nav) }

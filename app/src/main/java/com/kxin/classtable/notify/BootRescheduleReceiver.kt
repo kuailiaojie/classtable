@@ -43,6 +43,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
                     ReminderPlanner(
                         appContext,
                         AppDatabase.get(appContext).courseDao(),
+                        AppDatabase.get(appContext).agendaDao(),
                         SettingsRepository(appContext),
                     ).rescheduleAll(force = true)
                 }

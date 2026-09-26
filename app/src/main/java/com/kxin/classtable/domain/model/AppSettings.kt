@@ -58,6 +58,10 @@ data class AppSettings(
     val tomorrowReminderEnabled: Boolean = true,
     /** 明日课程预告的提醒时刻("HH:MM")。 */
     val tomorrowReminderTime: String = "21:30",
+    /** 日程到点提醒总开关(每条日程可在编辑页单独覆盖)。默认开启。 */
+    val agendaReminderEnabled: Boolean = true,
+    /** 全天日程在当天什么时刻提醒("HH:MM")。 */
+    val agendaAllDayRemindTime: String = "09:00",
     /** 是否在后台自动检查更新(每天一次,有新版发通知)。 */
     val autoCheckUpdate: Boolean = true,
     /**

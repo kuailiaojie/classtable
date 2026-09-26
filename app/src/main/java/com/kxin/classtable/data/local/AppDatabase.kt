@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AgendaEntity::class,
         DeletedAgendaEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -177,6 +177,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v9 → v10:日程增加**到点提醒**。
+         *
+         * 老记录保持「不提醒」(remindEnabled = 0),不回填:提醒是用户自己选的打扰,
+         * 升级不该替所有人把闹钟打开。
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE agenda_events ADD COLUMN remindEnabled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE agenda_events ADD COLUMN remindLeadMinutes INTEGER NOT NULL DEFAULT 10")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -186,7 +199,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                        MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     )
                     .build()
                     .also { instance = it }

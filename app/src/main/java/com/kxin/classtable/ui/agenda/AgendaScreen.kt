@@ -25,13 +25,17 @@ import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.domain.model.showsInAgenda
+import com.kxin.classtable.domain.model.showsInCountdown
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 
 /**
- * 日程:一份数据两种看法 ——
- * **议程**按天铺日历周条 + 时间线,**倒计时**按剩余天数铺列表;右上角切换。
+ * 日程:两个页签按**分类**分工 ——
+ * **议程**铺日历周条 + 时间线,收待办 / 活动(要做的事);**倒计时**按剩余天数铺列表,
+ * 收考试 / 作业(等着倒数的目标);「其他」两边都出现。提醒是条目自己的属性,与页签无关。
  * 新建 / 编辑走独立整页(见 [AgendaFormScreen])。
  */
 @Composable
@@ -59,19 +63,21 @@ fun AgendaScreen(
     }
 
     // 新建 / 编辑都跳独立整页(把当前选中日当作新建时的默认日期)
-    fun openForm(event: AgendaEvent?) {
+    fun openForm(event: AgendaEvent?, category: AgendaCategory? = null) {
         val date = selected.toEpochDay()
-        nav.navigate(
-            if (event == null) {
-                "agenda_form?date=$date"
-            } else {
-                "agenda_form?eventId=${event.id}&date=$date"
-            },
-        )
+        val base = if (event == null) {
+            "agenda_form?date=$date"
+        } else {
+            "agenda_form?eventId=${event.id}&date=$date"
+        }
+        nav.navigate(if (category == null) base else "$base&category=${category.name}")
     }
 
-    val dayEvents = remember(events, selected) {
-        events.filter { it.spans(selected) }.sortedBy { it.startAt }
+    val agendaEvents = remember(events) { events.filter { it.category.showsInAgenda } }
+    val countdownEvents = remember(events) { events.filter { it.category.showsInCountdown } }
+
+    val dayEvents = remember(agendaEvents, selected) {
+        agendaEvents.filter { it.spans(selected) }.sortedBy { it.startAt }
     }
 
     Column(
@@ -126,9 +132,9 @@ fun AgendaScreen(
             )
         } else {
             CountdownList(
-                events = events,
+                events = countdownEvents,
                 now = nowMillis,
-                onAdd = { openForm(null) },
+                onAdd = { openForm(null, AgendaCategory.EXAM) },
                 onEventClick = { openForm(it) },
                 modifier = Modifier.weight(1f),
             )

@@ -56,7 +56,7 @@
 
 - **客户端**:本地优先。Room 持久化课程数据,未登录 = 访客本地模式;登录后 pull → 合并(updatedAt 后者胜)→ 应用墓碑 → push。
 - **反代中间层**:Android 的 Firebase Auth/Firestore 官方 SDK 硬编码 Google 域名,大陆无法直连。本项目移除 `firebase-auth` / `firebase-firestore` SDK 依赖,改用 REST 实现,全部请求经自建 Netlify Function 转发(方法 / query / body / Authorization ID token 原样透传)。`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留官方 SDK。同步由实时监听改为按需 pull / push(App 启动、登录、网络恢复时触发),对课程表场景无感知差异。
-- **提醒通道**:本地精确闹钟是准点提醒主力(离线可用),FCM 为实时增强通道。排程实现见 `notify/ReminderPlanner.kt`:按「排程签名 + 已排台账」管理 8 天滚动窗口,并排一个次日 00:05 的自续期闹钟;实时活动由前台服务持有,payload 持久化以便进程被杀后恢复。
+- **提醒通道**:本地精确闹钟是准点提醒主力(离线可用),FCM 为实时增强通道。排程实现见 `notify/ReminderPlanner.kt`:按「排程签名 + 已排台账」管理 8 天滚动窗口(课程与日程共用这一窗口),并排一个次日 00:05 的自续期闹钟;实时活动由前台服务持有,payload 持久化以便进程被杀后恢复。课程与日程的闹钟用不同 action 排(`ACTION_COURSE_REMIND` / `ACTION_AGENDA_REMIND`),互不覆盖。
 - **状态栏胶囊(实时活动)**:国产胶囊(荣耀灵动胶囊 / 小米超级岛 / OPPO 实况通知等)都按 Android 16 Live Updates 规范提升通知,条件是:清单声明 `POST_PROMOTED_NOTIFICATIONS`、通知 `ongoing` 且有 `contentTitle`、样式为 BigTextStyle / ProgressStyle 等且不用自定义 RemoteViews、并主动请求提升(`android.requestPromotedOngoing` + `android.shortCriticalText`)。实现见 `notify/CapsuleCompat.kt`(提升请求与系统设置入口)与其中的 `XiaomiIsland`(小米超级岛的 `miui.focus.param`,先查设备能力再补参数)。实时活动前台服务类型为 `specialUse`,需带 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 说明。
 
 ## 目录结构
@@ -67,9 +67,9 @@ app/src/main/java/com/kxin/classtable/
   domain/      # Course / AgendaEvent / Semester / Schedule(节次↔时间换算、学期周推导)/ LunarDate
   data/        # Room + DataStore + 同步 + 更新检查 + import(WarehouseIndex / ImportParser)
   di/          # Hilt 依赖注入模块
-  notify/      # 提醒排程 / 通知构建 / 实时活动服务 / 开机重排
+  notify/      # 提醒排程(课程 + 日程)/ 通知构建 / 实时活动服务 / 开机重排
   ui/          # 课表(周+日) 课程 日程 表单 导入 设置(+ 子页) 账号 天气
-  widget/      # Glance:1×1 下节课 + 4×2 今日课表
+  widget/      # Glance:1×1 下节课 + 4×2 今日课表 + 2×2 明日课程 + 4×2 日程
 netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送 / 版本 / APK)
 netlify/static/               # 构建期生成:warehouse/bundle.json(适配器同步源,CDN 分发)
 tools/yaml2json.mjs           # 教务仓库 YAML → assets JSON 预编译
@@ -99,7 +99,9 @@ alpha / translation / scale,同类元素统一缓动、列表与课程块按序�
 
 同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删内容在其它设备复活。课程与日程共用 `SyncRepository.mergeById(...)` 这一套合并逻辑,只是各自走不同的集合。
 
-房间版本:**v8**(v7 → v8 新增 `agenda_events` / `deleted_agenda` 两张空表,手动 `Migration`,无破坏性回退)。
+房间版本:**v10**(v7 → v8 新增 `agenda_events` / `deleted_agenda`;v8 → v9 课程加 `colorHue`;v9 → v10 日程加 `remindEnabled` / `remindLeadMinutes`。均为手动 `Migration`,只加列 / 加空表,无破坏性回退)。
+
+日程字段:`id / title / category / startAt / endAt / allDay / location / note / priority / remindEnabled / remindLeadMinutes / updatedAt`。分类决定它落在「日程」还是「倒计时」页签(`showsInAgenda` / `showsInCountdown`);提醒是条目自己的属性,与页签无关(定时的按提前量,全天的按设置里的固定时刻)。
 
 课程字段:`id / name / teacher / location / weekday / weekdays(位掩码)/ startPeriod / endPeriod / weekType / weekStart / weekEnd / weeks / customStartMinute / customEndMinute / note / updatedAt`。作息与学期单独存在设置里,课程只引用节次序号,因此改作息会整体平移所有课程的时间。
 

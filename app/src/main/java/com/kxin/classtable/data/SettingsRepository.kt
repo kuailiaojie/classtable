@@ -50,6 +50,9 @@ class SettingsRepository @Inject constructor(
     private val KEY_NOTIFY_MODE = stringPreferencesKey("notify_mode")
     private val KEY_TOMORROW_ENABLED = booleanPreferencesKey("tomorrow_reminder_enabled")
     private val KEY_TOMORROW_TIME = stringPreferencesKey("tomorrow_reminder_time")
+    /** 日程到点提醒:总开关 + 全天日程的提醒时刻。属于本机偏好,不进云端设置同步。 */
+    private val KEY_AGENDA_REMIND_ENABLED = booleanPreferencesKey("agenda_reminder_enabled")
+    private val KEY_AGENDA_ALLDAY_TIME = stringPreferencesKey("agenda_allday_remind_time")
     private val KEY_AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
     private val KEY_INCLUDE_PRERELEASE = booleanPreferencesKey("include_prerelease")
     private val KEY_UPDATE_INTERVAL = intPreferencesKey("update_check_interval_days")
@@ -99,6 +102,8 @@ class SettingsRepository @Inject constructor(
             notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.LIVE.name,
             tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: true,
             tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
+            agendaReminderEnabled = p[KEY_AGENDA_REMIND_ENABLED] ?: true,
+            agendaAllDayRemindTime = p[KEY_AGENDA_ALLDAY_TIME] ?: "09:00",
             autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
             includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
             updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
@@ -187,6 +192,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setTomorrowReminder(enabled: Boolean, time: String) = editSettings {
         it[KEY_TOMORROW_ENABLED] = enabled
         it[KEY_TOMORROW_TIME] = time.trim()
+    }
+
+    /** 日程到点提醒:总开关 + 全天日程的提醒时刻("HH:MM")。每条日程的开关存在条目本身。 */
+    suspend fun setAgendaReminder(enabled: Boolean, allDayTime: String) = editSettings {
+        it[KEY_AGENDA_REMIND_ENABLED] = enabled
+        it[KEY_AGENDA_ALLDAY_TIME] = allDayTime.trim()
     }
 
     suspend fun setAutoCheckUpdate(enabled: Boolean) = editSettings { it[KEY_AUTO_CHECK_UPDATE] = enabled }
