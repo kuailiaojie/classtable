@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -67,16 +69,26 @@ fun YohakuSheet(
         var shown by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { shown = true }
 
-        // 关键:Dialog 窗口默认按 WRAP_CONTENT 测量,内容拿不到「一屏」的硬约束 ——
-        // 于是 fillMaxSize / 面板的 fillMaxHeight(0.9f) / 子项的 weight 会一起失效,
-        // 面板被内容撑到屏幕外、底部按钮掉到屏幕下方。显式把窗口钉成整屏
-        // (新版 Compose 内部也是这么兜的),约束重新成立。
+        // Dialog 窗口默认按 WRAP_CONTENT 测量,内容拿不到「一屏」的硬约束 ——
+        // 于是 fillMaxHeight / 子项的 weight 会一起失效,面板被内容撑到屏幕外。
+        // 显式把窗口钉成整屏,内容重新拿到硬约束。
         val dialogView = LocalView.current
         LaunchedEffect(Unit) {
             dialogView.findDialogWindow()?.setLayout(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
             )
+        }
+        val density = LocalDensity.current
+        // 面板容器(遮罩)的封顶高度。
+        //
+        // 关键:对话框的内容是从状态栏下方开始排的(y 起点 = 状态栏高),却仍按**整屏**给出
+        // 最大高度 —— 直接拿 screenHeightDp 当上限,容器底边会落到屏幕外一整个状态栏的高度,
+        // 面板连同底部按钮就一起被裁在屏幕下方了。所以上限要减掉状态栏那一段。
+        val containerMaxHeight = with(density) {
+            val screenPx = LocalConfiguration.current.screenHeightDp.dp.toPx()
+            val statusBarPx = WindowInsets.statusBars.getTop(density).toFloat()
+            (screenPx - statusBarPx).coerceAtLeast(0f).toDp()
         }
         val progress by animateFloatAsState(
             targetValue = if (shown) 1f else 0f,
@@ -89,11 +101,7 @@ fun YohakuSheet(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // Dialog 在部分 Compose 版本下按 WRAP_CONTENT 测量,内容拿不到封顶高度,
-                // 于是 fillMaxSize / 面板的 fillMaxHeight(0.9f) / 子项的 weight 全部失效 ——
-                // 面板被内容撑到屏幕外,底部按钮掉到屏幕下方、还滚不动。
-                // 这里把容器显式钉到「最多一屏」再填满,约束重新成立,面板才受控。
-                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp)
+                .heightIn(max = containerMaxHeight)
                 .fillMaxHeight()
                 // 点面板之外关闭(无涟漪)
                 .clickable(
