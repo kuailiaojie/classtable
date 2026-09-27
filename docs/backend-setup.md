@@ -69,18 +69,23 @@ npx netlify-cli deploy --prod --dir netlify/static
 
 ## App Check
 
-反代端点默认对公网开放,`/auth/*` 与 `/firestore/*` 可被任意调用(直接烧 Firebase 配额)。App Check 用设备 attestation 把「只有本应用发出的请求」区分出来:
+反代端点默认对公网开放,`/auth/*` 与 `/firestore/*` 可被任意调用(直接烧 Firebase 配额)。App Check 用来把「只有本应用发出的请求」区分出来。
 
-1. Firebase 控制台 → **App Check** → 为 Android 应用注册 **Play Integrity** 提供方;并把 release 签名(与 CI 用的 keystore 对应)的 SHA-256 登记到项目设置,debug 签名也一并登记便于真机调试。
-2. 打开 Play Integrity 提供方;如需调试,**为 debug 包登记 Debug token**:debug 首次运行会在 logcat 打印
-   `Enter this debug secret into the allow list in the Firebase Console ...`,把它粘进控制台。
-3. 客户端在 `Application` 启动时安装 provider(`data/AppCheck.kt`:release = Play Integrity / debug = Debug),
-   经 `FirebaseGateway` 给 Auth 与 Firestore 请求附 `X-Firebase-AppCheck`;反代(`proxy.mjs`)把该头**透传**给上游。
-4. **先在控制台观察比例,不要立刻强制**。确认绝大多数请求都带上了有效 token 后,再对 Cloud Firestore
+**为什么不用 Play Integrity**:它需要 Google Play 开发者账号、且围绕 Play 分发;本项目侧载分发、还要照顾无 GMS 设备,都不合身。改用**自定义 provider**,不依赖 GMS:
+
+1. Netlify → Site settings → Environment variables 新增 `APP_CHECK_CERT_SHA256`:允许签发 token 的**签名证书 SHA-256**(大写十六进制、无分隔);逗号分隔可放多个(release 证书 + 本机 debug 证书)。取值:
+   ```bash
+   keytool -list -v -keystore <keystore> -alias <alias>   # 看 SHA256 那一行
+   ```
+   同时 `SERVICE_ACCOUNT` 必须已配置(`/push` 已要求),否则端点会返回 500。
+2. 客户端 `data/AppCheck.kt` 是自定义 provider:读本包签名证书的 SHA-256 → `POST <proxy>/appcheck/token` →
+   反代校验指纹后用 `firebase-admin` 的 `appCheck().createToken(APP_ID)` 签发 → 客户端把 token 作为
+   `X-Firebase-AppCheck` 附在 Auth / Firestore 请求上(`APP_ID` 写死在 `proxy.mjs`,取自 `google-services.json`)。
+3. **先在控制台观察比例,不要立刻强制**。确认绝大多数请求都带上了有效 token 后,再对 Cloud Firestore
    (以及按需 Identity Platform)打开强制;强制后不带有效 token 的请求会被拒。
 
-> **无 GMS 的坑**:Play Integrity 依赖 GMS,华为等无 GMS 设备拿不到 token。客户端对此**失败放行**
-> (不加头、不阻断登录与同步),所以在无 GMS 用户占比明确前**不要开强制**,否则会掐断这些设备的登录与同步。
+> **边界**:这是抬高门槛(挡掉抄了反代地址白嫖配额的滥用),**不是硬件级证明** —— 签名指纹可被有心人模仿。
+> 客户端对失败一律**放行**(不加头、不阻断登录与同步),所以无论是否强制都不会掐断用户。
 
 ### 诊断与远程开关
 

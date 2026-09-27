@@ -19,8 +19,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 63
-        versionName = "2.2.0-rc1"
+        versionCode = 64
+        versionName = "2.2.0-rc2"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")
@@ -150,11 +150,8 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.messaging)
-    // App Check:反代端点不再裸奔;provider 按 build type 分源集装
-    // (src/debug 用 Debug provider,src/release 用 Play Integrity)
+    // App Check:反代端点不再裸奔;用自定义 provider 向反代换取 token(不依赖 Play / GMS)
     implementation(libs.firebase.appcheck)
-    releaseImplementation(libs.firebase.appcheck.playintegrity)
-    debugImplementation(libs.firebase.appcheck.debug)
     // 性能监控:启动 / 网络 / 自定义 trace
     implementation(libs.firebase.perf)
     // 远程配置:只做远程开关 / 灰度,默认值写在代码里(离线优先)

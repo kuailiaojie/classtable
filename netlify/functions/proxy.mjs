@@ -26,6 +26,11 @@ const RELEASES_LIST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases`
 // 安装包按 CPU 架构拆开,每台设备只该拿到自己那一种。顺序有意义:"x86" 是 "x86_64" 的子串。
 const ABI_NAMES = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"];
 
+// App Check 自定义签发:无 Play 账号 / 侧载分发时 Play Integrity 走不通,改由本函数用
+// firebase-admin 为应用签 token。APP_ID 取 google-services.json 的 mobilesdk_app_id。
+// 需要 Netlify 环境变量:APP_CHECK_CERT_SHA256(允许的签名证书 SHA-256,逗号分隔,可含 release 与 debug)。
+const APP_CHECK_APP_ID = "1:123208302848:android:dfecc47a03fbf4e48af3e5";
+
 // Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
 // 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
 // 注意:firebase-admin 是重依赖,必须「按需动态加载」——只在 /push 路径才 import,
@@ -76,6 +81,39 @@ async function handlePush(req) {
     return json(200, { sent: result.successCount, failed: result.failureCount });
   } catch (e) {
     return json(500, { error: { code: 500, message: "push failed: " + e.message } });
+  }
+}
+
+// POST /appcheck/token → 用 firebase-admin 为该应用签一枚 App Check token。
+// 客户端带上本包签名证书的 SHA-256,只有已知证书才签发(挡掉抄地址白嫖配额的滥用;
+// 这是抬高门槛,不是硬件级证明)。APP_CHECK_CERT_SHA256 未配置时明确报错,便于上线排查。
+async function handleAppCheck(req) {
+  if (!process.env.SERVICE_ACCOUNT) {
+    return json(500, { error: { code: 500, message: "SERVICE_ACCOUNT env not configured (Firebase service account JSON)" } });
+  }
+  const allowed = String(process.env.APP_CHECK_CERT_SHA256 || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  if (allowed.length === 0) {
+    return json(503, { error: { code: 503, message: "APP_CHECK_CERT_SHA256 env not configured" } });
+  }
+  let body;
+  try {
+    body = JSON.parse(await req.text());
+  } catch {
+    return json(400, { error: { code: 400, message: "invalid JSON body" } });
+  }
+  const sha = String(body.signingSha256 || "").trim().toUpperCase();
+  if (!sha || !allowed.includes(sha)) {
+    return json(403, { error: { code: 403, message: "unrecognized app signature" } });
+  }
+  try {
+    const app = await getAdmin();
+    const { token, ttlMillis } = await app.appCheck().createToken(APP_CHECK_APP_ID);
+    return json(200, { token, expireTimeMillis: Date.now() + ttlMillis });
+  } catch (e) {
+    return json(500, { error: { code: 500, message: "appcheck token failed: " + e.message } });
   }
 }
 
@@ -244,6 +282,9 @@ export default async (req) => {
 
   if (rest === "/push") {
     return handlePush(req);
+  }
+  if (rest === "/appcheck/token") {
+    return handleAppCheck(req);
   }
   if (rest === "/version") {
     return handleVersion(url);

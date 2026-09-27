@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.0-rc2 (2026-09-27)
+
+> 预发布版(RC)。修掉 2.2.0-rc1 里 App Check 的落地问题。
+
+### 数据与诊断
+- **App Check 改用自定义 provider**。rc1 用的 Play Integrity 需要 Google Play 开发者账号、且围绕
+  Play 分发,本项目侧载、还要照顾无 GMS 设备,走不通;改为客户端带上本包**签名证书的 SHA-256**,
+  向自建反代换取由 `firebase-admin` 签发的 App Check token(反代新增 `POST /appcheck/token`,
+  需配 Netlify 环境变量 `APP_CHECK_CERT_SHA256`)。不依赖 GMS,侧载 / 无 GMS 设备同样能出 token。
+  **仍是失败放行**:拿不到 token 时不加头、不阻断登录与同步;强制校验待观察比例后再开。
+- 移除 `firebase-appcheck-playintegrity` / `firebase-appcheck-debug` 依赖,以及按 build type 分的 provider 源集。
+
+### 版本
+- 2.2.0-rc1(63) → 2.2.0-rc2(64)。
+
 ## 2.2.0-rc1 (2026-09-27)
 
 > 预发布版(RC)。开屏换成自绘品牌动画,设置「更多」去掉中转层,Firebase 端补上 App Check
