@@ -18,8 +18,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 61
-        versionName = "2.0.0"
+        versionCode = 62
+        versionName = "2.1.0-rc1"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")
@@ -157,6 +157,9 @@ dependencies {
 
     // 农历/节气:日历周条下的小字(纯 Java,无反射,可在 Android 直接使用)
     implementation(libs.lunar)
+
+    // 开屏品牌动画:矢量时间线(手写 JSON,见 res/raw/splash_mark.json)
+    implementation(libs.lottie.compose)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)

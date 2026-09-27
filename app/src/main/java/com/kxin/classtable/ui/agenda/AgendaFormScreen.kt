@@ -42,7 +42,9 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.domain.model.AgendaKind
 import com.kxin.classtable.domain.model.AgendaPriority
+import com.kxin.classtable.domain.model.kind
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -73,6 +75,8 @@ fun AgendaFormScreen(
     } else {
         LocalDate.now()
     }
+    // 归属由条目自己的分类(编辑态)或进入时的默认分类(新建态)推断
+    val kind = (editing?.category ?: defaultCategory ?: AgendaCategory.TODO).kind
 
     Column(
         modifier = Modifier
@@ -80,7 +84,7 @@ fun AgendaFormScreen(
             .background(colors.paper),
     ) {
         YohakuTopBar(
-            title = if (eventId != null) "编辑日程" else "新建日程",
+            title = if (eventId != null) "编辑${kind.label}" else "新建${kind.label}",
             onBack = { nav.popBackStack() },
         )
         if (eventId != null && editing == null) {
@@ -89,6 +93,7 @@ fun AgendaFormScreen(
         } else {
             AgendaFormBody(
                 initial = editing,
+                kind = kind,
                 defaultDate = defaultDate,
                 defaultCategory = defaultCategory,
                 onSave = {
@@ -108,6 +113,7 @@ fun AgendaFormScreen(
 @Composable
 private fun AgendaFormBody(
     initial: AgendaEvent?,
+    kind: AgendaKind,
     defaultDate: LocalDate,
     defaultCategory: AgendaCategory?,
     onSave: (AgendaEvent) -> Unit,
@@ -173,11 +179,12 @@ private fun AgendaFormBody(
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("分类")
+            val categories = remember(kind) { AgendaCategory.entries.filter { it.kind == kind } }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                AgendaCategory.entries.forEach { c ->
+                categories.forEach { c ->
                     YohakuChip(
                         text = c.label,
                         selected = category == c,
@@ -185,6 +192,15 @@ private fun AgendaFormBody(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = when (kind) {
+                    AgendaKind.SCHEDULE -> "有时间要做的事,会排在「日程」页签。"
+                    AgendaKind.COUNTDOWN -> "等着倒数的目标,会排在「倒计时」页签。"
+                },
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             Row(verticalAlignment = Alignment.CenterVertically) {

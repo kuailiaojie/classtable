@@ -72,6 +72,7 @@ internal fun CountdownList(
         if (upcoming.isEmpty()) {
             item(key = "empty") { EmptyCountdownCard(onAdd = onAdd) }
         } else {
+            item(key = "summary") { CountdownSummary(upcoming, today) }
             items(upcoming, key = { it.id }) { event ->
                 CountdownCard(
                     event = event,
@@ -216,6 +217,26 @@ private fun CountdownBadge(
 }
 
 @Composable
+private fun CountdownSummary(events: List<AgendaEvent>, today: LocalDate) {
+    val colors = LocalYohakuColors.current
+    val ongoingCount = events.count { it.startLocal().toLocalDate() <= today }
+    val nearest = events.map { daysUntil(it.startLocal().toLocalDate(), today) }
+        .filter { it > 0 }
+        .minOrNull()
+    val detail = when {
+        ongoingCount > 0 -> "$ongoingCount 个进行中"
+        nearest != null -> "最近还剩 $nearest 天"
+        else -> "今天到期"
+    }
+    Text(
+        text = "${events.size} 个倒计时 · $detail",
+        style = YohakuType.label12,
+        color = colors.neutral7,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
 private fun EmptyCountdownCard(onAdd: () -> Unit) {
     val colors = LocalYohakuColors.current
     YohakuCard(modifier = Modifier.fillMaxWidth()) {
@@ -227,7 +248,7 @@ private fun EmptyCountdownCard(onAdd: () -> Unit) {
                     color = colors.neutral10,
                 )
                 Text(
-                    text = "新的考试、活动或待办会排在这里",
+                    text = "新的考试、作业会排在这里",
                     style = YohakuType.label12,
                     color = colors.neutral7,
                 )

@@ -1,0 +1,86 @@
+# 自动更新教务适配器数据
+#
+# 触发方式:
+#   - 定时:每天 20:00 UTC(次日 04:00 北京时间)
+#   - 手动触发(Workflow dispatch)
+#
+# 做什么:
+#   从上游适配仓库(Gitee 镜像优先,失败回退 GitHub)整份拉取 → 更新 warehouse/ 源快照 →
+#   重新预编译 app/src/main/assets/warehouse/{index,adapters}.json 与适配脚本 → 校验 →
+#   有变化才提交并推送到 master。
+#
+# 为什么用默认 GITHUB_TOKEN 推送也不会误触发发版:
+#   GitHub 不会为 GITHUB_TOKEN 引起的 push 再触发其它 workflow(防递归),所以 build-apk.yml 不会跑;
+#   而 Netlify 的外部 webhook 照常收到这次推送,会重建 warehouse/bundle.json ——
+#   那正是 App 内「设置 → 导入与识别 → 适配器同步」拉取的来源,因此无需发版即可更新。
+#
+# 前置:仓库未开启分支保护(允许直接推 master)。若被拦截,末步可改为开 PR。
+
+name: Update adapters
+
+on:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-adapters
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Sync warehouse from upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Gitee 镜像优先(国内源),失败再回退 GitHub
+      - name: Fetch upstream warehouse
+        run: |
+          set -e
+          git clone --depth 1 https://gitee.com/XingHeYuZhuan-gh/shiguang_warehouse /tmp/shiguang \
+            || git clone --depth 1 https://github.com/XingHeYuZhuan/shiguang_warehouse /tmp/shiguang
+
+      # 整份镜像,而不是叠加:上游删掉的学校也要跟着从本地快照里消失
+      - name: Apply upstream snapshot
+        run: |
+          set -e
+          rm -rf warehouse/resources
+          mkdir -p warehouse/resources warehouse/index
+          cp -r /tmp/shiguang/resources/* warehouse/resources/
+          cp /tmp/shiguang/index/root_index.yaml warehouse/index/
+          cp /tmp/shiguang/README.md /tmp/shiguang/LICENSE warehouse/
+
+      # yaml2json 会一并把适配脚本镜像进 assets;verify 失败即停,不提交
+      - name: Regenerate compiled data
+        run: |
+          set -e
+          node tools/yaml2json.mjs
+          node tools/build-netlify.mjs
+          node tools/verify-warehouse.mjs
+
+      - name: Commit and push if changed
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain warehouse app/src/main/assets/warehouse)" ]; then
+            echo "适配器数据无变化,跳过提交"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add warehouse app/src/main/assets/warehouse
+          git commit -m "适配器:同步上游数据(自动)"
+          git push origin HEAD:master

@@ -74,7 +74,8 @@ netlify/functions/proxy.mjs   # 后端反代(认证 / Firestore / 推送 / 版�
 netlify/static/               # 构建期生成:warehouse/bundle.json(适配器同步源,CDN 分发)
 tools/yaml2json.mjs           # 教务仓库 YAML → assets JSON 预编译
 tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
-.github/workflows/build-apk.yml   # GitHub Actions:自动构建并上传 APK
+.github/workflows/build-apk.yml        # GitHub Actions:自动构建并上传 APK
+.github/workflows/update-adapters.yml  # GitHub Actions:定时从上游同步适配器数据
 ```
 
 **导航信息架构**:四个根标签页 —— 课表(`week`,周/日视图合并、右上角切换)、课程(`courses`)、

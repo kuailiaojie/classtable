@@ -79,6 +79,7 @@ import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
 import com.kxin.classtable.ui.navigateToTab
+import com.kxin.classtable.ui.settings.SettingsHub
 import kotlinx.coroutines.launch
 import java.net.URL
 import java.time.LocalDate
@@ -330,7 +331,7 @@ fun ImportScreen(
         )
         if (indexError) {
             IndexErrorPanel(
-                onSync = { nav.navigate("adapter_sync") },
+                onSync = { nav.navigate(SettingsHub.IMPORT.route) },
                 onRetry = { indexReload++ },
             )
         } else when (step) {

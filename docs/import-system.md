@@ -39,15 +39,26 @@ assets/warehouse/
 
 ```bash
 git clone --depth 1 https://gitee.com/XingHeYuZhuan-gh/shiguang_warehouse /tmp/shiguang
-cp -r /tmp/shiguang/resources/* warehouse/resources/     # 适配脚本 + adapters.yaml
+rm -rf warehouse/resources && mkdir -p warehouse/resources         # 整份替换,而非叠加
+cp -r /tmp/shiguang/resources/* warehouse/resources/               # 适配脚本 + adapters.yaml
 cp /tmp/shiguang/index/root_index.yaml warehouse/index/
 cp /tmp/shiguang/README.md /tmp/shiguang/LICENSE warehouse/
-node tools/yaml2json.mjs        # 重新生成 assets/warehouse/{index,adapters}.json
-node tools/build-netlify.mjs    # 打包 netlify/static/warehouse/bundle.json
+node tools/yaml2json.mjs        # 预编译 index/adapters.json,并把 .js 镜像进 assets/warehouse/resources
+node tools/build-netlify.mjs    # 打包 netlify/static/warehouse/bundle.json(本地校验,产物 gitignore)
 node tools/verify-warehouse.mjs # 校验数据自洽(每校必有适配器 / 脚本存在 / id 唯一 / 无未引用脚本)
 ```
 
 `assets/warehouse/resources/**` 只需放 `.js`(运行时只读脚本);YAML 只留在 `warehouse/` 源目录用于比对。
+`yaml2json.mjs` 会先清空 `assets/warehouse/resources` 再按上游镜像脚本 —— 否则上游删掉的学校脚本会残留,让「无未引用脚本」校验失败。
+
+### 自动更新(GitHub Actions)
+
+`.github/workflows/update-adapters.yml` 每天定时(也可手动触发)执行上面的流程:从上游整份拉取 →
+重新预编译 → `verify-warehouse` 通过后,有变化才提交并推送 `master`。
+
+- 用默认 `GITHUB_TOKEN` 推送**不会**触发 `build-apk.yml`(GitHub 对 `GITHUB_TOKEN` 引起的 push 不递归触发 workflow),因此不会误发版。
+- Netlify 的外部 webhook 会照常收到这次推送并重建 `warehouse/bundle.json`,App 内「适配器同步」随即能拉到新数据,无需发版。
+- 依赖仓库未开启分支保护(允许直接推 `master`);若被拦截,把末步改为开 PR 即可。
 
 注意:
 

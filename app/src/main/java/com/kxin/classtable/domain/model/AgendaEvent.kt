@@ -1,6 +1,9 @@
 package com.kxin.classtable.domain.model
 
-/** 日程分类。只影响标签文字与一条淡彩点缀,不承载语义(与课程淡彩同一套取色逻辑)。 */
+/**
+ * 日程分类。决定条目归属哪个页签(见 [kind])与标签文字;颜色仍只是淡彩点缀,
+ * 不承载语义(与课程淡彩同一套取色逻辑)。
+ */
 enum class AgendaCategory(val label: String) {
     TODO("待办"),
     ACTIVITY("活动"),
@@ -9,15 +12,27 @@ enum class AgendaCategory(val label: String) {
     OTHER("其他"),
 }
 
+/** 条目归属:落「日程」还是「倒计时」页签。 */
+enum class AgendaKind(val label: String) {
+    SCHEDULE("日程"),
+    COUNTDOWN("倒计时"),
+}
+
 /**
- * 分类决定条目落在「日程」还是「倒计时」页签 —— 这是两个页签唯一的分工依据:
- * 待办 / 活动是「要做的事」,考试 / 作业是「等着倒数的目标」,其他两边都出现。
+ * 分类决定条目落在「日程」还是「倒计时」页签 —— 这是两个页签唯一的分工依据,且**互斥**:
+ * 待办 / 活动 / 其他是「有时间要做的事」,考试 / 作业是「等着倒数的目标」。
  */
+val AgendaCategory.kind: AgendaKind
+    get() = when (this) {
+        AgendaCategory.EXAM, AgendaCategory.HOMEWORK -> AgendaKind.COUNTDOWN
+        AgendaCategory.TODO, AgendaCategory.ACTIVITY, AgendaCategory.OTHER -> AgendaKind.SCHEDULE
+    }
+
 val AgendaCategory.showsInAgenda: Boolean
-    get() = this != AgendaCategory.EXAM && this != AgendaCategory.HOMEWORK
+    get() = kind == AgendaKind.SCHEDULE
 
 val AgendaCategory.showsInCountdown: Boolean
-    get() = this != AgendaCategory.TODO && this != AgendaCategory.ACTIVITY
+    get() = kind == AgendaKind.COUNTDOWN
 
 /** 优先级。仅作排序与前缀点缀,不做颜色语义。 */
 enum class AgendaPriority(val label: String) {

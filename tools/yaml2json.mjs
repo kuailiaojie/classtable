@@ -127,6 +127,25 @@ for (const folder of fs.readdirSync(resourcesDir, { withFileTypes: true })) {
 }
 fs.writeFileSync(path.join(outDir, 'adapters.json'), JSON.stringify({ adapters }, null, 1), 'utf8');
 
+// 3) resources/<FOLDER>/*.js → app/src/main/assets/warehouse/resources/<FOLDER>/*.js
+//    assets 只放 .js(YAML 只留在 warehouse/ 源目录用于比对);先清空再镜像,
+//    以免上游删掉的学校脚本留在 assets 里,让 verify-warehouse 的「无未引用脚本」失败。
+const assetsResources = path.join(outDir, 'resources');
+fs.rmSync(assetsResources, { recursive: true, force: true });
+let scriptCount = 0;
+for (const folder of fs.readdirSync(resourcesDir, { withFileTypes: true })) {
+  if (!folder.isDirectory()) continue;
+  const srcFolder = path.join(resourcesDir, folder.name);
+  for (const entry of fs.readdirSync(srcFolder, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+    const destFolder = path.join(assetsResources, folder.name);
+    fs.mkdirSync(destFolder, { recursive: true });
+    fs.copyFileSync(path.join(srcFolder, entry.name), path.join(destFolder, entry.name));
+    scriptCount++;
+  }
+}
+console.log(`scripts: ${scriptCount}`);
+
 console.log(`schools: ${schools.length}`);
 console.log(`adapters: ${adapters.length}`);
 console.log(`sample school: ${JSON.stringify(schools[0])}`);

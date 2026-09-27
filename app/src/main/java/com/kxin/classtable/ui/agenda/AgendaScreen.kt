@@ -1,12 +1,19 @@
 package com.kxin.classtable.ui.agenda
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,22 +28,25 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.kxin.classtable.design.LocalYohakuColors
-import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMotion
+import com.kxin.classtable.design.YohakuSegmentedControl
 import com.kxin.classtable.design.YohakuTopBar
+import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.domain.model.AgendaKind
 import com.kxin.classtable.domain.model.showsInAgenda
 import com.kxin.classtable.domain.model.showsInCountdown
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 
 /**
- * 日程:两个页签按**分类**分工 ——
- * **议程**铺日历周条 + 时间线,收待办 / 活动(要做的事);**倒计时**按剩余天数铺列表,
- * 收考试 / 作业(等着倒数的目标);「其他」两边都出现。提醒是条目自己的属性,与页签无关。
- * 新建 / 编辑走独立整页(见 [AgendaFormScreen])。
+ * 日程:两个页签按**归属**分工且互斥 ——
+ * **日程**铺日历周条 + 时间线,收待办 / 活动 / 其他(有时间要做的事);**倒计时**按剩余天数铺列表,
+ * 收考试 / 作业(等着倒数的目标)。提醒是条目自己的属性,与页签无关。
+ * 新建 / 编辑走独立整页(见 [AgendaFormScreen]),默认分类随页签走。
  */
 @Composable
 fun AgendaScreen(
@@ -52,6 +62,7 @@ fun AgendaScreen(
     var mondayEpoch by rememberSaveable { mutableStateOf(Schedule.mondayEpochDay(today.toEpochDay())) }
     val selected = LocalDate.ofEpochDay(selectedEpoch)
     val monday = LocalDate.ofEpochDay(mondayEpoch)
+    val kind = if (showCountdown) AgendaKind.COUNTDOWN else AgendaKind.SCHEDULE
 
     // 倒计时的「还有几天」每分钟重算一次
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -86,58 +97,84 @@ fun AgendaScreen(
             .background(colors.paper),
     ) {
         YohakuTopBar(
-            title = "日程",
+            title = kind.label,
             actions = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    YohakuChip(
-                        text = "议程",
-                        selected = !showCountdown,
-                        onClick = { showCountdown = false },
-                    )
-                    YohakuChip(
-                        text = "倒计时",
-                        selected = showCountdown,
-                        onClick = { showCountdown = true },
-                    )
-                }
+                YohakuSegmentedControl(
+                    options = listOf(AgendaKind.SCHEDULE.label, AgendaKind.COUNTDOWN.label),
+                    selectedIndex = if (showCountdown) 1 else 0,
+                    onSelect = { showCountdown = it == 1 },
+                    modifier = Modifier.width(148.dp),
+                )
             },
         )
+        // 一行说明:把「这个页签收什么」写在明面上,两个页签的差别不再靠猜
+        Text(
+            text = when (kind) {
+                AgendaKind.SCHEDULE -> "有时间要做的事 · 待办 / 活动 / 其他"
+                AgendaKind.COUNTDOWN -> "等着倒数的目标 · 考试 / 作业"
+            },
+            style = YohakuType.label12,
+            color = colors.neutral7,
+            modifier = Modifier.padding(
+                start = YohakuDimens.screenPadding,
+                end = YohakuDimens.screenPadding,
+                top = 2.dp,
+                bottom = 6.dp,
+            ),
+        )
 
-        if (!showCountdown) {
-            CalendarStrip(
-                monday = monday,
-                selected = selected,
-                today = today,
-                onSelect = { selectedEpoch = it.toEpochDay() },
-                onWeekChange = { newMonday ->
-                    mondayEpoch = newMonday.toEpochDay()
-                    // 换周后选中日平移到同一星期几,时间线跟着周条走
-                    selectedEpoch = newMonday
-                        .plusDays((selected.dayOfWeek.value - 1).toLong())
-                        .toEpochDay()
-                },
-                onToday = {
-                    mondayEpoch = Schedule.mondayEpochDay(today.toEpochDay())
-                    selectedEpoch = today.toEpochDay()
-                },
-            )
-            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-            AgendaTimeline(
-                date = selected,
-                today = today,
-                events = dayEvents,
-                onAdd = { openForm(null) },
-                onEventClick = { openForm(it) },
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            CountdownList(
-                events = countdownEvents,
-                now = nowMillis,
-                onAdd = { openForm(null, AgendaCategory.EXAM) },
-                onEventClick = { openForm(it) },
-                modifier = Modifier.weight(1f),
-            )
+        AnimatedContent(
+            targetState = showCountdown,
+            transitionSpec = {
+                val forward = targetState
+                val enter = slideInHorizontally { if (forward) it / 6 else -it / 6 } +
+                    fadeIn(YohakuMotion.tween(YohakuMotion.durBase))
+                val exit = slideOutHorizontally { if (forward) -it / 6 else it / 6 } +
+                    fadeOut(YohakuMotion.tween(YohakuMotion.durFast))
+                enter togetherWith exit
+            },
+            label = "agendaPane",
+        ) { countdown ->
+            if (!countdown) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    CalendarStrip(
+                        monday = monday,
+                        selected = selected,
+                        today = today,
+                        onSelect = { selectedEpoch = it.toEpochDay() },
+                        onWeekChange = { newMonday ->
+                            mondayEpoch = newMonday.toEpochDay()
+                            // 换周后选中日平移到同一星期几,时间线跟着周条走
+                            selectedEpoch = newMonday
+                                .plusDays((selected.dayOfWeek.value - 1).toLong())
+                                .toEpochDay()
+                        },
+                        onToday = {
+                            mondayEpoch = Schedule.mondayEpochDay(today.toEpochDay())
+                            selectedEpoch = today.toEpochDay()
+                        },
+                    )
+                    Spacer(
+                        modifier = Modifier.height(YohakuDimens.gapTight),
+                    )
+                    AgendaTimeline(
+                        date = selected,
+                        today = today,
+                        events = dayEvents,
+                        onAdd = { openForm(null) },
+                        onEventClick = { openForm(it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                CountdownList(
+                    events = countdownEvents,
+                    now = nowMillis,
+                    onAdd = { openForm(null, AgendaCategory.EXAM) },
+                    onEventClick = { openForm(it) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }

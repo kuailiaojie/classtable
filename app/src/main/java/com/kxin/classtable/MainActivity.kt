@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
@@ -27,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +58,8 @@ import com.kxin.classtable.design.YohakuTheme
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.accentColor
+import com.kxin.classtable.design.fadeScaleIn
+import com.kxin.classtable.design.fadeScaleOut
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
@@ -72,12 +76,9 @@ import com.kxin.classtable.ui.form.CourseFormScreen
 import com.kxin.classtable.ui.importer.AiImportScreen
 import com.kxin.classtable.ui.importer.ImportScreen
 import com.kxin.classtable.ui.importer.ManualImportScreen
-import com.kxin.classtable.ui.settings.AdapterSyncScreen
 import com.kxin.classtable.ui.settings.AdjustmentsScreen
 import com.kxin.classtable.ui.settings.AgendaReminderScreen
 import com.kxin.classtable.ui.settings.AiKeyScreen
-import com.kxin.classtable.ui.settings.AppIconScreen
-import com.kxin.classtable.ui.settings.ClassDndScreen
 import com.kxin.classtable.ui.settings.CourseReminderScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
@@ -142,6 +143,8 @@ fun ClasstableRoot(
         // 首次启动权限引导:未完成且存在未开启项 → 弹出(完成/跳过后只弹一次,设置页可重进)
         val context = LocalContext.current
         var onboardingDismissed by rememberSaveable { mutableStateOf(false) }
+        // 开屏退场后才让引导入场:两者接成一次连续编排,而不是引导在开屏后面「偷偷」播完
+        var splashExiting by remember { mutableStateOf(false) }
         val needsOnboarding = !settings.onboardingDone && !onboardingDismissed && (
             !RomHelper.notificationsEnabled(context) ||
                 !RomHelper.exactAlarmGranted(context) ||
@@ -257,7 +260,6 @@ fun ClasstableRoot(
                 ) { entry ->
                     SettingsHubScreen(nav, SettingsHub.of(entry.arguments?.getString("hub")))
                 }
-                composable("app_icon") { AppIconScreen(nav) }
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
                 composable("adjustments") { AdjustmentsScreen(nav) }
@@ -265,11 +267,9 @@ fun ClasstableRoot(
                 composable("timetable_display") { TimetableDisplayScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
-                composable("adapter_sync") { AdapterSyncScreen(nav) }
                 composable("ai_key") { AiKeyScreen(nav) }
                 composable("course_reminder") { CourseReminderScreen(nav) }
                 composable("agenda_reminder") { AgendaReminderScreen(nav) }
-                composable("class_dnd") { ClassDndScreen(nav) }
                 composable("update") { UpdateScreen(nav) }
                 composable("rain_classroom") { RainClassroomScreen(nav) }
                 composable("yuketang_login") { YuketangLoginScreen(nav) }
@@ -288,8 +288,12 @@ fun ClasstableRoot(
                         .padding(vertical = 8.dp),
                 )
             }
-            // 首次启动权限引导全屏覆盖层:置于最上层,完成后 Dismiss 露出主界面
-            if (needsOnboarding) {
+            // 首次启动权限引导全屏覆盖层:开屏退场后入场,完成后淡出露出主界面
+            AnimatedVisibility(
+                visible = needsOnboarding && splashExiting,
+                enter = fadeScaleIn(),
+                exit = fadeScaleOut(),
+            ) {
                 OnboardingScreen(
                     onDismiss = {
                         onboardingDismissed = true
@@ -297,7 +301,7 @@ fun ClasstableRoot(
                     },
                 )
             }
-            SplashOverlay()
+            SplashOverlay(onExitStart = { splashExiting = true })
             // 启动静默检查更新(24h 节流);有新版弹非阻断提示
             var updateAutoChecked by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
