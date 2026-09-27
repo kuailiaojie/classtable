@@ -511,6 +511,16 @@
    "description": "登录后进入课程表，选择目标学期并等待加载完成，再执行导入。导入课程及学校12节作息时间，学期开始日期和总周数需手动核对。支持连续节次、单双周和同一时段多门课程；自定时间课程需先在教务系统确认排课。"
   },
   {
+   "folder": "FJPIT",
+   "adapter_id": "FJPIT_01",
+   "adapter_name": "福建信息职业技术学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "fjpit_01.js",
+   "import_url": "https://jw.fjpit.com/#/auth/login",
+   "maintainer": "Panda君",
+   "description": "登录完成后，直接点击“导入按钮”即可；龙腰校区实测可用，如有问题请提issues"
+  },
+  {
    "folder": "FOSU",
    "adapter_id": "FOSU_01",
    "adapter_name": "佛山大学强智教务系统",
