@@ -73,7 +73,7 @@ npx netlify-cli deploy --prod --dir netlify/static
 
 **为什么不用 Play Integrity**:它需要 Google Play 开发者账号、且围绕 Play 分发;本项目侧载分发、还要照顾无 GMS 设备,都不合身。改用**自定义 provider**,不依赖 GMS:
 
-1. Netlify → Site settings → Environment variables 新增 `APP_CHECK_CERT_SHA256`:允许签发 token 的**签名证书 SHA-256**(大写十六进制、无分隔);逗号分隔可放多个(release 证书 + 本机 debug 证书)。取值:
+1. Netlify → Site settings → Environment variables 新增 `APP_CHECK_CERT_SHA256`:允许签发 token 的**签名证书 SHA-256**;逗号分隔可放多个(release 证书 + 本机 debug 证书)。**带冒号或不带都行**(服务端会自动规整),取值:
    ```bash
    keytool -list -v -keystore <keystore> -alias <alias>   # 看 SHA256 那一行
    ```
