@@ -24,6 +24,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.yuketang.YuketangClient
@@ -127,6 +128,9 @@ class RainClassroomViewModel @Inject constructor(
         val result = runCatching { repository.syncAnnouncements() }
         settingsRepository.markYuketangFetched()
         refreshing = false
+        result.onSuccess { sync ->
+            Analytics.log("yuketang_sync", "fetched" to sync.fetched, "new" to sync.newCount)
+        }
         message = result.fold(
             onSuccess = { sync ->
                 when {

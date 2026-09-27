@@ -1,6 +1,7 @@
 package com.kxin.classtable.data.yuketang
 
 import android.util.Log
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AnnouncementDao
 import com.kxin.classtable.data.local.AnnouncementEntity
@@ -74,6 +75,7 @@ class YuketangRepository @Inject constructor(
 
     suspend fun saveSession(session: YuketangSession) {
         sessionStore.write(session)
+        Analytics.log("yuketang_login")
     }
 
     fun observeBindings(): Flow<List<YuketangBindingEntity>> = bindingDao.observeAll()
@@ -134,6 +136,7 @@ class YuketangRepository @Inject constructor(
                 updatedAt = System.currentTimeMillis(),
             ),
         )
+        Analytics.log("yuketang_bind")
     }
 
     suspend fun unbind(courseId: String) = bindingDao.deleteByCourse(courseId)

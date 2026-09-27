@@ -66,7 +66,21 @@ class SyncRepository @Inject constructor(
 
     private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings/config"
 
-    suspend fun syncNow(): Result<Unit> = runCatching {
+    /**
+     * 同步入口:未登录直接返回;已登录则记录耗时(performance)与成败(analytics / crash),
+     * 再交给 [syncNowInternal] 做实际合并。
+     */
+    suspend fun syncNow(): Result<Unit> {
+        if (authRepository.uid == null) return Result.success(Unit)
+        return Perf.trace("sync_duration") { syncNowInternal() }
+            .onSuccess { Analytics.log("sync_succeeded") }
+            .onFailure { error ->
+                Analytics.log("sync_failed", "reason" to error.javaClass.simpleName)
+                Crash.recordException(error, "op" to "sync")
+            }
+    }
+
+    private suspend fun syncNowInternal(): Result<Unit> = runCatching {
         val uid = authRepository.uid ?: return Result.success(Unit)
         val token = authRepository.freshIdToken() ?: return Result.success(Unit)
 

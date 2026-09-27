@@ -15,6 +15,7 @@ import androidx.glance.layout.height
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 
@@ -36,6 +37,11 @@ class TodayWidget : GlanceAppWidget() {
 
 class TodayWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TodayWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        Analytics.log("widget_added", "kind" to "today")
+    }
 }
 
 @Composable

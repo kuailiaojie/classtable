@@ -72,7 +72,7 @@ class ManualImportViewModel @Inject constructor(
             if (!periodSpec.isNullOrBlank()) {
                 settingsRepository.setPeriodTimes(periodSpec)
             }
-            courseRepository.importAll(courses)
+            courseRepository.importAll(courses, source = "table")
             _imported.value = true
         }
     }

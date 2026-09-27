@@ -31,7 +31,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.AiClient
 import com.kxin.classtable.data.AiScheduleResult
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.Crash
+import com.kxin.classtable.data.Perf
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
@@ -78,29 +81,35 @@ class AiImportViewModel @Inject constructor(
     fun analyze(settings: AppSettings, imageBase64: String, mimeType: String) {
         viewModelScope.launch {
             _state.value = AiUiState.Loading
-            AiClient.extractSchedule(
-                provider = settings.provider(),
-                apiKey = settings.aiApiKey,
-                baseUrl = settings.aiBaseUrl,
-                model = settings.aiModel,
-                imageBase64 = imageBase64,
-                mimeType = mimeType,
-                weekCount = settings.semesterWeekCount,
-            )
+            val outcome = Perf.trace("ai_recognize_duration") {
+                AiClient.extractSchedule(
+                    provider = settings.provider(),
+                    apiKey = settings.aiApiKey,
+                    baseUrl = settings.aiBaseUrl,
+                    model = settings.aiModel,
+                    imageBase64 = imageBase64,
+                    mimeType = mimeType,
+                    weekCount = settings.semesterWeekCount,
+                )
+            }
+            outcome
                 .onSuccess { r ->
                     _result.value = r
                     r.periodTimes?.let { settingsRepository.setPeriodTimes(it) }
                     _state.value = AiUiState.Done(r.courses.size, r.periodTimes != null)
+                    Analytics.log("ai_recognize_succeeded", "count" to r.courses.size)
                 }
                 .onFailure { e ->
                     _state.value = AiUiState.Error(e.message ?: "解析失败")
+                    Analytics.log("ai_recognize_failed", "reason" to e.javaClass.simpleName)
+                    Crash.recordException(e, "op" to "ai_recognize")
                 }
         }
     }
 
     fun importAll() {
         viewModelScope.launch {
-            courseRepository.importAll(_result.value?.courses ?: emptyList())
+            courseRepository.importAll(_result.value?.courses ?: emptyList(), source = "ai")
             _imported.value = true
         }
     }

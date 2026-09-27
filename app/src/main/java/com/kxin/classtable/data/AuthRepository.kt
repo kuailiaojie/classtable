@@ -49,7 +49,7 @@ class AuthRepository @Inject constructor(
                 },
             )
         }
-        if (r.isSuccess) Analytics.log("sign_up", "email" to email)
+        if (r.isSuccess) Analytics.log("sign_up", "method" to "password")
         return r
     }
 
@@ -64,24 +64,29 @@ class AuthRepository @Inject constructor(
                 },
             )
         }
-        if (r.isSuccess) Analytics.log("sign_in", "email" to email)
+        if (r.isSuccess) Analytics.log("sign_in", "method" to "password")
         return r
     }
 
     suspend fun signOut() {
         sessionStore.write(null)
         _currentUser.value = null
+        Analytics.log("sign_out")
     }
 
     /** 发送密码重置邮件;无论邮箱是否存在都返回成功(防枚举)。 */
-    suspend fun sendPasswordReset(email: String): Result<Unit> = authCall(expectSession = false) {
-        gateway.auth(
-            "accounts:sendOobCode",
-            JSONObject().apply {
-                put("requestType", "PASSWORD_RESET")
-                put("email", email)
-            },
-        )
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
+        val r = authCall(expectSession = false) {
+            gateway.auth(
+                "accounts:sendOobCode",
+                JSONObject().apply {
+                    put("requestType", "PASSWORD_RESET")
+                    put("email", email)
+                },
+            )
+        }
+        if (r.isSuccess) Analytics.log("password_reset_requested")
+        return r
     }
 
     /** 取未过期的 idToken;过期则用 refreshToken 刷新并更新会话。失败返回 null。 */

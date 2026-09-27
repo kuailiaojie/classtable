@@ -68,15 +68,15 @@ import java.util.Locale
 /**
  * 设置分组(二级页)。设置首页只列这些入口,常用且「即时生效」的设置项直接并进分组页,
  * 只有需要填字段 / 保存的复杂页(作息时间、调休、AI 密钥…)才保留各自的三级页。
+ *
+ * 雨课堂 / 桌面 / 账号与数据 各自只有一个真页,已从设置首页**直达**,不再经过这里
+ * (去掉只有一行的中转页:少点一层,也少一次标题重复)。
  */
 enum class SettingsHub(val title: String) {
     APPEARANCE("外观"),
     TIMETABLE("课表"),
     IMPORT("导入与识别"),
     REMINDER("提醒"),
-    YUKETANG("雨课堂"),
-    DESKTOP("桌面"),
-    ACCOUNT("账号与数据"),
     ABOUT("关于"),
     ;
 
@@ -124,9 +124,6 @@ fun SettingsHubScreen(
                 SettingsHub.TIMETABLE -> TimetableHub(nav, viewModel)
                 SettingsHub.IMPORT -> ImportHub(nav, viewModel)
                 SettingsHub.REMINDER -> ReminderHub(nav, viewModel)
-                SettingsHub.YUKETANG -> YuketangHub(nav, viewModel)
-                SettingsHub.DESKTOP -> DesktopHub(nav)
-                SettingsHub.ACCOUNT -> AccountHub(nav, viewModel)
                 SettingsHub.ABOUT -> AboutHub(nav)
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
@@ -409,33 +406,6 @@ private fun ClassDndSection(settings: AppSettings) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun YuketangHub(nav: NavHostController, viewModel: SettingsViewModel) {
-    val yuketangLoggedIn by viewModel.yuketangLoggedIn.collectAsStateWithLifecycle()
-    SettingsSection(title = "雨课堂") {
-        SettingRow(
-            title = "雨课堂公告",
-            value = if (yuketangLoggedIn) "已登录" else "未登录",
-            onClick = { nav.navigate("rain_classroom") },
-        )
-    }
-}
-
-@Composable
-private fun DesktopHub(nav: NavHostController) {
-    SettingsSection(title = "桌面") {
-        SettingRow("桌面小组件", "今日 / 明日 / 下节课 / 日程 · 可自定义") { nav.navigate("widget_settings") }
-    }
-}
-
-@Composable
-private fun AccountHub(nav: NavHostController, viewModel: SettingsViewModel) {
-    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
-    SettingsSection(title = "账号与数据") {
-        SettingRow("账号与同步", userEmail ?: "未登录") { nav.navigate("account") }
     }
 }
 

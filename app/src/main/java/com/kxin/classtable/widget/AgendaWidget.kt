@@ -23,6 +23,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.domain.model.AgendaEvent
 import java.time.Instant
 import java.time.LocalDate
@@ -48,6 +49,11 @@ class AgendaWidget : GlanceAppWidget() {
 
 class AgendaWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = AgendaWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        Analytics.log("widget_added", "kind" to "agenda")
+    }
 }
 
 @Composable

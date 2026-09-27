@@ -94,11 +94,12 @@ class SettingsViewModel @Inject constructor(
 }
 
 /**
- * 设置首页:只列[设置分组][SettingsHub]入口。
+ * 设置首页:只列分组入口,不铺具体设置项。
  *
- * 每张卡是一组语义相近的设置中心(外观 / 课表 / 导入与识别 / 提醒 / 雨课堂 / 桌面 / 账号与数据 /
- * 关于),点进去才是原来那些设置项 —— 于是「主题」「作息时间」「AI 密钥」这些选项各自落在**三级页**上,
- * 首页从此不会随着功能增加而越来越长。
+ * 「常用」四项各是一组语义相近的设置中心(外观 / 课表 / 导入与识别 / 提醒),点进去才是原来那些
+ * 设置项 ——「主题」「作息时间」「AI 密钥」这些选项各自落在**三级页**上,首页不会随功能增加而变长。
+ * 「更多」四项(雨课堂 / 桌面 / 账号与数据 / 关于)里,前三项各自只有一个真页,因此**去掉中转层、
+ * 直接跳过去**;「关于」本身有检查更新 / 关于 / 问卷三项,保留为分组页。
  */
 @Composable
 fun SettingsScreen(
@@ -136,13 +137,14 @@ fun SettingsScreen(
         }
 
         SettingsSection(title = "更多") {
+            // 这一组不再挂「只有一行」的中转页:每行直达真页,少点一层、也少一次标题重复。
             SettingRow("雨课堂", if (yuketangLoggedIn) "已登录" else "未登录") {
-                nav.navigate(SettingsHub.YUKETANG.route)
+                nav.navigate("rain_classroom")
             }
             DividerLine()
-            SettingRow("桌面", "小组件") { nav.navigate(SettingsHub.DESKTOP.route) }
+            SettingRow("桌面", "今日 / 明日 / 下节课 / 日程") { nav.navigate("widget_settings") }
             DividerLine()
-            SettingRow("账号与数据", userEmail ?: "未登录") { nav.navigate(SettingsHub.ACCOUNT.route) }
+            SettingRow("账号与数据", userEmail ?: "未登录") { nav.navigate("account") }
             DividerLine()
             SettingRow("关于", "v${BuildConfig.VERSION_NAME}") { nav.navigate(SettingsHub.ABOUT.route) }
         }

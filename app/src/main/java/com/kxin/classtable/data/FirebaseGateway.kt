@@ -70,6 +70,8 @@ class FirebaseGateway @Inject constructor() {
             conn.readTimeout = 20_000
             conn.setRequestProperty("Content-Type", "application/json")
             if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
+            // App Check:反代会把它透传给 Firebase;拿不到 token 时不带头(失败放行)
+            AppCheck.token()?.let { conn.setRequestProperty("X-Firebase-AppCheck", it) }
             if (body != null) {
                 conn.doOutput = true
                 conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }

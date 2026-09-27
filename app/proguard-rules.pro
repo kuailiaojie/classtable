@@ -13,8 +13,12 @@
 # 雨课堂登录页的桥(同上,唯一入口是网页里的 AndroidYuketangNative.*)
 -keep class com.kxin.classtable.ui.yuketang.YuketangLoginBridge { *; }
 
-# Firebase Analytics / Crashlytics / Messaging 依赖反射与清单注册
+# Firebase Analytics / Crashlytics / Messaging / App Check / Perf / Remote Config
+# 依赖反射与清单注册
 -keep class com.google.firebase.messaging.** { *; }
+-keep class com.google.firebase.appcheck.** { *; }
+-keep class com.google.firebase.perf.** { *; }
+-keep class com.google.firebase.remoteconfig.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 

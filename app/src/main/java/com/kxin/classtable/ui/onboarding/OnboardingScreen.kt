@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.design.LocalYohakuColors
@@ -66,6 +67,8 @@ fun OnboardingScreen(
     var alarmOk by remember { mutableStateOf(RomHelper.exactAlarmGranted(context)) }
     var batteryOk by remember { mutableStateOf(RomHelper.ignoreBatteryOptimizations(context)) }
     val autoStartVisited by viewModel.autoStartVisited.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { Analytics.log("onboarding_shown") }
 
     LifecycleResumeEffect(Unit) {
         notifOk = RomHelper.notificationsEnabled(context)
@@ -216,7 +219,14 @@ fun OnboardingScreen(
             ) { done ->
                 YohakuButton(
                     text = if (done) "完成" else "继续开启",
-                    onClick = { if (allDone) onDismiss() else openNext() },
+                    onClick = {
+                        if (allDone) {
+                            Analytics.log("onboarding_completed")
+                            onDismiss()
+                        } else {
+                            openNext()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -227,7 +237,10 @@ fun OnboardingScreen(
                 color = colors.neutral7,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onDismiss)
+                    .clickable {
+                        Analytics.log("onboarding_skipped")
+                        onDismiss()
+                    }
                     .padding(vertical = 10.dp),
                 textAlign = TextAlign.Center,
             )

@@ -91,7 +91,7 @@ class UpdateRepository @Inject constructor(
             val latest = json.optString("versionName").trim().removePrefix("v")
             if (latest.isBlank()) throw IOException("版本信息为空")
             val asset = assetFor(json, deviceAbi())
-            UpdateInfo(
+            val info = UpdateInfo(
                 currentVersion = BuildConfig.VERSION_NAME,
                 latestVersion = latest,
                 isNewer = isNewer(BuildConfig.VERSION_NAME, latest),
@@ -101,6 +101,9 @@ class UpdateRepository @Inject constructor(
                 apkSha256 = asset.sha256,
                 releaseUrl = json.optString("releaseUrl"),
             )
+            Analytics.log("update_check", "newer" to info.isNewer)
+            if (info.isNewer) Analytics.log("update_available", "version" to info.latestVersion)
+            info
         }
     }
 
@@ -173,6 +176,7 @@ class UpdateRepository @Inject constructor(
             // 同一版本已经下载并校验过 → 直接复用,不重复下载
             if (target.exists() && isReusable(target, info)) {
                 _download.value = DownloadState.Ready(target)
+                Analytics.log("update_download_succeeded", "version" to info.latestVersion, "reused" to true)
                 return
             }
             if (target.exists()) target.delete()
@@ -197,11 +201,14 @@ class UpdateRepository @Inject constructor(
                 throw IOException(it)
             }
             _download.value = DownloadState.Ready(target)
+            Analytics.log("update_download_succeeded", "version" to info.latestVersion)
         } catch (cancelled: CancellationException) {
             _download.value = DownloadState.Idle
             throw cancelled
         } catch (error: Exception) {
             _download.value = DownloadState.Failed(error.message ?: "下载失败")
+            Analytics.log("update_download_failed", "version" to info.latestVersion, "reason" to error.javaClass.simpleName)
+            Crash.recordException(error, "op" to "update_download", "version" to info.latestVersion)
         }
     }
 
@@ -367,7 +374,10 @@ class UpdateRepository @Inject constructor(
     /** 用户已忽略的版本(该版本不再主动提示)。 */
     suspend fun dismissedVersion(): String = settings.currentSettings().dismissedVersion
 
-    suspend fun ignoreVersion(version: String) = settings.setDismissedVersion(version)
+    suspend fun ignoreVersion(version: String) {
+        Analytics.log("update_ignored", "version" to version)
+        settings.setDismissedVersion(version)
+    }
 
     private fun getJson(url: String): JSONObject {
         val conn = URL(url).openConnection() as HttpURLConnection

@@ -20,6 +20,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 
@@ -40,6 +41,11 @@ class NextClassWidget : GlanceAppWidget() {
 
 class NextClassWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = NextClassWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        Analytics.log("widget_added", "kind" to "next_class")
+    }
 }
 
 @Composable

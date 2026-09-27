@@ -118,7 +118,7 @@ class ImportViewModel @Inject constructor(
     fun importAll(applyDetectedConfig: Boolean) {
         viewModelScope.launch {
             if (applyDetectedConfig) applyDetected()
-            courseRepository.importAll(_parsedCourses.value)
+            courseRepository.importAll(_parsedCourses.value, source = "jwxt")
             _imported.value = true
         }
     }

@@ -67,6 +67,28 @@ npx netlify-cli deploy --prod --dir netlify/static
 
 免费额度为 12.5 万次请求 / 月,登录 + 同步场景绰有余裕。
 
+## App Check
+
+反代端点默认对公网开放,`/auth/*` 与 `/firestore/*` 可被任意调用(直接烧 Firebase 配额)。App Check 用设备 attestation 把「只有本应用发出的请求」区分出来:
+
+1. Firebase 控制台 → **App Check** → 为 Android 应用注册 **Play Integrity** 提供方;并把 release 签名(与 CI 用的 keystore 对应)的 SHA-256 登记到项目设置,debug 签名也一并登记便于真机调试。
+2. 打开 Play Integrity 提供方;如需调试,**为 debug 包登记 Debug token**:debug 首次运行会在 logcat 打印
+   `Enter this debug secret into the allow list in the Firebase Console ...`,把它粘进控制台。
+3. 客户端在 `Application` 启动时安装 provider(`data/AppCheck.kt`:release = Play Integrity / debug = Debug),
+   经 `FirebaseGateway` 给 Auth 与 Firestore 请求附 `X-Firebase-AppCheck`;反代(`proxy.mjs`)把该头**透传**给上游。
+4. **先在控制台观察比例,不要立刻强制**。确认绝大多数请求都带上了有效 token 后,再对 Cloud Firestore
+   (以及按需 Identity Platform)打开强制;强制后不带有效 token 的请求会被拒。
+
+> **无 GMS 的坑**:Play Integrity 依赖 GMS,华为等无 GMS 设备拿不到 token。客户端对此**失败放行**
+> (不加头、不阻断登录与同步),所以在无 GMS 用户占比明确前**不要开强制**,否则会掐断这些设备的登录与同步。
+
+### 诊断与远程开关
+
+- Analytics / Crashlytics / Performance 走官方 SDK 直连 Google 域名(与其它 SDK 同一已知限制:大陆可能上报不上);
+  它们都收在 `data/` 的薄门面后面(`Analytics.kt` / `Crash.kt` / `Perf.kt`)。
+- Remote Config 只做远程开关 / 灰度,默认值写在 `data/RemoteConfig.kt` 里,拉取失败或大陆取不到时一律回落默认值。
+  当前可用键:`splash_enabled`、`update_prerelease_default`。
+
 ## 在线更新接口
 
 「设置 → 检查更新」由反代提供两个接口,客户端不直连 GitHub:

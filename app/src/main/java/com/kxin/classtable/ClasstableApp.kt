@@ -14,9 +14,13 @@ import androidx.work.WorkManager
 import com.kxin.classtable.notify.ReminderSelfHealWorker
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.AgendaRepository
+import com.kxin.classtable.data.AppCheck
 import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.FcmTokens
+import com.kxin.classtable.data.RemoteConfig
+import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
@@ -63,7 +67,10 @@ class ClasstableApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // App Check 必须先于任何 Firebase 调用安装 provider(给反代请求附 attestation)
+        AppCheck.init(this)
         Analytics.init(this)
+        RemoteConfig.init(this)
 
         // Crashlytics:崩溃自动上报;附带版本信息便于定位。无网络时本地缓存,恢复后补传。
         runCatching {
@@ -72,6 +79,9 @@ class ClasstableApp : Application() {
                 setCustomKey("version_code", BuildConfig.VERSION_CODE)
             }
         }
+
+        // Remote Config 后台拉一次;失败/大陆取不到就用代码默认值,不影响任何功能
+        scope.launch { RemoteConfig.fetch() }
 
         // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
@@ -110,6 +120,9 @@ class ClasstableApp : Application() {
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌
         scope.launch {
             authRepository.currentUser.collect { user ->
+                Analytics.setUserId(user?.uid)
+                Crash.setUserId(user?.uid)
+                Crash.log(if (user != null) "signed in" else "signed out")
                 if (user != null) {
                     syncWithRetry()
                     FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
@@ -118,6 +131,19 @@ class ClasstableApp : Application() {
                 }
             }
         }
+
+        // 用户属性:主题 / 通知形态 / ROM,供分析分段用;值变了才写
+        scope.launch {
+            settingsRepository.settings
+                .map { Triple(it.themeMode.name, it.notifyMode, it.notificationsEnabled) }
+                .distinctUntilChanged()
+                .collect { (theme, notifyMode, notifications) ->
+                    Analytics.setUserProperty("theme_mode", theme)
+                    Analytics.setUserProperty("notify_mode", notifyMode)
+                    Analytics.setUserProperty("notifications_enabled", notifications.toString())
+                }
+        }
+        scope.launch { Analytics.setUserProperty("rom_type", RomHelper.detect().name) }
 
         // 网络恢复时自动补一次同步(直连抖动/切换 WiFi 流量后不用手动操作)
         val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -154,6 +180,7 @@ class ClasstableApp : Application() {
     /** Firestore 直连抖动时自动重试,最多 3 次。 */
     private suspend fun syncWithRetry() {
         repeat(3) { attempt ->
+            Crash.log("sync attempt ${attempt + 1}")
             if (syncRepository.syncNow().isSuccess) return
             if (attempt < 2) delay(5_000)
         }

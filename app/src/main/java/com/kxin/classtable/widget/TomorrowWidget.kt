@@ -11,6 +11,7 @@ import androidx.glance.layout.Column
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import java.time.LocalDate
@@ -33,6 +34,11 @@ class TomorrowWidget : GlanceAppWidget() {
 
 class TomorrowWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TomorrowWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        Analytics.log("widget_added", "kind" to "tomorrow")
+    }
 }
 
 @Composable

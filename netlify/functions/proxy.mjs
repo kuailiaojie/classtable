@@ -267,6 +267,9 @@ export default async (req) => {
   const headers = { "Content-Type": "application/json" };
   const authorization = req.headers.get("authorization");
   if (authorization) headers.Authorization = authorization;
+  // App Check token:必须透传到上游,Firebase 才能按它评估请求(经反代时同样生效)。
+  const appCheck = req.headers.get("x-firebase-appcheck");
+  if (appCheck) headers["X-Firebase-AppCheck"] = appCheck;
 
   // GET/HEAD 无 body;其余方法读取请求体(可能为空串)
   let body;

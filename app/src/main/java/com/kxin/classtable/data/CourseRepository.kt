@@ -90,7 +90,8 @@ class CourseRepository @Inject constructor(
         scope.launch { sync.syncNow() }
     }
 
-    suspend fun importAll(courses: List<Course>) {
+    /** [source] 标明导入来源(jwxt / table / ai),供分析区分各条导入链路的成功率。 */
+    suspend fun importAll(courses: List<Course>, source: String = "unknown") {
         val now = System.currentTimeMillis()
         // 导入即钉住时刻:按当前作息(导入前刚被脚本覆盖的那一张)把节次换算成具体时刻存下来,
         // 之后改作息不会再把这些课程的时间点带跑。
@@ -123,7 +124,7 @@ class CourseRepository @Inject constructor(
         dao.upsertAll(pinned.map { Schedule.pinCourseTimes(it, periods) }
             .map { CourseEntity.fromDomain(it.copy(updatedAt = now)) })
         postChangeSideEffects()
-        Analytics.log("courses_imported", "count" to courses.size)
+        Analytics.log("courses_imported", "source" to source, "count" to courses.size)
         scope.launch { sync.syncNow() }
     }
 

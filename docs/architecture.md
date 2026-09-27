@@ -13,7 +13,7 @@
 | 本地存储 | Room 2.7.0、DataStore 1.1.1、SecurityCrypto 1.1.0 |
 | 后台任务 | WorkManager 2.10.0 |
 | 小组件 | Glance 1.1.1 |
-| 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM,BOM 33.7.0)经 Netlify Functions 反代 |
+| 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM / App Check / Performance / Remote Config,BOM 33.7.0)经 Netlify Functions 反代 |
 | 网络 | HttpURLConnection + REST(认证与同步不依赖 Firebase SDK) |
 | 农历 | `cn.6tail:lunar` 1.7.7(纯 Java,无第三方依赖;日历周条的农历 / 节气 / 节日) |
 
@@ -56,6 +56,8 @@
 
 - **客户端**:本地优先。Room 持久化课程数据,未登录 = 访客本地模式;登录后 pull → 合并(updatedAt 后者胜)→ 应用墓碑 → push。
 - **反代中间层**:Android 的 Firebase Auth/Firestore 官方 SDK 硬编码 Google 域名,大陆无法直连。本项目移除 `firebase-auth` / `firebase-firestore` SDK 依赖,改用 REST 实现,全部请求经自建 Netlify Function 转发(方法 / query / body / Authorization ID token 原样透传)。`firebase-analytics` / `firebase-messaging` / `firebase-crashlytics` 保留官方 SDK。同步由实时监听改为按需 pull / push(App 启动、登录、网络恢复时触发),对课程表场景无感知差异。
+- **App Check**:客户端给经反代的 Auth / Firestore 请求附上 attestation token(release 用 Play Integrity,debug 用 Debug provider),反代把 `X-Firebase-AppCheck` 透传给上游,由 Firebase 端校验 —— 反代地址不再能被随意当中转滥用。**失败放行**:拿不到 token(如无 GMS 设备)时不加头、不阻断登录与同步,强制校验需在控制台按线上已校验比例逐步开启。
+- **诊断与远程开关**:Analytics / Crashlytics / Performance / Remote Config 收在薄门面后面(`data/Analytics.kt` / `Crash.kt` / `Perf.kt` / `RemoteConfig.kt`),便于日后整体替换(见 [workers-backend.md](workers-backend.md))。埋点不发送可识别个人的信息;Remote Config 只做远程开关 / 灰度,默认值写在代码里,**不接管任何确定性逻辑**。
 - **提醒通道**:本地精确闹钟是准点提醒主力(离线可用),FCM 为实时增强通道。排程实现见 `notify/ReminderPlanner.kt`:按「排程签名 + 已排台账」管理 8 天滚动窗口(课程与日程共用这一窗口),并排一个次日 00:05 的自续期闹钟;实时活动由前台服务持有,payload 持久化以便进程被杀后恢复。课程与日程的闹钟用不同 action 排(`ACTION_COURSE_REMIND` / `ACTION_AGENDA_REMIND`),互不覆盖。
 - **状态栏胶囊(实时活动)**:国产胶囊(荣耀灵动胶囊 / 小米超级岛 / OPPO 实况通知等)都按 Android 16 Live Updates 规范提升通知,条件是:清单声明 `POST_PROMOTED_NOTIFICATIONS`、通知 `ongoing` 且有 `contentTitle`、样式为 BigTextStyle / ProgressStyle 等且不用自定义 RemoteViews、并主动请求提升(`android.requestPromotedOngoing` + `android.shortCriticalText`)。实现见 `notify/CapsuleCompat.kt`(提升请求与系统设置入口)与其中的 `XiaomiIsland`(小米超级岛的 `miui.focus.param`,先查设备能力再补参数)。实时活动前台服务类型为 `specialUse`,需带 `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` 说明。
 
@@ -85,7 +87,8 @@ tools/build-netlify.mjs       # 适配器 assets → Netlify 静态 bundle
 `power2.out` / `expo.out` / `back.out` 对应成 `CubicBezierEasing`,只动合成层的
 alpha / translation / scale,同类元素统一缓动、列表与课程块按序号错峰)。导航转场
 (MainActivity 的 `navEnter/navExit/navPopEnter/navPopExit`)、开屏时间线、底部导航指示、
-弹窗与底部面板、按压反馈、切周视差、数字滚动都由它驱动。
+弹窗与底部面板、按压反馈、切周视差、数字滚动都由它驱动。开屏的品牌条由 `ui/BrandMark.kt`
+用 Compose 自绘(逐条生长 + 扫光,颜色取主题 token),整条时间线在 `ui/SplashOverlay.kt` 编排。
 
 ## 数据模型与同步
 

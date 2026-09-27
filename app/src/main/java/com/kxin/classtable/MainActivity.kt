@@ -47,6 +47,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kxin.classtable.data.Analytics
+import com.kxin.classtable.data.RemoteConfig
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.data.SurveyPrompt
@@ -144,7 +146,9 @@ fun ClasstableRoot(
         val context = LocalContext.current
         var onboardingDismissed by rememberSaveable { mutableStateOf(false) }
         // 开屏退场后才让引导入场:两者接成一次连续编排,而不是引导在开屏后面「偷偷」播完
-        var splashExiting by remember { mutableStateOf(false) }
+        // 远程开关(默认 true)可兜底关掉开屏;Remote Config 缓存值在下次启动生效
+        val splashEnabled = remember { RemoteConfig.getBoolean("splash_enabled") }
+        var splashExiting by remember { mutableStateOf(!splashEnabled) }
         val needsOnboarding = !settings.onboardingDone && !onboardingDismissed && (
             !RomHelper.notificationsEnabled(context) ||
                 !RomHelper.exactAlarmGranted(context) ||
@@ -168,15 +172,19 @@ fun ClasstableRoot(
             }.getOrDefault(false)
             if (!handledDeepLink && !courseId.isNullOrBlank()) {
                 handledDeepLink = true
+                Analytics.log("reminder_tapped", "kind" to "course")
                 nav.navigate("course_detail/$courseId")
             } else if (!handledDeepLink && !agendaId.isNullOrBlank()) {
                 handledDeepLink = true
+                Analytics.log("reminder_tapped", "kind" to "agenda")
                 nav.navigate("agenda_form?eventId=$agendaId&date=$agendaDay")
             } else if (!handledDeepLink && openUpdate) {
                 handledDeepLink = true
+                Analytics.log("notification_tapped", "kind" to "update")
                 nav.navigate("update")
             } else if (!handledDeepLink && openRainClassroom) {
                 handledDeepLink = true
+                Analytics.log("notification_tapped", "kind" to "rain_classroom")
                 nav.navigate("rain_classroom")
             }
         }
@@ -189,6 +197,8 @@ fun ClasstableRoot(
             // 内容不被最后一屏压住的问题,改由各根标签页在自己的滚动内容里预留
             // navReservedHeight 解决(预留量在滚动区内,所以中途照样会从栏下经过)。
             val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
+            // 屏幕追踪:路由名即屏幕名
+            LaunchedEffect(currentRoute) { currentRoute?.let { Analytics.screenView(it) } }
             val showBottomNav = currentRoute in ROOT_TABS
             Box(
                 modifier = Modifier
@@ -301,7 +311,7 @@ fun ClasstableRoot(
                     },
                 )
             }
-            SplashOverlay(onExitStart = { splashExiting = true })
+            if (splashEnabled) SplashOverlay(onExitStart = { splashExiting = true })
             // 启动静默检查更新(24h 节流);有新版弹非阻断提示
             var updateAutoChecked by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(Unit) {
