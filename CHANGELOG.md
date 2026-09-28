@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.3.0 (2026-09-28)
+
+正在上的那节课,通知里终于有一条会走的进度条。
+
+### 提醒
+- **课中实时活动补上确定态进度条**:课前 → 上课上屏时按本节课时长设好起点,上课期间每分钟
+  原地更新一次(同一个通知 id + `setOnlyAlertOnce`,不重起前台服务、也不另发一条),条子
+  与真实上课进度一致。官方对 progress-centric 通知的要求本就是「随行程频繁且准确地更新进度」
+  (developer.android.com/about/versions/16/features/progress-centric-notifications)。
+- 正文仍只跟状态走(即将开始 / 上课中),秒级倒计时交给系统的 `when` + Chronometer 自己走 ——
+  2.2.2 这两条没有改动,现在随时间变化的只有进度条。
+- Android 16 以下同样回落成**确定态**系统进度条(`setProgress(100, x, false)`),不再是转圈的不确定态。
+
+### 构建
+- 工具链升到 AGP 9.3.0 / Gradle 9.5.0 / Kotlin 2.2.10(AGP 内置)/ KSP 2.3.12 / Hilt 2.60.1;
+  Compose BOM → 2026.09.00、Firebase BOM → 34.19.0 等依赖一并升级,compileSdk 36 → 37。
+- built-in Kotlin 下 `kotlin-parcelize` 插件不生效(Google Issue 478401081),两个数据类改为
+  手写 Parcelable 实现。
+
+### 版本
+- 2.2.2(67) → 2.3.0(68)。
+
 ## 2.2.2 (2026-09-28)
 
 修掉实时活动在课中「每隔一会儿从胶囊里跳出来一下」的根因,并修好通知渠道改名与一条来历不明的渠道。

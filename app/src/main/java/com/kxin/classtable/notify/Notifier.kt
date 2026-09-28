@@ -200,9 +200,11 @@ object Notifier {
      * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随课程推进;
      * 通知带「取消本节课提醒」按钮,划掉通知也等同于取消本节提醒(见 delete intent)。
      *
-     * 倒计时交给系统的 `when` + Chronometer **自己走秒**:只在状态切换(课前 → 上课)时
-     * 重发一次,其余时间不重发 —— 国产胶囊(荣耀灵动胶囊 / 小米超级岛)会把每次重发当成
-     * 「又一条新提醒」再展开一次,那正是「每隔一会儿跳出来一下」的来源。
+     * 倒计时交给系统的 `when` + Chronometer **自己走秒**,正文只跟状态走(不再写分钟数);
+     * 上课中的进度条是**确定态**,由服务按分钟原地更新(见 [CourseLiveUpdateService])——
+     * 官方对 progress-centric 通知的要求就是随行程「频繁且准确地更新进度」
+     * (developer.android.com/about/versions/16/features/progress-centric-notifications)。
+     * 每次更新都是同一条通知(id 不变)+ `setOnlyAlertOnce`,不重新拉起服务、不另发一条。
      *
      * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊认的是
      * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求只在平台 Builder 上可达。
@@ -279,8 +281,8 @@ object Notifier {
                         // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
                         .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
                         .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
-                        // 不确定态:进度由系统自己动,不再逐分钟重推百分比(重推会触发胶囊重弹)
-                        .setProgressIndeterminate(true)
+                        // 确定态:按本节课时长推进,由服务在上课期间按分钟原地更新
+                        .setProgress(classProgressPercent(startAtMillis, endAtMillis, now))
                 } else {
                     Notification.BigTextStyle().bigText(expandedText)
                 },
@@ -288,7 +290,7 @@ object Notifier {
         } else {
             builder.setStyle(Notification.BigTextStyle().bigText(expandedText))
             if (progressing) {
-                builder.setProgress(0, 0, true)
+                builder.setProgress(100, classProgressPercent(startAtMillis, endAtMillis, now), false)
             }
         }
 
@@ -307,6 +309,15 @@ object Notifier {
         return builder.build().also { notification ->
             CapsuleCompat.logPromotionState(context, notification)
         }
+    }
+
+    /**
+     * 本节课已进行的百分比(0–100),课前夹到 0、下课后夹到 100。
+     * 服务也用它算「进度有没有变」来决定要不要原地更新(见 [CourseLiveUpdateService])。
+     */
+    internal fun classProgressPercent(startAt: Long, endAt: Long, now: Long): Int {
+        val span = (endAt - startAt).coerceAtLeast(1L)
+        return (((now - startAt).toDouble() / span) * 100).toInt().coerceIn(0, 100)
     }
 
     private fun minutesBetween(from: Long, to: Long): Int =
