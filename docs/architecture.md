@@ -6,14 +6,14 @@
 
 | 分类 | 选型 |
 |---|---|
-| 语言 | Kotlin 2.1.0 |
-| UI | Jetpack Compose(BOM 2024.12.01),自建 Yohaku 设计系统,不沿用 Material3 默认外观 |
-| 构建 | AGP 8.7.3 / KSP(`2.1.0-1.0.29`)/ Gradle Wrapper(已提交) |
-| 架构 | MVVM + Hilt 2.54 |
-| 本地存储 | Room 2.7.0、DataStore 1.1.1、SecurityCrypto 1.1.0 |
-| 后台任务 | WorkManager 2.10.0 |
-| 小组件 | Glance 1.1.1 |
-| 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM / App Check / Performance / Remote Config,BOM 33.7.0)经 Netlify Functions 反代 |
+| 语言 | Kotlin 2.2.10(由 AGP 9 内置 Kotlin 提供,不再单独应用 `kotlin-android` 插件) |
+| UI | Jetpack Compose(BOM 2026.09.00),自建 Yohaku 设计系统,不沿用 Material3 默认外观 |
+| 构建 | AGP 9.3.0 / Gradle 9.5.0(Wrapper 已提交)/ KSP 2.3.12 / Hilt 编译器走 KSP(已弃用 kapt) |
+| 架构 | MVVM + Hilt 2.60.1 |
+| 本地存储 | Room 2.8.5、DataStore 1.2.1、SecurityCrypto 1.1.0 |
+| 后台任务 | WorkManager 2.12.0 |
+| 小组件 | Glance 1.2.0 |
+| 后端 | Firebase(Auth / Firestore / Analytics / Crashlytics / FCM / App Check / Performance / Remote Config,BOM 34.19.0)经 Netlify Functions 反代 |
 | 网络 | HttpURLConnection + REST(认证与同步不依赖 Firebase SDK) |
 | 农历 | `cn.6tail:lunar` 1.7.7(纯 Java,无第三方依赖;日历周条的农历 / 节气 / 节日) |
 
@@ -21,8 +21,8 @@
 
 | 项 | 要求 |
 |---|---|
-| IDE | Android Studio(含 JDK 17+) |
-| SDK | compileSdk 36 / targetSdk 36 / minSdk 26(Android 8.0+) |
+| IDE | Android Studio Quail 3(2026.1.3)或更高(含 JDK 17+,AGP 9 最低 JDK 17) |
+| SDK | compileSdk 37 / targetSdk 36 / minSdk 26(Android 8.0+) |
 | 网络 | 首次 Sync 需联网下载依赖 |
 
 ## 构建

@@ -1,20 +1,44 @@
 package com.kxin.classtable.data.importer
 
 import android.content.Context
+import android.os.Parcel
 import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
 import org.json.JSONObject
 import java.io.File
 
-@Parcelize
+// 注:@Parcelize(kotlin-parcelize 插件)在 AGP 9 的 built-in Kotlin 下不生效
+// (Google Issue 478401081),故这两个类手写 Parcelable 实现,行为与原生成代码一致。
 data class SchoolEntry(
     val id: String,
     val name: String,
     val initial: String,
     val folder: String,
-) : Parcelable
+) : Parcelable {
 
-@Parcelize
+    override fun describeContents(): Int = 0
+
+    override fun writeToParcel(dest: Parcel, flags: Int) {
+        dest.writeString(id)
+        dest.writeString(name)
+        dest.writeString(initial)
+        dest.writeString(folder)
+    }
+
+    companion object {
+        @JvmField
+        val CREATOR: Parcelable.Creator<SchoolEntry> = object : Parcelable.Creator<SchoolEntry> {
+            override fun createFromParcel(source: Parcel): SchoolEntry = SchoolEntry(
+                id = source.readString().orEmpty(),
+                name = source.readString().orEmpty(),
+                initial = source.readString().orEmpty(),
+                folder = source.readString().orEmpty(),
+            )
+
+            override fun newArray(size: Int): Array<SchoolEntry?> = arrayOfNulls(size)
+        }
+    }
+}
+
 data class AdapterEntry(
     val folder: String,
     val adapterId: String,
@@ -27,6 +51,37 @@ data class AdapterEntry(
 ) : Parcelable {
     /** 通用教务类适配器没有固定入口,需要用户手动填写教务系统网址。 */
     val needsManualUrl: Boolean get() = importUrl.isBlank()
+
+    override fun describeContents(): Int = 0
+
+    override fun writeToParcel(dest: Parcel, flags: Int) {
+        dest.writeString(folder)
+        dest.writeString(adapterId)
+        dest.writeString(adapterName)
+        dest.writeString(category)
+        dest.writeString(jsPath)
+        dest.writeString(importUrl)
+        dest.writeString(description)
+        dest.writeString(maintainer)
+    }
+
+    companion object {
+        @JvmField
+        val CREATOR: Parcelable.Creator<AdapterEntry> = object : Parcelable.Creator<AdapterEntry> {
+            override fun createFromParcel(source: Parcel): AdapterEntry = AdapterEntry(
+                folder = source.readString().orEmpty(),
+                adapterId = source.readString().orEmpty(),
+                adapterName = source.readString().orEmpty(),
+                category = source.readString().orEmpty(),
+                jsPath = source.readString().orEmpty(),
+                importUrl = source.readString().orEmpty(),
+                description = source.readString().orEmpty(),
+                maintainer = source.readString().orEmpty(),
+            )
+
+            override fun newArray(size: Int): Array<AdapterEntry?> = arrayOfNulls(size)
+        }
+    }
 }
 
 /**
