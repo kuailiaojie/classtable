@@ -162,13 +162,16 @@ object Notifier {
     }
 
     /**
-     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随分钟推进;
+     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」;
      * 通知带「取消本节课提醒」按钮,划掉通知也等同于取消本节提醒(见 delete intent)。
      *
-     * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊(荣耀灵动胶囊 /
-     * 小米超级岛 / OPPO 实况通知)认的是 Android 16 的 Live Updates 规范,
-     * 需要 `ProgressStyle`(平台 API)+ `setRequestPromotedOngoing` + `setShortCriticalText`,
-     * 这三者都只在平台 Builder 上可达。条件见 [CapsuleCompat] 的说明。
+     * **文案只跟状态走,不写分钟数**:分钟倒计时交给系统的 `when`(见下面的 setWhen),
+     * 每次重发都是一条「新提醒」—— 国产胶囊(荣耀灵动胶囊 / 小米超级岛)会再展开一次,
+     * 所以这张通知在整个课前到下课之间只在状态切换时上屏两三次,不按分钟重发。
+     *
+     * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊认的是
+     * Android 16 的 Live Updates 规范,`ProgressStyle`(平台 API)+ 提升请求(`android.requestPromotedOngoing`)
+     * 只在平台 Builder 上可达。条件见 [CapsuleCompat] 的说明。
      */
     fun buildLiveCourse(
         context: Context,
@@ -177,34 +180,31 @@ object Notifier {
         location: String,
         startAtMillis: Long,
         endAtMillis: Long,
-        leadMinutes: Int,
         muteKey: String,
         now: Long,
+        /**
+         * 静默上屏:只改内容,不再提醒第二次(重试闹钟补发、进程被杀后重启走这条)。
+         * 置 true 时清掉声音 / 振动 / 默认提醒方式 —— 这句话在今天只剩兜底意义:
+         * 真正防止「弹」的是不按分钟重发,见本方法的说明。
+         */
+        silent: Boolean = false,
         /** 该课程最新一条公告标题;只进展开文本,不动 bodyText/chipText(胶囊短文案放不下)。 */
         announcement: String? = null,
     ): Notification {
         ensureChannels(context)
 
-        val minutesToStart = minutesBetween(now, startAtMillis)
-        val minutesToEnd = minutesBetween(now, endAtMillis)
         val inClass = now >= startAtMillis
         val finished = now >= endAtMillis
         val timeText = "${clock(startAtMillis)}–${clock(endAtMillis)}"
         val placeText = location.ifBlank { "未设置地点" }
 
         val statusLine = when {
-            !inClass && minutesToStart > 0 -> "还有 $minutesToStart 分钟上课"
-            !inClass -> "马上就要上课"
-            !finished && minutesToEnd > 0 -> "上课中 · 还有 $minutesToEnd 分钟下课"
+            !inClass -> "即将开始"
+            !finished -> "上课中"
             else -> "已下课"
         }
         // 胶囊短文案:纯文本、尽量 ≤7 字 —— 状态栏胶囊宽 96dp,放不下就只剩图标
-        val chipText = when {
-            !inClass && minutesToStart > 0 -> "${minutesToStart}分钟"
-            !inClass -> "准备上课"
-            !finished && minutesToEnd > 0 -> "${minutesToEnd}分钟"
-            else -> "已下课"
-        }
+        val chipText = statusLine
         val bodyText = "$statusLine · $timeText"
         val expandedText = buildString {
             append(bodyText)
@@ -214,6 +214,8 @@ object Notifier {
             }
         }
         val progressing = inClass && !finished
+        // 课前倒数到上课,上课后倒数到下课:由系统按 when 自己走秒,不需要我们重发
+        val countdownTo = if (inClass) endAtMillis else startAtMillis
 
         val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
             .setSmallIcon(R.drawable.ic_notify)
@@ -224,7 +226,9 @@ object Notifier {
             .setDeleteIntent(cancelLivePendingIntent(context, muteKey, endAtMillis))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(false)
+            // 状态栏胶囊 / 状态栏上的「还有多久」由系统按 when 自己倒计时:不重发也能一直走
+            .setWhen(countdownTo)
+            .setShowWhen(true)
             // 固定用默认色:自定义颜色会让部分系统的胶囊强制按普通通知渲染
             .setColor(Notification.COLOR_DEFAULT)
             .setCategory(
@@ -236,14 +240,22 @@ object Notifier {
                 cancelLivePendingIntent(context, muteKey, endAtMillis),
             )
 
+        // 兜底静默:清掉声音 / 振动 / 默认提醒方式,补发的这次不再响一声
+        if (silent) {
+            builder.setSound(null)
+            builder.setVibrate(null)
+            builder.setDefaults(0)
+        }
+
         if (Build.VERSION.SDK_INT >= 36) {
             builder.setStyle(
                 if (progressing) {
+                    // 进度轨改成「系统自己动」的不确定态:这类机型上进度条不会再被逐分钟重发推进,
+                    // 写死一个百分比只会永远停在那一刻
                     Notification.ProgressStyle()
-                        // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
                         .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
                         .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
-                        .setProgress(progressPercent(startAtMillis, endAtMillis, leadMinutes, now))
+                        .setProgressIndeterminate(true)
                 } else {
                     Notification.BigTextStyle().bigText(expandedText)
                 },
@@ -251,15 +263,11 @@ object Notifier {
         } else {
             builder.setStyle(Notification.BigTextStyle().bigText(expandedText))
             if (progressing) {
-                builder.setProgress(
-                    100,
-                    progressPercent(startAtMillis, endAtMillis, leadMinutes, now),
-                    false,
-                )
+                builder.setProgress(0, 0, true)
             }
         }
 
-        CapsuleCompat.requestPromotion(builder, chipText)
+        CapsuleCompat.requestPromotion(builder)
         XiaomiIsland.applyTo(
             builder = builder,
             context = context,
@@ -273,18 +281,6 @@ object Notifier {
         return builder.build().also { notification ->
             CapsuleCompat.logPromotionState(context, notification)
         }
-    }
-
-    /** 进度百分比:课前从「提前量」那一刻推进到上课,上课后按本节课时长推进。 */
-    private fun progressPercent(startAt: Long, endAt: Long, leadMinutes: Int, now: Long): Int {
-        val from = if (now < startAt) {
-            startAt - leadMinutes.coerceAtLeast(0) * 60_000L
-        } else {
-            startAt
-        }
-        val to = if (now < startAt) startAt else endAt
-        val span = (to - from).coerceAtLeast(1L)
-        return (((now - from).toFloat() / span) * 100).toInt().coerceIn(0, 100)
     }
 
     private fun minutesBetween(from: Long, to: Long): Int =

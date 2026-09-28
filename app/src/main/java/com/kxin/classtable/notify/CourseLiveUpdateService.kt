@@ -25,15 +25,20 @@ import kotlinx.coroutines.withContext
 
 /**
  * 课程进行中的常驻通知(实时活动):从「提前量」时刻起持有通知,覆盖
- * 课前倒计时 → 上课中(还有 N 分钟下课)→ 下课,下课 1 分钟后自动收掉。
+ * 课前倒计时 → 上课中 → 下课,下课 1 分钟后自动收掉。
  *
  * 与旧实现的差别:
  * - **平台 Notification.Builder + ProgressStyle / 提升请求**:状态栏胶囊(荣耀灵动胶囊、
  *   小米超级岛等)只提升符合 Android 16 Live Updates 规范的通知,细节见 [CapsuleCompat]。
  * - **前台服务类型 specialUse**(而非 dataSync):实时活动是「持续展示进行中状态」,dataSync 在
  *   Android 15+ 有每日时长上限,且胶囊机型按 specialUse 判定(清单里另有子类型说明)。
- * - **按分钟边界对齐刷新**(不用 chronometer:它会被系统替换掉状态栏胶囊的文案)。
- * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课。
+ * - **只在状态切换时上屏,不按分钟重发**:一节课只上屏两次 —— 课前(倒计时到上课)、
+ *   上课(倒计时到下课)。国产胶囊会把每次重发当成一条新提醒再展开一次,每分钟重发就是
+ *   「每分钟弹一下」;分钟数改由通知的 `when` 让系统自己走(见 [Notifier.buildLiveCourse])。
+ * - **重试闹钟不重发**:同一节课已经在本进程上屏过时,重试(+1/+3/+5 分)只保证服务活着,
+ *   通知原样不动,免得又弹一次。
+ * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课,
+ *   恢复出来的那次只静默刷新,不再提醒一遍。
  * - **静音检查**:点了「取消本节课提醒」立即收掉,并且不会因为重试闹钟又冒出来。
  * - 通知权限/渠道被关掉时自停,不做无意义的常驻。
  */
@@ -42,11 +47,16 @@ class CourseLiveUpdateService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var refreshJob: Job? = null
 
+    /** 本进程当前已经上屏的那节课:重试闹钟再打进来时据此判断「通知要不要动」。 */
+    private var onScreen: LiveCourse? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val planner = planner()
-        val payload = intent?.toLiveCourse() ?: planner.restoreLive()
+        // 从本地恢复出来的 payload(重试闹钟补发、进程被杀后按 START_STICKY 重启)
+        val restored = planner.restoreLive()
+        val payload = intent?.toLiveCourse() ?: restored
         val now = System.currentTimeMillis()
 
         val usable = payload != null &&
@@ -62,12 +72,16 @@ class CourseLiveUpdateService : Service() {
         }
 
         planner.saveLive(payload!!)
-        startForegroundNotification(payload, now)
-        startRefreshLoop(planner, payload)
+        if (onScreen != payload) {
+            // 只有第一次(或换了一节课)才动通知:重发 = 胶囊再展开一次
+            startForegroundNotification(payload, now, silent = payload == restored)
+            onScreen = payload
+            startRefreshLoop(planner, payload)
+        }
         return START_STICKY
     }
 
-    private fun startForegroundNotification(payload: LiveCourse, now: Long) {
+    private fun startForegroundNotification(payload: LiveCourse, now: Long, silent: Boolean) {
         val notification = Notifier.buildLiveCourse(
             context = this,
             courseId = payload.courseId,
@@ -75,10 +89,9 @@ class CourseLiveUpdateService : Service() {
             location = payload.location,
             startAtMillis = payload.startAtMillis,
             endAtMillis = payload.endAtMillis,
-            leadMinutes = payload.leadMinutes,
             muteKey = payload.muteKey,
             now = now,
-            // 首次上屏时取一次;后续由刷新循环更新(公告可能在课前那几分钟里刚发出来)
+            silent = silent,
             announcement = runBlocking { latestAnnouncementTitle(payload.courseId) },
         )
         runCatching {
@@ -94,19 +107,24 @@ class CourseLiveUpdateService : Service() {
         }
     }
 
+    /**
+     * 每分钟醒一次只做「该不该收掉」的检查;真正上屏只发生在**状态切换**那一刻
+     * (课前 → 上课)。分钟倒计时由系统的 `when` 自己走,不需要我们重发。
+     */
     private fun startRefreshLoop(planner: ReminderPlanner, payload: LiveCourse) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
+            var postedInClass = System.currentTimeMillis() >= payload.startAtMillis
             while (isActive) {
-                // 对齐到下个整分钟:状态栏胶囊上的「N 分钟」跟着墙上时钟跳
-                val delayToNextMinute = 60_000L - System.currentTimeMillis() % 60_000L + 150L
-                delay(delayToNextMinute.coerceAtLeast(1_000L))
+                delay(60_000L - System.currentTimeMillis() % 60_000L + 150L)
 
                 val now = System.currentTimeMillis()
                 if (now >= payload.endAtMillis + 60_000L) break
                 if (planner.isMuted(payload.muteKey, now)) break
                 if (!Notifier.canPost(this@CourseLiveUpdateService, Notifier.CHANNEL_COURSE_LIVE)) break
 
+                val inClass = now >= payload.startAtMillis
+                if (inClass == postedInClass) continue
                 val notification = Notifier.buildLiveCourse(
                     context = this@CourseLiveUpdateService,
                     courseId = payload.courseId,
@@ -114,7 +132,6 @@ class CourseLiveUpdateService : Service() {
                     location = payload.location,
                     startAtMillis = payload.startAtMillis,
                     endAtMillis = payload.endAtMillis,
-                    leadMinutes = payload.leadMinutes,
                     muteKey = payload.muteKey,
                     now = now,
                     announcement = latestAnnouncementTitle(payload.courseId),
@@ -124,12 +141,14 @@ class CourseLiveUpdateService : Service() {
                         .notify(Notifier.LIVE_NOTIFICATION_ID, notification)
                 }.isSuccess
                 if (!posted) break
+                postedInClass = inClass
             }
             finish()
         }
     }
 
     private fun finish() {
+        onScreen = null
         planner().clearLive()
         stopForegroundNow()
         stopSelf()
