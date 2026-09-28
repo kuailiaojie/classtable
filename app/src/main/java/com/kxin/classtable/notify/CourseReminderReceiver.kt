@@ -97,45 +97,43 @@ class CourseReminderReceiver : BroadcastReceiver() {
         }
 
         val courseId = intent.getStringExtra(ReminderPlanner.EXTRA_COURSE_ID) ?: return
-        val startAt = intent.getLongExtra(ReminderPlanner.EXTRA_START_MILLIS, 0L)
-        val endAt = intent.getLongExtra(ReminderPlanner.EXTRA_END_MILLIS, 0L)
-        val lead = intent.getIntExtra(ReminderPlanner.EXTRA_LEAD, 10)
         val live = intent.getBooleanExtra(ReminderPlanner.EXTRA_LIVE, false)
         val now = System.currentTimeMillis()
-        // 已经下课就别再打扰(闹钟投递顺序不保证,重试闹钟可能晚到)
-        if (endAt in 1..now) return
+
+        // 当天的时间分段随闹钟一起带来(排程时按调休后的教学日算好);缺了就跳过
+        val payload = intent.toLiveUpdate() ?: return
+        val endAt = payload.endAtMillis() ?: return
+        // 已经下课就别再打扰(闹钟投递顺序不保证,相变闹钟可能晚到)
+        if (endAt <= now) return
 
         val settings = runBlocking { SettingsRepository(context).settings.first() }
         val periods = Schedule.parsePeriods(settings.periodTimes)
         val course = runBlocking { AppDatabase.get(context).courseDao().getById(courseId)?.toDomain() }
-        val name = course?.name ?: intent.getStringExtra(ReminderPlanner.EXTRA_COURSE_NAME).orEmpty()
-        val location = course?.location ?: intent.getStringExtra(ReminderPlanner.EXTRA_LOCATION).orEmpty()
+        val name = course?.name?.takeIf { it.isNotBlank() } ?: payload.name
+        val location = course?.location ?: payload.location
         val teacher = course?.teacher.orEmpty()
-        val startMinute = course?.let { Schedule.courseStartMinute(it, periods) }
-            ?: intent.getIntExtra(ReminderPlanner.EXTRA_START_MINUTE, -1)
+        val startMinute = course?.let { Schedule.courseStartMinute(it, periods) } ?: -1
+        val startAt = payload.startAtMillis()
+        val leadMinutes = if (startAt != null && now < startAt) {
+            ((startAt - now + 59_999L) / 60_000L).toInt()
+        } else {
+            0
+        }
+        // 课名/地点取**当下**的值(改课 / 换教室后到点显示的是新的),分段沿用排程时算好的
+        val effective = payload.copy(name = name, location = location)
 
-        val payload = LiveCourse(
-            courseId = courseId,
-            name = name,
-            location = location,
-            startAtMillis = startAt,
-            endAtMillis = endAt,
-            leadMinutes = lead,
-            muteKey = muteKey,
-        )
-
-        val started = live && startLiveUpdate(context, payload)
+        val started = live && startLiveUpdateService(context, effective)
         if (!started) {
             // 标准模式,或实时活动启动失败(后台启动被拒):普通高优先级通知兜底,保证必达
             Notifier.showCourseReminder(
                 context = context,
-                notificationId = Notifier.reminderId(muteKey.ifBlank { "$courseId:$startAt" }),
+                notificationId = Notifier.reminderId(muteKey.ifBlank { "$courseId:$endAt" }),
                 courseId = courseId,
                 courseName = name,
                 startMinute = startMinute,
                 location = location,
                 teacher = teacher,
-                leadMinutes = lead,
+                leadMinutes = leadMinutes,
                 announcement = latestAnnouncement(context, courseId, settings),
             )
         }
@@ -155,17 +153,4 @@ class CourseReminderReceiver : BroadcastReceiver() {
             runBlocking { YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(context), courseId) }
         }.getOrNull()
     }
-
-    private fun startLiveUpdate(context: Context, payload: LiveCourse): Boolean = runCatching {
-        context.startForegroundService(
-            Intent(context, CourseLiveUpdateService::class.java)
-                .putExtra(ReminderPlanner.EXTRA_COURSE_ID, payload.courseId)
-                .putExtra(ReminderPlanner.EXTRA_COURSE_NAME, payload.name)
-                .putExtra(ReminderPlanner.EXTRA_LOCATION, payload.location)
-                .putExtra(ReminderPlanner.EXTRA_START_MILLIS, payload.startAtMillis)
-                .putExtra(ReminderPlanner.EXTRA_END_MILLIS, payload.endAtMillis)
-                .putExtra(ReminderPlanner.EXTRA_LEAD, payload.leadMinutes)
-                .putExtra(ReminderPlanner.EXTRA_MUTE_KEY, payload.muteKey),
-        )
-    }.isSuccess
 }

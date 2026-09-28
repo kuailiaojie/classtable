@@ -118,12 +118,13 @@ class ReminderPlanner @Inject constructor(
 
     // —— 实时活动的 payload 持久化:进程被杀后服务重启仍能恢复「正在上的那节课」 ——
 
-    fun saveLive(payload: LiveCourse) {
+    fun saveLive(payload: LiveUpdate) {
         prefs.edit().putString(KEY_LIVE, payload.toJson().toString()).apply()
     }
 
-    fun restoreLive(): LiveCourse? = prefs.getString(KEY_LIVE, null)?.let { raw ->
-        runCatching { LiveCourse.fromJson(JSONObject(raw)) }.getOrNull()
+    fun restoreLive(): LiveUpdate? = prefs.getString(KEY_LIVE, null)?.let { raw ->
+        runCatching { LiveUpdate.fromJson(JSONObject(raw)) }.getOrNull()
+            ?.takeIf { it.segments.isNotEmpty() }
     }
 
     fun clearLive() {
@@ -172,22 +173,35 @@ class ReminderPlanner @Inject constructor(
                 val key = "${course.id}:${date.toEpochDay()}"
                 val trigger = startAt - lead * 60_000L
                 if (trigger <= now || trigger >= endAt) return@forEach
-                val payload = LiveCourse(
+                val segments = LiveUpdate.segmentsOf(course, date, periods, zone)
+                if (segments.isEmpty()) return@forEach
+                val payload = LiveUpdate(
                     courseId = course.id,
                     name = course.name,
                     location = course.location,
-                    startAtMillis = startAt,
-                    endAtMillis = endAt,
-                    leadMinutes = lead,
+                    timeText = Schedule.courseTimeText(course, periods),
                     muteKey = key,
+                    segments = segments,
                 )
                 val code = eventCode(date.toEpochDay(), course.id, LIVE_INDEX)
                 scheduleAlarm(
                     trigger = trigger,
                     requestCode = code,
-                    intent = reminderIntent(payload, live, startMinute),
+                    intent = reminderIntent(payload, live),
                 )
                 entries += Entry(code, ACTION_REMIND, course.id)
+                // 实时活动模式:每个相位边界(上课 / 课间 / 下课)再排一个闹钟。息屏时协程的
+                // delay 不按墙上时间推进,靠这些边界闹钟把相变补齐(服务醒着时自己也会到点刷新)。
+                if (live) {
+                    payload.refreshBoundaries()
+                        .filter { it > now && it != trigger }
+                        .forEachIndexed { index, boundary ->
+                            val boundaryCode =
+                                eventCode(date.toEpochDay(), course.id, LIVE_BOUNDARY_INDEX + index)
+                            scheduleAlarm(boundary, boundaryCode, reminderIntent(payload, live))
+                            entries += Entry(boundaryCode, ACTION_REMIND, course.id)
+                        }
+                }
             }
 
             // 明日课程预告(可选):前一天指定时刻提醒
@@ -352,18 +366,16 @@ class ReminderPlanner @Inject constructor(
         }
     }
 
-    private fun reminderIntent(payload: LiveCourse, live: Boolean, startMinute: Int): Intent =
+    private fun reminderIntent(payload: LiveUpdate, live: Boolean): Intent =
         Intent(context, CourseReminderReceiver::class.java)
             .setAction(ACTION_REMIND)
             .putExtra(EXTRA_LIVE, live)
             .putExtra(EXTRA_COURSE_ID, payload.courseId)
             .putExtra(EXTRA_COURSE_NAME, payload.name)
             .putExtra(EXTRA_LOCATION, payload.location)
-            .putExtra(EXTRA_START_MILLIS, payload.startAtMillis)
-            .putExtra(EXTRA_END_MILLIS, payload.endAtMillis)
-            .putExtra(EXTRA_LEAD, payload.leadMinutes)
+            .putExtra(EXTRA_TIME_TEXT, payload.timeText)
             .putExtra(EXTRA_MUTE_KEY, payload.muteKey)
-            .putExtra(EXTRA_START_MINUTE, startMinute)
+            .putExtra(EXTRA_SEGMENTS, encodeLiveSegments(payload.segments))
 
     private fun scheduleAlarm(trigger: Long, requestCode: Int, intent: Intent) {
         val pi = PendingIntent.getBroadcast(
@@ -507,10 +519,9 @@ class ReminderPlanner @Inject constructor(
         const val EXTRA_COURSE_ID = "course_id"
         const val EXTRA_COURSE_NAME = "course_name"
         const val EXTRA_LOCATION = "location"
-        const val EXTRA_START_MILLIS = "start_millis"
-        const val EXTRA_END_MILLIS = "end_millis"
+        const val EXTRA_TIME_TEXT = "time_text"
+        const val EXTRA_SEGMENTS = "segments"
         const val EXTRA_START_MINUTE = "start_minute"
-        const val EXTRA_LEAD = "lead_minutes"
         const val EXTRA_MUTE_KEY = "mute_key"
         const val EXTRA_TOMORROW = "tomorrow"
         const val EXTRA_TOMORROW_COUNT = "tomorrow_count"
@@ -519,10 +530,13 @@ class ReminderPlanner @Inject constructor(
         const val TOMORROW_KEY = "tomorrow"
         const val REFRESH_KEY = "refresh"
 
-        /** 课程提醒的 requestCode 序号。一节课只有一个闹钟(不再有 1/3/5 分钟的重试)。 */
+        /** 课程提醒的 requestCode 序号。一节课只有一个「上屏」闹钟(不再有 1/3/5 分钟的重试)。 */
         private const val LIVE_INDEX = 0
 
-        /** 免打扰两个闹钟的 requestCode 序号:与课程提醒(0)、自续期(99)错开。 */
+        /** 实时活动相位边界闹钟的 requestCode 序号起点(每个边界 +1)。 */
+        private const val LIVE_BOUNDARY_INDEX = 20
+
+        /** 免打扰两个闹钟的 requestCode 序号:与课程提醒(0)、相变(20+)、自续期(99)错开。 */
         private const val DND_ON_INDEX = 5
         private const val DND_OFF_INDEX = 6
 
@@ -548,34 +562,3 @@ class ReminderPlanner @Inject constructor(
     }
 }
 
-/** 实时活动需要展示的一节课。 */
-data class LiveCourse(
-    val courseId: String,
-    val name: String,
-    val location: String,
-    val startAtMillis: Long,
-    val endAtMillis: Long,
-    val leadMinutes: Int,
-    val muteKey: String,
-) {
-    fun toJson(): JSONObject = JSONObject()
-        .put("courseId", courseId)
-        .put("name", name)
-        .put("location", location)
-        .put("startAt", startAtMillis)
-        .put("endAt", endAtMillis)
-        .put("lead", leadMinutes)
-        .put("muteKey", muteKey)
-
-    companion object {
-        fun fromJson(json: JSONObject) = LiveCourse(
-            courseId = json.optString("courseId"),
-            name = json.optString("name"),
-            location = json.optString("location"),
-            startAtMillis = json.optLong("startAt"),
-            endAtMillis = json.optLong("endAt"),
-            leadMinutes = json.optInt("lead", 10),
-            muteKey = json.optString("muteKey"),
-        )
-    }
-}

@@ -3,7 +3,6 @@ package com.kxin.classtable.notify
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -33,10 +32,7 @@ class LiveUpdateActionReceiver : BroadcastReceiver() {
                         SettingsRepository(appContext),
                     ).mute(muteKey, muteUntil)
                 }
-                runCatching {
-                    NotificationManagerCompat.from(appContext)
-                        .cancel(Notifier.LIVE_NOTIFICATION_ID)
-                }
+                Notifier.cancelLiveUpdate(appContext)
                 appContext.stopService(Intent(appContext, CourseLiveUpdateService::class.java))
             } finally {
                 pendingResult.finish()

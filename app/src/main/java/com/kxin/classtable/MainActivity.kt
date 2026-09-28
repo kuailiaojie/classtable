@@ -403,6 +403,10 @@ private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
  *
  * 两个层级用两套动作:根标签之间是「同层平移」,不该有方向感 —— 淡入 + 轻微缩放;
  * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
+ *
+ * 层级页的转场**不叠 alpha**:新页面淡入时,正在退场的旧页面会透过半透明的新页面显出来,
+ * 看起来就是「上一个界面的残影」。改成两页各自完整滑入 / 滑出 —— 滑动本身就带方向感,
+ * 没有淡入淡出也就没有双重曝光。
  */
 private fun navEnter(from: String?, to: String?): EnterTransition =
     if (isRootTab(from) && isRootTab(to)) {
@@ -415,7 +419,7 @@ private fun navEnter(from: String?, to: String?): EnterTransition =
         slideInHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
             initialOffsetX = { it },
-        ) + fadeIn(YohakuMotion.tween(YohakuMotion.durBase))
+        )
     }
 
 private fun navExit(from: String?, to: String?): ExitTransition =
@@ -428,22 +432,22 @@ private fun navExit(from: String?, to: String?): ExitTransition =
     } else {
         slideOutHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-            targetOffsetX = { -it / 4 },
-        ) + fadeOut(YohakuMotion.tween(YohakuMotion.durBase))
+            targetOffsetX = { -it },
+        )
     }
 
-/** 返回:被压住的页面从左侧滑回、当前页向右退出。 */
+/** 返回:被压住的页面从左侧滑回、当前页向右滑出。同样不叠 alpha(见 [navEnter])。 */
 private fun navPopEnter(): EnterTransition =
     slideInHorizontally(
         animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
-        initialOffsetX = { -it / 4 },
-    ) + fadeIn(YohakuMotion.tween(YohakuMotion.durBase))
+        initialOffsetX = { -it },
+    )
 
 private fun navPopExit(): ExitTransition =
     slideOutHorizontally(
         animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
         targetOffsetX = { it },
-    ) + fadeOut(YohakuMotion.tween(YohakuMotion.durBase))
+    )
 
 /** 沿 ContextWrapper 链向上找宿主 Activity。 */
 private tailrec fun Context.findActivity(): Activity? = when (this) {

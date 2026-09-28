@@ -43,8 +43,10 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.NotifyMode
-import com.kxin.classtable.notify.LiveCourse
-import com.kxin.classtable.notify.startLiveCourseService
+import com.kxin.classtable.notify.LiveUpdate
+import com.kxin.classtable.notify.LiveUpdateSegment
+import com.kxin.classtable.notify.PREVIEW_MUTE_PREFIX
+import com.kxin.classtable.notify.startLiveUpdateService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -258,21 +260,33 @@ internal fun ChipToggle(selected: Boolean, onSelected: (Boolean) -> Unit) {
 }
 
 /**
- * 预览实时活动:用一节「5 分钟后开始、45 分钟」的假课程拉起常驻通知,
+ * 预览实时活动:用一节「5 分钟后开始、中间带一次课间、共约 45 分钟」的假课程拉起常驻通知,
  * 让用户在设置里先看清它长什么样(不写课程数据、不影响真实提醒)。
  */
 private fun previewLiveUpdate(context: Context) {
-    val start = System.currentTimeMillis() + 5 * 60_000L
-    startLiveCourseService(
+    val now = System.currentTimeMillis()
+    val start = now + 5 * 60_000L
+    val firstEnd = start + 20 * 60_000L
+    val secondStart = firstEnd + 5 * 60_000L
+    val end = secondStart + 20 * 60_000L
+    startLiveUpdateService(
         context,
-        LiveCourse(
+        LiveUpdate(
             courseId = "preview",
             name = "高等数学",
             location = "教学楼 A101",
-            startAtMillis = start,
-            endAtMillis = start + 45 * 60_000L,
-            leadMinutes = 5,
-            muteKey = "preview:${System.currentTimeMillis()}",
+            timeText = "${previewClock(start)}–${previewClock(end)}",
+            muteKey = "$PREVIEW_MUTE_PREFIX$now",
+            segments = listOf(
+                LiveUpdateSegment(start, firstEnd),
+                LiveUpdateSegment(secondStart, end),
+            ),
         ),
     )
 }
+
+private fun previewClock(millis: Long): String =
+    java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalTime()
+        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))

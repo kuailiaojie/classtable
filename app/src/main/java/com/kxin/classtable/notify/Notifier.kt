@@ -37,8 +37,14 @@ object Notifier {
     const val EXTRA_AGENDA_ID = "notify_agenda_id"
     const val EXTRA_AGENDA_DAY = "notify_agenda_day"
 
-    /** 实时活动通知固定 id:同一时刻只会有一节课的实时活动。 */
+    /**
+     * 实时活动通知的**两个槽位**:同一相位沿用原槽位(分钟刷新原地更新,胶囊不重弹),
+     * 跨相位换另一槽位,让胶囊在新状态时重新展开一次。
+     */
     const val LIVE_NOTIFICATION_ID = 99010
+    const val LIVE_NOTIFICATION_ALTERNATE_ID = 99011
+    /** 写在通知 extras 上的「这是哪一帧」,槽位轮换据此判断是不是同一个身份。 */
+    const val EXTRA_LIVE_IDENTITY = "classtable.live_update_identity"
     private const val NOTIFY_ID_UPDATE = 99001
     private const val NOTIFY_ID_TOMORROW = 99003
     private const val NOTIFY_ID_ANNOUNCEMENT = 99004
@@ -197,131 +203,173 @@ object Notifier {
     }
 
     /**
-     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 下课」,进度条随课程推进;
-     * 通知带「取消本节课提醒」按钮,划掉通知也等同于取消本节提醒(见 delete intent)。
+     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 课间中 → 已下课」,上课期间进度条随当前小节推进。
      *
-     * 倒计时交给系统的 `when` + Chronometer **自己走秒**,正文只跟状态走(不再写分钟数);
-     * 上课中的进度条是**确定态**,由服务按分钟原地更新(见 [CourseLiveUpdateService])——
-     * 官方对 progress-centric 通知的要求就是随行程「频繁且准确地更新进度」
-     * (developer.android.com/about/versions/16/features/progress-centric-notifications)。
-     * 每次更新都是同一条通知(id 不变)+ `setOnlyAlertOnce`,不重新拉起服务、不另发一条。
+     * 文案(状态 + 分钟数)由服务按 [LiveUpdate.nextRefreshAtMillis] 精确刷新;胶囊那一格的
+     * 短文案用 [CapsuleCompat.setShortCriticalText] 写我们自己算的分钟数 / 地点,**不交给**
+     * 系统的 `when` + Chronometer —— 短文案非空时它本来就不生效,部分机型(OPPO / 一加)还会被
+     * 提升通知的渲染器整块吞掉。
+     *
+     * 每次刷新都是同一身份 → 同一槽位的那条通知(原地更新 + `setOnlyAlertOnce`),不重起服务、
+     * 不另发一条;只有跨到新相位时才换到另一个槽位,让胶囊在新状态重新展开一次(见 [postLiveUpdate])。
      *
      * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊认的是
-     * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求只在平台 Builder 上可达。
+     * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求 + 短文案只在平台 Builder 上可达。
      * 条件见 [CapsuleCompat] 的说明。
      */
-    fun buildLiveCourse(
+    fun buildLiveUpdate(
         context: Context,
-        courseId: String,
-        courseName: String,
-        location: String,
-        startAtMillis: Long,
-        endAtMillis: Long,
-        muteKey: String,
+        payload: LiveUpdate,
         now: Long,
         /** 该课程最新一条公告标题;只进展开文本。 */
         announcement: String? = null,
     ): Notification {
         ensureChannels(context)
 
-        val inClass = now >= startAtMillis
-        val finished = now >= endAtMillis
-        val timeText = "${clock(startAtMillis)}–${clock(endAtMillis)}"
-        val placeText = location.ifBlank { "未设置地点" }
-
-        // 文案只跟状态走,不写分钟数:倒计时交给系统的 when + Chronometer 自己走(见下),
-        // 我们不再每分钟重发 —— 重发在国产胶囊眼里就是「又一条新提醒」,会再展开一次。
-        val statusLine = when {
-            !inClass -> "即将开始"
-            !finished -> "上课中"
-            else -> "已下课"
-        }
-        val bodyText = "$statusLine · $timeText"
+        val status = payload.statusAt(now)
+        val placeText = payload.location.ifBlank { "未设置地点" }
+        val shortText = chipText(payload, status, placeText)
+        val bodyText = "${cardStatusText(status)} · ${payload.timeText}"
         val expandedText = buildString {
             append(bodyText)
-            if (location.isNotBlank()) append("\n").append(placeText)
+            if (payload.location.isNotBlank()) append("\n").append(placeText)
             announcement?.takeIf { it.isNotBlank() }?.let {
                 append("\n最新公告:").append(it.take(ANNOUNCEMENT_MAX_CHARS))
             }
         }
-        val progressing = inClass && !finished
-        // 课前倒数到上课,上课后倒数到下课:秒级 Chronometer 由系统自己走,不重发也能一直走
-        val countdownTo = if (inClass) endAtMillis else startAtMillis
+        val progress = status.progressPercent
 
         val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
             .setSmallIcon(R.drawable.ic_notify)
             // contentTitle 是不可省的:没有它系统不会提升为实时活动
-            .setContentTitle(courseName)
+            .setContentTitle(payload.name)
             .setContentText(bodyText)
-            .setContentIntent(courseContentIntent(context, courseId))
-            .setDeleteIntent(cancelLivePendingIntent(context, muteKey, endAtMillis))
+            .setContentIntent(courseContentIntent(context, payload.courseId))
+            .setDeleteIntent(cancelLivePendingIntent(context, payload.muteKey, payload.endAtMillis() ?: 0L))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            // 胶囊 / 通知上的「还有多久」由系统的 when + Chronometer 自己走秒:不重发也能一直走,
-            // 而重发正是国产胶囊「每隔一会儿跳出来一下」的来源(见 [CourseLiveUpdateService])
-            .setShowWhen(true)
-            .setWhen(countdownTo)
-            .setUsesChronometer(true)
-            .setChronometerCountDown(true)
+            // 倒计时不交给系统:短文案与正文的分钟数都由服务在「翻页的那一秒」原地刷新
+            .setShowWhen(false)
+            .setUsesChronometer(false)
+            .setChronometerCountDown(false)
             // 固定用默认色:自定义颜色会让部分系统的胶囊强制按普通通知渲染
             .setColor(Notification.COLOR_DEFAULT)
             .setCategory(
-                if (progressing) Notification.CATEGORY_PROGRESS else Notification.CATEGORY_EVENT,
-            )
-            .addAction(
-                R.drawable.ic_notify,
-                "取消本节课提醒",
-                cancelLivePendingIntent(context, muteKey, endAtMillis),
+                if (progress != null) Notification.CATEGORY_PROGRESS else Notification.CATEGORY_EVENT,
             )
 
-        if (Build.VERSION.SDK_INT >= 36) {
+        if (progress != null) {
+            val countdownLine = if (status.phase == LiveUpdatePhase.BREAK) {
+                "还有${status.minutesToTransition}分钟上课"
+            } else {
+                "还有${status.minutesToTransition}分钟下课"
+            }
+            builder.setContentText("${status.detailText} · ${payload.timeText}\n$countdownLine")
+        }
+
+        if (Build.VERSION.SDK_INT >= 36 && progress != null) {
             builder.setStyle(
-                if (progressing) {
-                    Notification.ProgressStyle()
-                        // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
-                        .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
-                        .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
-                        // 确定态:按本节课时长推进,由服务在上课期间按分钟原地更新
-                        .setProgress(classProgressPercent(startAtMillis, endAtMillis, now))
-                } else {
-                    Notification.BigTextStyle().bigText(expandedText)
-                },
+                Notification.ProgressStyle()
+                    // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
+                    .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
+                    .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
+                    // 确定态:按当前小节推进,由服务在「翻页的那一秒」原地更新
+                    .setProgress(progress),
             )
         } else {
             builder.setStyle(Notification.BigTextStyle().bigText(expandedText))
-            if (progressing) {
-                builder.setProgress(100, classProgressPercent(startAtMillis, endAtMillis, now), false)
-            }
+            if (progress != null) builder.setProgress(100, progress, false)
+        }
+
+        // 进行中时展开区已被进度条占满,不再摆按钮;课前 / 刚下课才给「取消本节课提醒」
+        if (progress == null) {
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, R.drawable.ic_notify),
+                    "取消本节课提醒",
+                    cancelLivePendingIntent(context, payload.muteKey, payload.endAtMillis() ?: 0L),
+                ).build(),
+            )
         }
 
         CapsuleCompat.requestPromotion(builder)
-        XiaomiIsland.applyTo(
-            builder = builder,
-            context = context,
-            courseName = courseName,
-            placeText = placeText,
-            statusLabel = statusLine,
-            // 小米岛自己不会按秒走,这里只给状态(不再给会被放旧的「N 分钟」)
-            chipText = statusLine,
-            timeoutMinutes = minutesBetween(now, endAtMillis).coerceAtLeast(1),
-        )
+        CapsuleCompat.setShortCriticalText(builder, shortText)
 
         return builder.build().also { notification ->
+            notification.extras.putString(EXTRA_LIVE_IDENTITY, payload.notificationIdentityAt(now))
+            XiaomiIsland.decorate(context, notification, payload, status, shortText)
             CapsuleCompat.logPromotionState(context, notification)
         }
     }
 
-    /**
-     * 本节课已进行的百分比(0–100),课前夹到 0、下课后夹到 100。
-     * 服务也用它算「进度有没有变」来决定要不要原地更新(见 [CourseLiveUpdateService])。
-     */
-    internal fun classProgressPercent(startAt: Long, endAt: Long, now: Long): Int {
-        val span = (endAt - startAt).coerceAtLeast(1L)
-        return (((now - startAt).toDouble() / span) * 100).toInt().coerceIn(0, 100)
+    /** 胶囊短文案:课前给地点(没有地点就用课名),课中给分钟数,下课给状态。 */
+    private fun chipText(payload: LiveUpdate, status: LiveUpdateStatus, placeText: String): String =
+        when (status.phase) {
+            LiveUpdatePhase.BEFORE_CLASS -> if (payload.location.isBlank()) payload.name else placeText
+            LiveUpdatePhase.FINISHED -> "已下课"
+            else -> "${status.minutesToTransition.coerceAtLeast(0)}分钟"
+        }
+
+    /** 通知正文里的状态短句(通知卡片与展开区共用)。 */
+    private fun cardStatusText(status: LiveUpdateStatus): String = when (status.phase) {
+        LiveUpdatePhase.BEFORE_CLASS ->
+            if (status.minutesToTransition <= 0) "准备上课" else "还剩${status.minutesToTransition}分钟"
+
+        LiveUpdatePhase.IN_CLASS, LiveUpdatePhase.BREAK -> status.detailText
+        LiveUpdatePhase.FINISHED -> "已下课"
     }
 
-    private fun minutesBetween(from: Long, to: Long): Int =
-        Math.ceil((to - from) / 60_000.0).toInt()
+    /**
+     * 实时活动通知槽位:同一身份沿用原槽位(分钟刷新原地更新,胶囊不重弹);
+     * 身份变了(跨相位)就换到另一个槽位,让胶囊在新状态时重新展开一次。
+     */
+    internal fun liveUpdateSlot(activeNewestFirst: List<Pair<Int, String?>>, identity: String): Int {
+        activeNewestFirst.firstOrNull { it.second == identity }?.let { return it.first }
+        return if (activeNewestFirst.firstOrNull()?.first == LIVE_NOTIFICATION_ID) {
+            LIVE_NOTIFICATION_ALTERNATE_ID
+        } else {
+            LIVE_NOTIFICATION_ID
+        }
+    }
+
+    /**
+     * 上屏 / 原地更新实时活动:按身份挑槽位,上新槽后再收掉另一个槽。
+     * [attachForeground] 把新槽重新挂回前台服务(槽位变了就得重挂)。
+     */
+    fun postLiveUpdate(
+        context: Context,
+        notification: Notification,
+        attachForeground: ((Int, Notification) -> Unit)? = null,
+    ) {
+        val active = context.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications
+            ?.filter { it.id == LIVE_NOTIFICATION_ID || it.id == LIVE_NOTIFICATION_ALTERNATE_ID }
+            ?.sortedByDescending { it.postTime }
+            .orEmpty()
+        val identity = notification.extras.getString(EXTRA_LIVE_IDENTITY).orEmpty()
+        val id = liveUpdateSlot(
+            active.map { it.id to it.notification.extras.getString(EXTRA_LIVE_IDENTITY) },
+            identity,
+        )
+        val posted = runCatching {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        }.isSuccess
+        if (!posted) {
+            Log.w(TAG, "实时活动上屏失败")
+            return
+        }
+        attachForeground?.invoke(id, notification)
+        listOf(LIVE_NOTIFICATION_ID, LIVE_NOTIFICATION_ALTERNATE_ID)
+            .filter { it != id }
+            .forEach { NotificationManagerCompat.from(context).cancel(it) }
+    }
+
+    /** 收掉实时活动的两个槽位(取消本节课提醒 / 下课 / 预览结束)。 */
+    fun cancelLiveUpdate(context: Context) {
+        val manager = NotificationManagerCompat.from(context)
+        manager.cancel(LIVE_NOTIFICATION_ID)
+        manager.cancel(LIVE_NOTIFICATION_ALTERNATE_ID)
+    }
 
     private fun clock(millis: Long): String {
         val t = java.time.LocalTime.ofInstant(

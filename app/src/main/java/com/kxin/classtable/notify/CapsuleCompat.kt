@@ -23,9 +23,9 @@ import org.json.JSONObject
  * 2. 通知本身 `ongoing`、有 `contentTitle`、使用受支持的样式(BigTextStyle / ProgressStyle 等),
  *    且**不能**用自定义 RemoteViews、不能 colorized、不能是分组摘要、渠道不能是 IMPORTANCE_MIN;
  * 3. 主动请求提升(`setRequestPromotedOngoing(true)` / `EXTRA_REQUEST_PROMOTED_ONGOING`)。
- *    胶囊里的倒计时由通知自己的 `setWhen` + Chronometer 驱动(见 [Notifier.buildLiveCourse]);
- *    **不要**再用 `setShortCriticalText` —— 它的优先级高于计时器,一旦写上,胶囊就只剩那句
- *    静态文案(状态栏胶囊宽度上限 96dp,文字放不下还会只剩图标)。
+ *    胶囊那一格的文字用 [setShortCriticalText] 写成**我们自己算出的分钟数**:系统的
+ *    `when` + Chronometer 计时器在部分机型(尤其 OPPO/一加)会被提升通知的渲染器吞掉,
+ *    所以不把倒计时交给它 —— 分钟数由服务在「翻页的那一秒」原地更新同一条通知。
  *
  * 任何一条不满足系统都不会放进胶囊 —— 这也是「装到手机上不出胶囊」最常见的原因。
  * 小米(澎湃 OS)另外提供 `miui.focus.param` 扩展参数作为第三方上岛的公开途径,见 [XiaomiIsland]。
@@ -64,12 +64,6 @@ object CapsuleCompat {
     /**
      * 请求把通知提升为实时活动。
      *
-     * **不写胶囊短文案** —— 状态栏胶囊那一格交给系统自己的倒计时(`setWhen` + Chronometer,
-     * 见 [Notifier.buildLiveCourse])。理由:`setShortCriticalText` 的优先级高于计时器,一旦
-     * 写上,胶囊就只剩这句静态文案,想让它跟着走就只能每分钟重发一次通知;而国产胶囊(荣耀
-     * 灵动胶囊 / 小米超级岛)会把每次重发当成「又一条新提醒」再展开一次 —— 那正是「每隔一会儿
-     * 跳出来一下」。让系统按秒走,既不重发也不跳。
-     *
      * API 36 的公开 SDK 里 `setRequestPromotedOngoing` 没有导出方法,所以以规范里的 extras
      * 键为准写入;方法存在时再补一次调用。
      */
@@ -80,6 +74,25 @@ object CapsuleCompat {
                 .getMethod("setRequestPromotedOngoing", java.lang.Boolean.TYPE)
                 .invoke(builder, true)
         }.onFailure { Log.d(TAG, "setRequestPromotedOngoing 不可用(${it.javaClass.simpleName}),以 extras 提交提升请求") }
+    }
+
+    /**
+     * 写胶囊短文案(状态栏胶囊那一格 / 锁屏 AOD 的短行)。
+     *
+     * 方法在公开 SDK 里同样没有导出,按规范 extras 键 + 反射两手都写。**不要**留给系统的
+     * `when` + Chronometer:短文案非空时它本来就不生效,部分机型还会被整块吞掉。
+     */
+    fun setShortCriticalText(builder: Notification.Builder, text: CharSequence) {
+        builder.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, text)
+        runCatching {
+            builder.javaClass
+                .getMethod("setShortCriticalText", CharSequence::class.java)
+                .invoke(builder, text)
+        }.recoverCatching {
+            builder.javaClass
+                .getMethod("setShortCriticalText", String::class.java)
+                .invoke(builder, text.toString())
+        }.onFailure { Log.d(TAG, "setShortCriticalText 不可用(${it.javaClass.simpleName}),以 extras 提交短文案") }
     }
 
     /**
@@ -100,25 +113,31 @@ object CapsuleCompat {
     }
 
     const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
+    const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 }
 
 /**
  * 小米澎湃 OS「超级岛 / 焦点通知」。
  *
- * 官方《超级岛开发指南》给了客户端接入方式:在原生通知的 extras 里放一个
- * `miui.focus.param` JSON(`param_v2` 下含交互能力、摘要态、焦点通知数据),并可用
- * `miui.focus.pics` 提供图片、`miui.focus.actions` 提供按钮。
+ * 官方《超级岛开发指南》给了客户端接入方式:在原生通知的 extras 里放一个 `miui.focus.param`
+ * JSON(`param_v2` 下含交互能力、摘要态、焦点通知数据),并可用 `miui.focus.pics` 提供图片。
  *
- * 这里只在**确认设备支持**时才补参数(三件事都查:是否小米系、岛能力开关、焦点通知协议
- * 版本与权限),任何一项不满足就完全不动通知 —— 也就是退回普通通知,不会因为参数不识别
- * 而影响提醒送达。参数里显式写入 `filterWhenNoPermission=false`,权限被关时同样退化为普通通知。
+ * 这里只在**确认设备支持**时才补参数(设备是小米系、系统开了岛能力、焦点通知协议版本够、
+ * 且本应用被允许发焦点通知),任何一项不满足就完全不动通知 —— 退回普通通知,不会因为参数
+ * 不被识别而影响提醒送达。参数里显式写入 `filterWhenNoPermission=false`,权限被关时同样退化。
  */
 object XiaomiIsland {
     private const val TAG = "XiaomiIsland"
-    private const val PIC_ICON = "miui.focus.pic_icon"
+
+    /** 小米岛复用同一份短文案:胶囊那一格与锁屏短行都取它。 */
+    private const val FocusParameter = "miui.focus.param"
+    private const val AppIconPicture = "miui.focus.pic_app_icon"
+    private const val AppIconDarkPicture = "miui.focus.pic_app_icon_dark"
+    private const val SmallPicture = "miui.focus.pic_small"
+    private const val SmallPictureDark = "miui.focus.pic_small_dark"
 
     /** 小米/红米/POCO。 */
-    private fun isXiaomiFamily(): Boolean {
+    fun isXiaomiFamily(): Boolean {
         val brand = "${Build.MANUFACTURER} ${Build.BRAND}".lowercase()
         return brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco")
     }
@@ -173,89 +192,155 @@ object XiaomiIsland {
     }
 
     /**
-     * 给实时活动通知补上超级岛参数。返回是否写入成功。
+     * 给构建好的通知补上超级岛参数与图片。设备不支持时是空操作。
      *
-     * @param chipText 小岛上的短文案(纯文本,如「即将开始」;小米岛不会自己按秒走)
+     * @param shortText 胶囊/锁屏短文案(如「10分钟」「教学楼 A101」)
      */
-    fun applyTo(
-        builder: Notification.Builder,
+    fun decorate(
         context: Context,
-        courseName: String,
-        placeText: String,
-        statusLabel: String,
-        chipText: String,
-        timeoutMinutes: Int,
-    ): Boolean {
-        if (!state(context).usable) return false
-        return runCatching {
-            val params = JSONObject().put(
-                "param_v2",
-                JSONObject()
-                    .put("protocol", 1)
-                    .put("business", "course")
-                    .put("updatable", true)
-                    .put("enableFloat", false)
-                    .put("timeout", timeoutMinutes.coerceIn(1, 720))
-                    // 焦点通知权限被关掉时退化为普通通知,而不是把通知整个过滤掉
-                    .put("filterWhenNoPermission", false)
-                    .put("ticker", chipText)
-                    .put("aodTitle", "$courseName · $chipText")
-                    .put(
-                        "param_island",
-                        JSONObject()
-                            .put("islandProperty", 1)
-                            .put(
-                                "bigIslandArea",
-                                JSONObject()
-                                    .put(
-                                        "imageTextInfoLeft",
-                                        JSONObject()
-                                            .put("type", 1)
-                                            .put(
-                                                "picInfo",
-                                                JSONObject().put("type", 1).put("pic", PIC_ICON),
-                                            )
-                                            .put(
-                                                "textInfo",
-                                                JSONObject()
-                                                    .put("frontTitle", statusLabel)
-                                                    .put("title", courseName)
-                                                    .put("content", placeText)
-                                                    .put("useHighLight", false),
-                                            ),
-                                    )
-                                    .put("picInfo", JSONObject().put("type", 1).put("pic", PIC_ICON)),
-                            )
-                            .put(
-                                "smallIslandArea",
-                                JSONObject().put(
-                                    "picInfo",
-                                    JSONObject().put("type", 1).put("pic", PIC_ICON),
-                                ),
-                            ),
-                    )
-                    .put(
-                        "baseInfo",
-                        JSONObject()
-                            .put("title", courseName)
-                            .put("content", statusLabel)
-                            .put("type", 2),
-                    )
-                    .put(
-                        "hintInfo",
-                        JSONObject().put("type", 1).put("title", chipText),
-                    ),
+        notification: Notification,
+        payload: LiveUpdate,
+        status: LiveUpdateStatus,
+        shortText: String,
+    ) {
+        if (!state(context).usable) return
+        runCatching {
+            notification.extras.putString(
+                FocusParameter,
+                parameters(payload, status, shortText, System.currentTimeMillis(), context.packageName),
             )
-            builder.extras.putString("miui.focus.param", params.toString())
-            builder.extras.putBundle(
+            val icon = Icon.createWithResource(context, R.mipmap.ic_launcher)
+            notification.extras.putBundle(
                 "miui.focus.pics",
                 Bundle().apply {
-                    putParcelable(PIC_ICON, Icon.createWithResource(context, R.mipmap.ic_launcher))
+                    putParcelable(AppIconPicture, icon)
+                    putParcelable(AppIconDarkPicture, icon)
+                    putParcelable(SmallPicture, icon)
+                    putParcelable(SmallPictureDark, icon)
                 },
             )
             Log.d(TAG, "已补超级岛参数(${state(context).summary()})")
-            true
         }.onFailure { Log.w(TAG, "超级岛参数构建失败,退回普通通知: ${it.javaClass.simpleName}") }
-            .getOrDefault(false)
+    }
+
+    internal fun parameters(
+        payload: LiveUpdate,
+        status: LiveUpdateStatus,
+        shortText: String,
+        nowMillis: Long = System.currentTimeMillis(),
+        packageName: String = "com.kxin.classtable",
+    ): String {
+        val beforeClass = status.phase == LiveUpdatePhase.BEFORE_CLASS
+        val timerAt = status.nextTransitionAtMillis?.takeIf { beforeClass && it > nowMillis }
+        val courseName = payload.name.ifBlank { shortText }
+        val placeText = payload.location.ifBlank { "未设置地点" }
+        val islandStatus = when (status.phase) {
+            LiveUpdatePhase.BEFORE_CLASS -> placeText
+            LiveUpdatePhase.IN_CLASS -> "已上课"
+            LiveUpdatePhase.BREAK -> "课间"
+            LiveUpdatePhase.FINISHED -> "已下课"
+        }
+        // 小岛左侧固定显示课名;右侧课前给短文案(地点/分钟),课中给状态
+        val left = JSONObject().put("type", 1).put(
+            "textInfo",
+            JSONObject()
+                .put("title", courseName)
+                .put("content", "")
+                .put("showHighlightColor", false)
+                .put("narrowFont", false),
+        )
+        val bigIsland = JSONObject()
+            .put("templateNo", 2)
+            .put("imageTextInfoLeft", left)
+            .put(
+                "textInfo",
+                JSONObject()
+                    .put("frontTitle", "")
+                    .put("title", if (beforeClass) shortText else islandStatus)
+                    .put("content", "")
+                    .put("showHighlightColor", false)
+                    .put("narrowFont", false),
+            )
+        val island = JSONObject()
+            .put("islandProperty", 1)
+            .put("islandTimeout", 3600)
+            .put("bigIslandArea", bigIsland)
+            .put(
+                "smallIslandArea",
+                JSONObject().put(
+                    "picInfo",
+                    JSONObject()
+                        .put("type", 1)
+                        .put("pic", SmallPicture)
+                        .put("picDark", SmallPictureDark),
+                ),
+            )
+        val detail = listOf(payload.timeText, payload.location)
+            .filter(String::isNotBlank)
+            .joinToString(" · ")
+        val card = JSONObject()
+            .put("type", 2)
+            .put("title", courseName)
+            .put("content", detail)
+            .put("subTitle", "")
+            .put("extraTitle", "")
+            .put("specialTitle", "")
+            .put("subContent", "")
+            .put("picFunction", "")
+            .put("showDivider", true)
+            .put("showContentDivider", false)
+            .put("colorTitle", "#111111")
+            .put("colorTitleDark", "#ffffff")
+            .put("colorContent", "#333333")
+            .put("colorContentDark", "#cccccc")
+        val hint = JSONObject()
+            .put("type", 2)
+            .put("content", if (beforeClass) status.statusText else "现在")
+            .put("title", if (beforeClass) "" else islandStatus)
+            .put("subContent", "地点")
+            .put("subTitle", placeText)
+            .put("colorContent", "#666666")
+            .put("colorContentDark", "#aaaaaa")
+            .put("colorTitle", "#222222")
+            .put("colorTitleDark", "#eeeeee")
+            .put("colorSubContent", "#666666")
+            .put("colorSubContentDark", "#aaaaaa")
+            .put("colorSubTitle", "#222222")
+            .put("colorSubTitleDark", "#eeeeee")
+            .put(
+                "actionInfo",
+                JSONObject()
+                    .put("actionTitle", "查看课表")
+                    .put("actionIntentType", 1)
+                    .put("actionIntent", "intent:#Intent;component=$packageName/.MainActivity;end"),
+            )
+            .put("timerInfo", timerInfo(timerAt, nowMillis))
+        return JSONObject()
+            .put(
+                "param_v2",
+                JSONObject()
+                    .put("protocol", 1)
+                    .put("business", "course_reminder")
+                    .put("enableFloat", beforeClass)
+                    .put("islandFirstFloat", !beforeClass)
+                    .put("updatable", true)
+                    .put("outEffectSrc", "outer_glow")
+                    .put("aodTitle", placeText)
+                    .put("reopen", "reopen")
+                    // 焦点通知权限被关掉时退化为普通通知,而不是把通知整个过滤掉
+                    .put("filterWhenNoPermission", false)
+                    .put("baseInfo", card)
+                    .put("picInfo", JSONObject().put("type", 1).put("pic", ""))
+                    .put("hintInfo", hint)
+                    .put("param_island", island),
+            )
+            .toString()
+    }
+
+    private fun timerInfo(timerAt: Long?, nowMillis: Long): JSONObject = JSONObject().apply {
+        put("timerType", if (timerAt != null) -1 else 0)
+        put("timerWhen", timerAt ?: 0L)
+        put("timerTotal", 0L)
+        put("timerSystemCurrent", if (timerAt != null) nowMillis else 0L)
     }
 }
