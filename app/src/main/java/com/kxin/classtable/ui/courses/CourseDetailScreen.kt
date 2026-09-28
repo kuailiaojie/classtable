@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -270,12 +269,11 @@ private fun AnnouncementRow(announcement: YuketangAnnouncement) {
             val body = announcement.content.trim()
             if (body.isNotEmpty() && body != announcement.title) {
                 Spacer(modifier = Modifier.height(2.dp))
+                // 公告正文整段铺开:这是用户点进来要看的内容,截断成几行等于看不全
                 Text(
                     text = body,
                     style = YohakuType.label12,
                     color = colors.neutral7,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (announcement.publisher.isNotBlank()) {

@@ -61,23 +61,38 @@ object CapsuleCompat {
     }
 
     /**
-     * 请求把通知提升为实时活动。
+     * 请求把通知提升为实时活动,并设置胶囊短文案。
      *
-     * 只写提升请求、**不写胶囊短文案**:胶囊上的倒计时改由通知自己的 `when` 驱动
-     * (见 [Notifier.buildLiveCourse]),系统按它自己走秒 —— 而 shortCriticalText 的
-     * 优先级高于 `when`,一旦写上,胶囊就只会显示那句静态文案,想让它跟着分钟走就只能
-     * 每分钟重发一次通知,而国产胶囊会把每次重发当成一条新提醒再展开一次。
+     * 短文案写**显式分钟数**(如「10分钟」):非空短文案本来就会盖过系统的 `when` / Chronometer
+     * 倒计时(官方文档:短文案非空时优先于计时器),而系统计时器在部分机型(实测 ColorOS)
+     * 还会被吞掉 —— 所以胶囊这一格由我们自己写、由服务按分钟刷新。
      *
      * API 36 的公开 SDK 里 `setRequestPromotedOngoing` 没有导出方法,所以以规范里的 extras
      * 键为准写入;方法存在时再补一次调用。
      */
-    fun requestPromotion(builder: Notification.Builder) {
+    fun requestPromotion(builder: Notification.Builder, shortText: String) {
         builder.extras.putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
         runCatching {
             builder.javaClass
                 .getMethod("setRequestPromotedOngoing", java.lang.Boolean.TYPE)
                 .invoke(builder, true)
         }.onFailure { Log.d(TAG, "setRequestPromotedOngoing 不可用(${it.javaClass.simpleName}),以 extras 提交提升请求") }
+
+        val called = runCatching {
+            if (Build.VERSION.SDK_INT >= 36) builder.setShortCriticalText(shortText) else null
+        }.isSuccess
+        val reflected = called || runCatching {
+            builder.javaClass
+                .getMethod("setShortCriticalText", String::class.java)
+                .invoke(builder, shortText)
+        }.recoverCatching {
+            builder.javaClass
+                .getMethod("setShortCriticalText", CharSequence::class.java)
+                .invoke(builder, shortText)
+        }.isSuccess
+        if (!reflected) Log.d(TAG, "setShortCriticalText 不可用,以 extras 提交胶囊文案")
+        // 胶囊文案保持纯文本:部分机型的渲染器会丢弃带 span 的短文案
+        builder.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, shortText)
     }
 
     /**
@@ -93,11 +108,14 @@ object CapsuleCompat {
         Log.i(
             TAG,
             "实时活动构建:promotable=$promotable, requested=$requested, " +
-                "canPostPromoted=${canPostPromoted(context)}, 小米岛=${XiaomiIsland.state(context).summary()}",
+                "canPostPromoted=${canPostPromoted(context)}, chip=${
+                    notification.extras.getCharSequence(EXTRA_SHORT_CRITICAL_TEXT)
+                }, 小米岛=${XiaomiIsland.state(context).summary()}",
         )
     }
 
     const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
+    const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 }
 
 /**

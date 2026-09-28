@@ -36,8 +36,9 @@ import javax.inject.Singleton
  * - **已排台账**:把真正排出去的 `requestCode|action|key` 记在本地,取消时精确撤销,不再盲扫 120 天。
  * - **滚动窗口 + 自续期**:窗口 8 天,并额外排一个次日 00:05 的「刷新」闹钟,由接收器强制重排 ——
  *   App 长期不开也能把窗口往前滚。
- * - **实时活动重试补发**:实时活动的触发点会排 +0/+1/+3/+5 分钟四次(提前量不同导致的
- *   系统丢闹钟/延迟送达,后一次仍能把状态补上)。
+ * - **不再排「提醒后 1/3/5 分钟」的重试**:那几次重发没有新状态,却会各自拉起一次前台服务 ——
+ *   在国产胶囊眼里就是「又一条新提醒」,课前那几分钟里胶囊会跟着一跳一跳;它们还会挤占同一个
+ *   待发队列的额度。实时活动的状态推进由服务自己负责(它醒着),闹钟只负责把课上屏。
  * - **静音**:「取消本节课提醒」按「课程:日期」记到下课为止,重试与重启后依然生效。
  * - **日程提醒**:日程条目自带开始/结束绝对时刻,不像课程要靠作息换算;它的提醒用独立的
  *   action 排程(见 [ACTION_AGENDA_REMIND]),与课程闹钟天然不互相覆盖。
@@ -169,32 +170,24 @@ class ReminderPlanner @Inject constructor(
                 val endAt = millisAt(date, endMinute, zone)
                 if (endAt <= now) return@forEach
                 val key = "${course.id}:${date.toEpochDay()}"
-                val firstTrigger = startAt - lead * 60_000L
-                // 实时活动:多发几次,系统丢闹钟/延迟也能补上;普通提醒只需一次。
-                val triggers = if (live) {
-                    listOf(0L, 60_000L, 3 * 60_000L, 5 * 60_000L).map { firstTrigger + it }
-                } else {
-                    listOf(firstTrigger)
-                }
-                triggers.forEachIndexed { index, trigger ->
-                    if (trigger <= now || trigger >= endAt) return@forEachIndexed
-                    val payload = LiveCourse(
-                        courseId = course.id,
-                        name = course.name,
-                        location = course.location,
-                        startAtMillis = startAt,
-                        endAtMillis = endAt,
-                        leadMinutes = lead,
-                        muteKey = key,
-                    )
-                    val code = eventCode(date.toEpochDay(), course.id, index)
-                    scheduleAlarm(
-                        trigger = trigger,
-                        requestCode = code,
-                        intent = reminderIntent(payload, live, startMinute),
-                    )
-                    entries += Entry(code, ACTION_REMIND, course.id)
-                }
+                val trigger = startAt - lead * 60_000L
+                if (trigger <= now || trigger >= endAt) return@forEach
+                val payload = LiveCourse(
+                    courseId = course.id,
+                    name = course.name,
+                    location = course.location,
+                    startAtMillis = startAt,
+                    endAtMillis = endAt,
+                    leadMinutes = lead,
+                    muteKey = key,
+                )
+                val code = eventCode(date.toEpochDay(), course.id, LIVE_INDEX)
+                scheduleAlarm(
+                    trigger = trigger,
+                    requestCode = code,
+                    intent = reminderIntent(payload, live, startMinute),
+                )
+                entries += Entry(code, ACTION_REMIND, course.id)
             }
 
             // 明日课程预告(可选):前一天指定时刻提醒
@@ -497,7 +490,7 @@ class ReminderPlanner @Inject constructor(
         private const val KEY_MUTED_KEY = "muted_key"
         private const val KEY_MUTED_UNTIL = "muted_until"
         private const val KEY_LIVE = "live_payload"
-        private const val SIGNATURE_VERSION = "plan-v4"
+        private const val SIGNATURE_VERSION = "plan-v5"
 
         /** 滚动窗口天数(含今天)。 */
         const val HORIZON_DAYS = 8
@@ -526,11 +519,14 @@ class ReminderPlanner @Inject constructor(
         const val TOMORROW_KEY = "tomorrow"
         const val REFRESH_KEY = "refresh"
 
-        /** 免打扰两个闹钟的 requestCode 序号:与提醒(0..3)错开,避免任何混淆。 */
+        /** 课程提醒的 requestCode 序号。一节课只有一个闹钟(不再有 1/3/5 分钟的重试)。 */
+        private const val LIVE_INDEX = 0
+
+        /** 免打扰两个闹钟的 requestCode 序号:与课程提醒(0)、自续期(99)错开。 */
         private const val DND_ON_INDEX = 5
         private const val DND_OFF_INDEX = 6
 
-        /** 日程提醒的 requestCode 序号:与课程(0..3)、免打扰(5/6)、自续期(99)都错开。 */
+        /** 日程提醒的 requestCode 序号:与课程提醒、免打扰、自续期都错开。 */
         private const val AGENDA_INDEX = 7
 
         private const val DEFAULT_TOMORROW_MINUTE = 21 * 60 + 30

@@ -207,7 +207,11 @@ class YuketangClient @Inject constructor(
         return (0 until results.length()).mapNotNull { index ->
             val item = results.optJSONObject(index) ?: return@mapNotNull null
             val title = item.optString("topic_name").trim()
-            val body = item.optJSONObject("content")?.optString("text").orEmpty().trim()
+            // 正文取 content.text;它为空时退回 content.app_text —— 雨课堂两种都出现过,
+            // 只认 text 的话这类公告会变成「只有标题、没有正文」,看起来就是显示不全。
+            val contentJson = item.optJSONObject("content")
+            val body = contentJson?.optString("text").orEmpty().trim()
+                .ifBlank { contentJson?.optString("app_text").orEmpty().trim() }
             if (title.isBlank() && body.isBlank()) return@mapNotNull null
             val createdAt = item.optLong("publish_time", 0L).let { published ->
                 if (published > 0L) normalizeEpoch(published) else parseTimeText(item.optString("create_time"))
