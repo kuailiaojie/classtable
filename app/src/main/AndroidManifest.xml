@@ -221,6 +221,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- FCM 系统兜底展示:不指定渠道时通知会落到 SDK 自建的 Miscellaneous
+             (fcm_fallback_notification_channel)。这里钉到「课表动态」,图标也一并指定,
+             免得设置里多出一条看不懂的渠道。渠道由 ClasstableApp 启动时预先建好。 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="live_updates" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notify" />
+
         <!-- FCM 推送 -->
         <service
             android:name=".data.FcmMessagingService"

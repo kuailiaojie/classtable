@@ -27,17 +27,17 @@ import kotlinx.coroutines.withContext
  * 课程进行中的常驻通知(实时活动):从「提前量」时刻起持有通知,覆盖
  * 课前倒计时 → 上课中 → 下课,下课 1 分钟后自动收掉。
  *
- * 这套结构参照 SleepDown-Schedule 的实时活动:minutes 之类的内容更新都是**同 id 原地更新**
- * (系统视为「更新这一条」),不去重新拉起服务、也不另发一条通知 —— 一节课只有**一个**闹钟,
- * 不会再排「提醒后 1/3/5 分钟」那种没有新状态的重发。国产胶囊(荣耀灵动胶囊 / 小米超级岛)
- * 会把「又起了一次前台服务 / 又发了一条通知」当成新提醒再展开一次,那才是「一分钟弹一下」。
+ * 这套结构参照 SleepDown-Schedule 的实时活动:一节课只有**一个**闹钟,不会再排「提醒后
+ * 1/3/5 分钟」那种没有新状态的重发;运行期间也**只在状态切换时更新一次通知**。国产胶囊
+ * (荣耀灵动胶囊 / 小米超级岛)会把「又起了一次前台服务 / 又更新了一条通知」当成新提醒
+ * 再展开一次,那才是「每隔一会儿跳出来一下」。
  *
  * - **平台 Notification.Builder + ProgressStyle / 提升请求**:状态栏胶囊只提升符合
  *   Android 16 Live Updates 规范的通知,细节见 [CapsuleCompat]。
  * - **前台服务类型 specialUse**(而非 dataSync):实时活动是「持续展示进行中状态」,dataSync 在
  *   Android 15+ 有每日时长上限,且胶囊机型按 specialUse 判定(清单里另有子类型说明)。
- * - **按「显示出来的分钟数」刷新**:下一次刷新对齐目标时刻的秒数(与 ceil 的剩余分钟算法一致),
- *   不对齐墙上整分钟 —— 同一份内容不会重复发。
+ * - **只在状态切换时上屏**:课前 → 上课各一次,其余时间不重发;秒级倒计时交给系统的
+ *   `when` + Chronometer 自己走(重发会被国产胶囊当成「又一条新提醒」再展开一次)。
  * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课。
  * - **静音检查**:点了「取消本节课提醒」立即收掉,重试与重启后依然生效。
  * - 通知权限/渠道被关掉时自停,不做无意义的常驻。
@@ -88,7 +88,6 @@ class CourseLiveUpdateService : Service() {
             location = payload.location,
             startAtMillis = payload.startAtMillis,
             endAtMillis = payload.endAtMillis,
-            leadMinutes = payload.leadMinutes,
             muteKey = payload.muteKey,
             now = now,
             // 首次上屏时取一次;后续由刷新循环更新(公告可能在课前那几分钟里刚发出来)
@@ -108,19 +107,26 @@ class CourseLiveUpdateService : Service() {
     }
 
     /**
-     * 按「下一次显示出来的分钟数变化」刷新,顺手推进进度条。
-     * 每次都是同一个通知 id 的原地更新 —— 不重发、不重启服务,胶囊不会跟着跳。
+     * 只在**状态切换**那一刻上屏(课前 → 上课),其余时间什么都不发。
+     *
+     * 秒级倒计时改由系统的 `when` + Chronometer 自己走(见 [Notifier.buildLiveCourse]),
+     * 不再逐分钟重发 —— 重发在国产胶囊眼里就是「又一条新提醒」,会再展开一次。循环仍每分钟
+     * 醒一次,但只做「该不该收掉」的检查,不产生任何通知更新。
      */
     private fun startRefreshLoop(planner: ReminderPlanner, payload: LiveCourse) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
+            var postedInClass = System.currentTimeMillis() >= payload.startAtMillis
             while (isActive) {
-                delay(delayToNextMinuteChange(payload))
+                delay(60_000L - System.currentTimeMillis() % 60_000L + 150L)
 
                 val now = System.currentTimeMillis()
                 if (now >= payload.endAtMillis + 60_000L) break
                 if (planner.isMuted(payload.muteKey, now)) break
                 if (!Notifier.canPost(this@CourseLiveUpdateService, Notifier.CHANNEL_COURSE_LIVE)) break
+
+                val inClass = now >= payload.startAtMillis
+                if (inClass == postedInClass) continue
 
                 val notification = Notifier.buildLiveCourse(
                     context = this@CourseLiveUpdateService,
@@ -129,7 +135,6 @@ class CourseLiveUpdateService : Service() {
                     location = payload.location,
                     startAtMillis = payload.startAtMillis,
                     endAtMillis = payload.endAtMillis,
-                    leadMinutes = payload.leadMinutes,
                     muteKey = payload.muteKey,
                     now = now,
                     announcement = latestAnnouncementTitle(payload.courseId),
@@ -139,23 +144,10 @@ class CourseLiveUpdateService : Service() {
                         .notify(Notifier.LIVE_NOTIFICATION_ID, notification)
                 }.isSuccess
                 if (!posted) break
+                postedInClass = inClass
             }
             finish()
         }
-    }
-
-    /**
-     * 距离「显示出来的分钟数」下一次变化还有多久。
-     *
-     * 剩余分钟用 ceil,所以它是在**目标时刻的秒数**上跳的:08:00:30 上课时,「还有 11 分钟」
-     * 到 07:50:30 才变成 10 分钟。对齐这个秒数就不会出现「改完字还停在同一分钟」的空刷新。
-     */
-    private fun delayToNextMinuteChange(payload: LiveCourse): Long {
-        val now = System.currentTimeMillis()
-        val target = if (now < payload.startAtMillis) payload.startAtMillis else payload.endAtMillis
-        val remaining = target - now
-        if (remaining <= 1_000L) return 1_000L
-        return (remaining - 1L) % 60_000L + 1L
     }
 
     private fun finish() {

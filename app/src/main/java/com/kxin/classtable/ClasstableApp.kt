@@ -11,6 +11,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.kxin.classtable.notify.Notifier
 import com.kxin.classtable.notify.ReminderSelfHealWorker
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.AgendaRepository
@@ -82,6 +83,10 @@ class ClasstableApp : Application() {
 
         // Remote Config 后台拉一次;失败/大陆取不到就用代码默认值,不影响任何功能
         scope.launch { RemoteConfig.fetch() }
+
+        // 通知渠道在启动时就建齐:FCM 的系统兜底展示(通知型消息)也才找得到「课表动态」,
+        // 不会退回 SDK 自建的 Miscellaneous;顺带让老用户看到改名后的渠道文案。
+        Notifier.ensureChannels(this)
 
         // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(

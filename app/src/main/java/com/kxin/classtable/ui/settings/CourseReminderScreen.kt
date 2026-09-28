@@ -178,8 +178,8 @@ fun CourseReminderScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "实时活动:从提前量那一刻起常驻一条通知,显示「还有 N 分钟上课 / 下课」直到下课," +
-                            "通知上可直接取消本节课提醒(重试与重启都不会再打扰)。",
+                        text = "实时活动:从提前量那一刻起常驻一条通知,由系统倒计时显示「还有多久上课 / 下课」" +
+                            "直到下课,通知上可直接取消本节课提醒(重试与重启都不会再打扰)。",
                         style = YohakuType.label12,
                         color = colors.neutral6,
                     )

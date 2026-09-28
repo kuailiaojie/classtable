@@ -22,9 +22,10 @@ import org.json.JSONObject
  * 1. 清单里声明 `POST_PROMOTED_NOTIFICATIONS`(非运行时权限,声明即可;用户可在系统设置里关掉);
  * 2. 通知本身 `ongoing`、有 `contentTitle`、使用受支持的样式(BigTextStyle / ProgressStyle 等),
  *    且**不能**用自定义 RemoteViews、不能 colorized、不能是分组摘要、渠道不能是 IMPORTANCE_MIN;
- * 3. 主动请求提升(`setRequestPromotedOngoing(true)` / `EXTRA_REQUEST_PROMOTED_ONGOING`),
- *    并用 `setShortCriticalText` 提供胶囊里的短文案(**纯文本**,状态栏胶囊宽度上限 96dp,
- *    文字放不下就只剩图标,所以短文案要尽量 ≤7 字)。
+ * 3. 主动请求提升(`setRequestPromotedOngoing(true)` / `EXTRA_REQUEST_PROMOTED_ONGOING`)。
+ *    胶囊里的倒计时由通知自己的 `setWhen` + Chronometer 驱动(见 [Notifier.buildLiveCourse]);
+ *    **不要**再用 `setShortCriticalText` —— 它的优先级高于计时器,一旦写上,胶囊就只剩那句
+ *    静态文案(状态栏胶囊宽度上限 96dp,文字放不下还会只剩图标)。
  *
  * 任何一条不满足系统都不会放进胶囊 —— 这也是「装到手机上不出胶囊」最常见的原因。
  * 小米(澎湃 OS)另外提供 `miui.focus.param` 扩展参数作为第三方上岛的公开途径,见 [XiaomiIsland]。
@@ -61,38 +62,24 @@ object CapsuleCompat {
     }
 
     /**
-     * 请求把通知提升为实时活动,并设置胶囊短文案。
+     * 请求把通知提升为实时活动。
      *
-     * 短文案写**显式分钟数**(如「10分钟」):非空短文案本来就会盖过系统的 `when` / Chronometer
-     * 倒计时(官方文档:短文案非空时优先于计时器),而系统计时器在部分机型(实测 ColorOS)
-     * 还会被吞掉 —— 所以胶囊这一格由我们自己写、由服务按分钟刷新。
+     * **不写胶囊短文案** —— 状态栏胶囊那一格交给系统自己的倒计时(`setWhen` + Chronometer,
+     * 见 [Notifier.buildLiveCourse])。理由:`setShortCriticalText` 的优先级高于计时器,一旦
+     * 写上,胶囊就只剩这句静态文案,想让它跟着走就只能每分钟重发一次通知;而国产胶囊(荣耀
+     * 灵动胶囊 / 小米超级岛)会把每次重发当成「又一条新提醒」再展开一次 —— 那正是「每隔一会儿
+     * 跳出来一下」。让系统按秒走,既不重发也不跳。
      *
      * API 36 的公开 SDK 里 `setRequestPromotedOngoing` 没有导出方法,所以以规范里的 extras
      * 键为准写入;方法存在时再补一次调用。
      */
-    fun requestPromotion(builder: Notification.Builder, shortText: String) {
+    fun requestPromotion(builder: Notification.Builder) {
         builder.extras.putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true)
         runCatching {
             builder.javaClass
                 .getMethod("setRequestPromotedOngoing", java.lang.Boolean.TYPE)
                 .invoke(builder, true)
         }.onFailure { Log.d(TAG, "setRequestPromotedOngoing 不可用(${it.javaClass.simpleName}),以 extras 提交提升请求") }
-
-        val called = runCatching {
-            if (Build.VERSION.SDK_INT >= 36) builder.setShortCriticalText(shortText) else null
-        }.isSuccess
-        val reflected = called || runCatching {
-            builder.javaClass
-                .getMethod("setShortCriticalText", String::class.java)
-                .invoke(builder, shortText)
-        }.recoverCatching {
-            builder.javaClass
-                .getMethod("setShortCriticalText", CharSequence::class.java)
-                .invoke(builder, shortText)
-        }.isSuccess
-        if (!reflected) Log.d(TAG, "setShortCriticalText 不可用,以 extras 提交胶囊文案")
-        // 胶囊文案保持纯文本:部分机型的渲染器会丢弃带 span 的短文案
-        builder.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, shortText)
     }
 
     /**
@@ -108,14 +95,11 @@ object CapsuleCompat {
         Log.i(
             TAG,
             "实时活动构建:promotable=$promotable, requested=$requested, " +
-                "canPostPromoted=${canPostPromoted(context)}, chip=${
-                    notification.extras.getCharSequence(EXTRA_SHORT_CRITICAL_TEXT)
-                }, 小米岛=${XiaomiIsland.state(context).summary()}",
+                "canPostPromoted=${canPostPromoted(context)}, 小米岛=${XiaomiIsland.state(context).summary()}",
         )
     }
 
     const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
-    const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 }
 
 /**
@@ -191,7 +175,7 @@ object XiaomiIsland {
     /**
      * 给实时活动通知补上超级岛参数。返回是否写入成功。
      *
-     * @param chipText 胶囊/小岛上的短文案(纯文本,如「10分钟」)
+     * @param chipText 小岛上的短文案(纯文本,如「即将开始」;小米岛不会自己按秒走)
      */
     fun applyTo(
         builder: Notification.Builder,
