@@ -405,19 +405,21 @@ private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
  * 导航转场。
  *
  * 两个层级用两套动作:根标签之间是「同层切换」,不该有方向感 —— 淡出 → 淡入;
- * 二级页则是「上/下钻」,用**分层视差**表达层级:上层页整幅平移,被压住的那页只走
- * [YohakuMotion.navParallaxFraction] 这一小截。走的距离不同,谁浮在上面、谁被压在后面
- * 一眼可辨 —— 这是 iOS 返回手势的手感,也是「空间连贯」:形态在变,但两页的相对关系
- * 始终接得上(推进时那页退到哪,返回时就从哪滑回)。
+ * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
+ *
+ * **铁律:同一时刻两页绝不能都留在屏内。** NavHost 把退场页与入场页叠在同一个容器里,
+ * 各自只沿水平轴平移。只要有一帧两页都还在屏内,重叠区就会把**错的那一页**画在上面
+ * (退场页的卡片压在入场页的文字上、把行内文字截断),看起来就是「两页同时出现又互相遮挡」。
+ * 所以两页必须**首尾相接、恒不重叠**:退场页整幅滑出屏幕,入场页整幅滑入 —— 两页同曲线、
+ * 同时长,边界线严格重合,任意时刻屏幕上只可能有一页的像素。
+ *
+ * 由此推出两条:**别让任何一页「只走一小段」**(那必然与另一页重叠);也不要让两页同时改
+ * alpha(那是同一类问题的另一种形态 —— 双重曝光)。「残影」与「文字被另一页截断」是同一个
+ * 根因的两种表现。
  *
  * 转场由**系统的返回手势驱动**(targetSdk 36 起预测性返回默认开启):手指拖到哪,两页就
  * 停在哪、松手前随时能退回 —— 过程可控,而不是先放手、再看一段固定时长的动画。所以这里
  * 只用可被「拖动定位」的补间(slide / fade / scale + tween),不掺动画协程这类写死的驱动。
- *
- * 「上一个界面的残影」= 两页在同一时刻各自半透明、**且位置重合**,才会互相透出来。这里两条
- * 都避开了:被压住的页只做位移(始终不透明),上层页整幅压在上面(锁死遮住下层),两者重叠
- * 的地方永远被上层盖住,不会双重曝光。根标签的串行淡化同理 —— 旧页先淡出、新页等它走完再
- * 淡入,任意时刻不同时改 alpha。
  */
 private fun navEnter(from: String?, to: String?): EnterTransition =
     if (isRootTab(from) && isRootTab(to)) {
@@ -431,7 +433,7 @@ private fun navEnter(from: String?, to: String?): EnterTransition =
                 initialScale = 0.98f,
             )
     } else {
-        // 上层页:整幅推入
+        // 入场页:整幅推入(必须整幅 —— 少走一点就会与退场页重叠,见上)
         slideInHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
             initialOffsetX = { it },
@@ -446,18 +448,18 @@ private fun navExit(from: String?, to: String?): ExitTransition =
                 targetScale = 1.01f,
             )
     } else {
-        // 被压住的页:只退这一小截,和返回时它滑回的位置正好对上
+        // 退场页:整幅滑出——与入场页共用同一条曲线与时长的「胶片」,边界线始终重合
         slideOutHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-            targetOffsetX = { -(it * YohakuMotion.navParallaxFraction).toInt() },
+            targetOffsetX = { -it },
         )
     }
 
-/** 返回:被压住的页从它退到的那一小截里滑回,当前页整幅向右揭开(两页同曲线同长,见 [navEnter])。 */
+/** 返回:被压住的页从左侧整幅滑回,当前页整幅向右滑出(两页同曲线同长,见 [navEnter])。 */
 private fun navPopEnter(): EnterTransition =
     slideInHorizontally(
         animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-        initialOffsetX = { -(it * YohakuMotion.navParallaxFraction).toInt() },
+        initialOffsetX = { -it },
     )
 
 private fun navPopExit(): ExitTransition =
