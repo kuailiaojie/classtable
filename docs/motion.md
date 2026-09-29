@@ -33,6 +33,7 @@
 | `staggerTight` | 22ms | 一屏塞得下的网格(周视图课程块) |
 | `staggerLoose` | 60ms | 条目少、要逐一看清(权限引导) |
 | `headerParallaxPx` | 56px | 周视图表头视差(注意单位是 **px**,直接给 `graphicsLayer`) |
+| `navParallaxFraction` | 0.30 | 二级页转场:被压住那页的位移比例(相对整幅宽度) |
 | `easeLinear` | 匀速 | GSAP `ease: "none"`,进度驱动 |
 | `easeOut` | `CubicBezierEasing(.215,.61,.355,1)` | GSAP `power2.out` |
 | `easeInOut` | `CubicBezierEasing(.645,.045,.355,1)` | GSAP `power2.inOut` |
@@ -104,10 +105,19 @@ LaunchedEffect(Unit) {
 | `ui/courses/CoursesScreen.kt` | 列表增删 / 选择模式重排 |
 | `ui/permissions/PermissionRow.kt` | 状态点缩放 + 文字变色 |
 | `ui/onboarding/OnboardingScreen.kt` | 整页 stagger 入场 + CTA 文案切换 |
-| `MainActivity.kt` | 导航转场(根标签串行淡化 / 二级页水平滑动)、引导覆盖层出入场 |
+| `MainActivity.kt` | 导航转场(根标签串行淡化 / 二级页分层视差)、引导覆盖层出入场 |
+| `design/YohakuTopBar.kt` | 返回 ‹ 的按压缩放 |
 
-导航转场的一条经验(见 `MainActivity.kt` 里 `navEnter`/`navExit` 的注释):**两页在同一时刻各自半透明会互相透出残影**,
-所以要么让同一时刻只有一页在画,要么让两页同曲线同长、首尾相接。改转场时别打破这一点。
+导航转场由**系统返回手势驱动**(targetSdk 36 起预测性返回默认开启):手指拖到哪、两页就停在哪,松手前随时能退回。
+所以 `navEnter` / `navExit` / `navPopEnter` / `navPopExit`(见 `MainActivity.kt`)只允许用**可被拖动定位**的补间
+(slide / fade / scale + tween),别掺 `Animatable` 或动画协程这类写死的驱动 —— 否则返回手势会退化成「先放手、再播一段动画」。
+
+二级页用**分层视差**:上层页整幅平移,被压住那页只走 `navParallaxFraction` 那一小截 —— 距离差就是深度差;
+推进时那页退到哪、返回时就从哪滑回,两页的相对关系始终接得上。这是 iOS 返回手势的手感:把上面一页「揭开」,
+而不是把一整块画布平移。
+
+一条经验:**「上一页的残影」= 两页在同一时刻各自半透明、且位置重合**。所以要么让任意时刻只有一页在变 alpha
+(根标签的串行淡化),要么让两页的重叠区永远被不透明的上层盖住(分层视差)。改转场时别打破这一点。
 
 ---
 

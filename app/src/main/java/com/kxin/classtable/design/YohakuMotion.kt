@@ -62,6 +62,18 @@ object YohakuMotion {
      */
     const val headerParallaxPx = 56f
 
+    /**
+     * 二级页转场:被压住的那一页只平移「整幅宽度的这一小截」。
+     *
+     * 推进时它退到 -0.30×宽,返回时再从那里滑回;上层页则整幅推进 / 退出。两页**同曲线同长,
+     * 但走的距离不同** —— 距离差就是深度差,谁浮在上面、谁被压在后面一眼可辨。
+     * 这是 iOS 返回手势的手感:不是把一整块画布平移,而是把上面一页「揭开」,底下那页被留在原处。
+     *
+     * 只用于 [androidx.compose.animation.slideInHorizontally] /
+     * [androidx.compose.animation.slideOutHorizontally] 的 offset 比例(相对整幅宽度)。
+     */
+    const val navParallaxFraction = 0.30f
+
     /** GSAP `ease: "none"` —— 匀速,用于进度驱动(品牌条生长、扫光)。 */
     val easeLinear: Easing = LinearEasing
 

@@ -405,15 +405,19 @@ private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
  * 导航转场。
  *
  * 两个层级用两套动作:根标签之间是「同层切换」,不该有方向感 —— 淡出 → 淡入;
- * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
+ * 二级页则是「上/下钻」,用**分层视差**表达层级:上层页整幅平移,被压住的那页只走
+ * [YohakuMotion.navParallaxFraction] 这一小截。走的距离不同,谁浮在上面、谁被压在后面
+ * 一眼可辨 —— 这是 iOS 返回手势的手感,也是「空间连贯」:形态在变,但两页的相对关系
+ * 始终接得上(推进时那页退到哪,返回时就从哪滑回)。
  *
- * 「上一个界面的残影」= 两页在同一时刻各自半透明、互相透出来。所以这里只做两件事,
- * 让任意时刻要么只有一页在画,要么两页首尾相接、绝不重叠:
+ * 转场由**系统的返回手势驱动**(targetSdk 36 起预测性返回默认开启):手指拖到哪,两页就
+ * 停在哪、松手前随时能退回 —— 过程可控,而不是先放手、再看一段固定时长的动画。所以这里
+ * 只用可被「拖动定位」的补间(slide / fade / scale + tween),不掺动画协程这类写死的驱动。
  *
- * - **根标签串行淡化**:旧页先淡出([YohakuMotion.durFast]),新页等到它走完再淡入
- *   (入门动画带同长的 delay)。两页的 alpha 从不同时变化,也就不会双重曝光。
- * - **二级页同曲线同长**:进入 / 退出的时长与曲线完全一致,两页像一条连续胶片一起平移,
- *   始终首尾相接 —— 曲线不一致时两页会短暂重叠,退场页会盖在新页上。
+ * 「上一个界面的残影」= 两页在同一时刻各自半透明、**且位置重合**,才会互相透出来。这里两条
+ * 都避开了:被压住的页只做位移(始终不透明),上层页整幅压在上面(锁死遮住下层),两者重叠
+ * 的地方永远被上层盖住,不会双重曝光。根标签的串行淡化同理 —— 旧页先淡出、新页等它走完再
+ * 淡入,任意时刻不同时改 alpha。
  */
 private fun navEnter(from: String?, to: String?): EnterTransition =
     if (isRootTab(from) && isRootTab(to)) {
@@ -427,6 +431,7 @@ private fun navEnter(from: String?, to: String?): EnterTransition =
                 initialScale = 0.98f,
             )
     } else {
+        // 上层页:整幅推入
         slideInHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
             initialOffsetX = { it },
@@ -441,17 +446,18 @@ private fun navExit(from: String?, to: String?): ExitTransition =
                 targetScale = 1.01f,
             )
     } else {
+        // 被压住的页:只退这一小截,和返回时它滑回的位置正好对上
         slideOutHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-            targetOffsetX = { -it },
+            targetOffsetX = { -(it * YohakuMotion.navParallaxFraction).toInt() },
         )
     }
 
-/** 返回:被压住的页面从左侧滑回、当前页向右滑出。两页同曲线同长,始终首尾相接(见 [navEnter])。 */
+/** 返回:被压住的页从它退到的那一小截里滑回,当前页整幅向右揭开(两页同曲线同长,见 [navEnter])。 */
 private fun navPopEnter(): EnterTransition =
     slideInHorizontally(
         animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-        initialOffsetX = { -it },
+        initialOffsetX = { -(it * YohakuMotion.navParallaxFraction).toInt() },
     )
 
 private fun navPopExit(): ExitTransition =
