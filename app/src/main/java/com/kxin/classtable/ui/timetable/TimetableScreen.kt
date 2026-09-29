@@ -1,7 +1,11 @@
 package com.kxin.classtable.ui.timetable
 
 import android.content.Context
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,16 +25,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -51,6 +56,9 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberEntranceTracker
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
@@ -138,7 +146,6 @@ fun TimetableScreen(
         Adjustments.decode(settings.scheduleAdjustments)
     }
     val today = Schedule.todayWeekday()
-    val scope = rememberCoroutineScope()
 
     var isDayMode by rememberSaveable { mutableStateOf(false) }
     var detailCourse by remember { mutableStateOf<Course?>(null) }
@@ -205,188 +212,249 @@ fun TimetableScreen(
         }
     }
 
+    val dayMode = isDayMode
+    val haptics = rememberYohakuHaptics()
+    // 入场只演一次:翻页会回收页、回头会重组,没有这层守卫就会每翻一次重播一次
+    val entrance = rememberEntranceTracker()
+
+    // 与模式无关的锚点:锚定「第几周 + 星期几」。切周 / 日只是换粒度,不换位置(任务连续);
+    // 首次进入仍落在真实当前周 / 今天。用 remember(非 saveable):重建即回到当前周,与既有行为一致。
+    var anchorWeek by remember { mutableIntStateOf(realWeek) }
+    var anchorWeekday by remember { mutableIntStateOf(today) }
+    val atToday = if (dayMode) anchorWeek == realWeek && anchorWeekday == today else anchorWeek == realWeek
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        key(isDayMode) {
-            val pageCount = if (isDayMode) weekCount * 7 else weekCount
-            val initialPage = if (isDayMode) {
-                ((realWeek - 1) * 7 + (today - 1)).coerceIn(0, pageCount - 1)
+        // 顶栏固定:切换的是内容,不是页头 —— 页头跟着转场一起滑反而显得整屏在晃。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = YohakuDimens.screenPadding, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            weather?.let { w ->
+                // 温度变化时滚动到新值(数字滚动,不是硬跳)
+                val temp by animateIntAsState(
+                    targetValue = w.temperature.roundToInt(),
+                    animationSpec = YohakuMotion.tween(YohakuMotion.durSlow),
+                    label = "weatherTemp",
+                )
+                Row(
+                    modifier = Modifier
+                        .clickable { showWeather = true }
+                        .padding(end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    WeatherIcon(weather = w, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$temp°",
+                        style = YohakuType.copy13,
+                        color = colors.neutral9,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            // 「今天」:已经在今天时不给可点态 —— 点了没有任何变化,给出可点的样子就是骗人
+            Text(
+                text = "今天",
+                style = YohakuType.copy13,
+                color = if (atToday) colors.neutral5 else colors.neutral7,
+                modifier = Modifier
+                    .then(
+                        if (atToday) {
+                            Modifier
+                        } else {
+                            Modifier.clickable {
+                                haptics.tick()
+                                anchorWeek = realWeek
+                                anchorWeekday = today
+                            }
+                        },
+                    )
+                    .yohakuTouchTarget()
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                YohakuChip(
+                    text = "周",
+                    selected = !isDayMode,
+                    onClick = { isDayMode = false },
+                )
+                YohakuChip(
+                    text = "日",
+                    selected = isDayMode,
+                    onClick = { isDayMode = true },
+                )
+            }
+            Text(
+                text = "添加",
+                style = YohakuType.copy13,
+                color = colors.accent,
+                modifier = Modifier
+                    .yohakuTouchTarget()
+                    .clickable { showAdd = true }
+                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+            )
+        }
+
+        // 周 / 日:同一份内容换粒度。横向共享轴 —— 退场页整幅滑出、入场页整幅滑入,
+        // 同曲线同时长,首尾相接(见文件头铁律:任意时刻屏上只可能有一页的像素)。
+        AnimatedContent(
+            targetState = isDayMode,
+            modifier = Modifier.weight(1f),
+            transitionSpec = {
+                val forward = targetState
+                val spec = YohakuMotion.tween<IntOffset>(YohakuMotion.durSlow, YohakuMotion.easeOut)
+                slideInHorizontally(animationSpec = spec) { if (forward) it else -it } togetherWith
+                    slideOutHorizontally(animationSpec = spec) { if (forward) -it else it }
+            },
+            label = "timetableMode",
+        ) { dayMode ->
+            val pageCount = if (dayMode) weekCount * 7 else weekCount
+            val initialPage = if (dayMode) {
+                (((anchorWeek - 1) * 7 + (anchorWeekday - 1))).coerceIn(0, pageCount - 1)
             } else {
-                (realWeek - 1).coerceIn(0, weekCount - 1)
+                (anchorWeek - 1).coerceIn(0, weekCount - 1)
             }
             val pagerState = rememberPagerState(initialPage = initialPage) { pageCount }
-            // 无论从哪里打开应用,都先落在**当前周 / 今天**:翻页状态是可保存的,
-            // 进程重建后会恢复成上次翻到的那一页,所以这里按真实周次把它拨回来。
-            LaunchedEffect(realWeek, weekCount, isDayMode) {
-                if (pagerState.currentPage != initialPage) pagerState.scrollToPage(initialPage)
+            fun pageFor(): Int = if (dayMode) {
+                ((anchorWeek - 1) * 7 + (anchorWeekday - 1)).coerceIn(0, pageCount - 1)
+            } else {
+                (anchorWeek - 1).coerceIn(0, weekCount - 1)
+            }
+            // 锚点 → 分页:点「今天」或点星期头后,把当前模式的分页滚过去
+            LaunchedEffect(anchorWeek, anchorWeekday, dayMode) {
+                val target = pageFor()
+                if (pagerState.currentPage != target) pagerState.animateScrollToPage(target)
+            }
+            // 分页 → 锚点:滑动落定后把锚点写成当前所看的位置,切模式时才接得上
+            LaunchedEffect(pagerState, dayMode) {
+                snapshotFlow { pagerState.settledPage }.collect { p ->
+                    if (dayMode) {
+                        anchorWeek = p / 7 + 1
+                        anchorWeekday = p % 7 + 1
+                    } else {
+                        anchorWeek = p + 1
+                    }
+                }
             }
             val currentPage = pagerState.currentPage
-            val displayedWeek = if (isDayMode) currentPage / 7 + 1 else currentPage + 1
+            val displayedWeek = if (dayMode) currentPage / 7 + 1 else currentPage + 1
             val weekRange = Schedule.weekRangeText(settings.semesterStartDay, displayedWeek)
             val weekLabel = "第 $displayedWeek 周" +
                 (if (weekRange.isNotEmpty()) " · $weekRange" else "") +
                 (if (settings.semesterStartDay <= 0L) " · 未设置开学日" else "")
 
-            // 顶栏:左上角当前天气图标,右上角今天 / 视图切换 / 添加
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = YohakuDimens.screenPadding, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                weather?.let { w ->
-                    // 温度变化时滚动到新值(数字滚动,不是硬跳)
-                    val temp by animateIntAsState(
-                        targetValue = w.temperature.roundToInt(),
-                        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow),
-                        label = "weatherTemp",
-                    )
-                    Row(
-                        modifier = Modifier
-                            .clickable { showWeather = true }
-                            .padding(end = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 日期 + 周信息(天气挪到左上角后,日期单独一行)。
+                // 日模式下这一天由 DayList 逐页绘制(随翻页一起滑动),这里不再画一遍 ——
+                // 否则表头与列表会各显示一次同一个日期。
+                if (!dayMode) {
+                    val todayDate = LocalDate.now()
+                    Column(
+                        modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
                     ) {
-                        WeatherIcon(weather = w, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "$temp°",
+                            text = "${todayDate.monthValue}月${todayDate.dayOfMonth}日 " +
+                                "周${"一二三四五六日"[todayDate.dayOfWeek.value - 1]}",
+                            style = YohakuType.title20,
+                            color = colors.neutral10,
+                        )
+                        Text(
+                            text = weekLabel,
                             style = YohakuType.copy13,
-                            color = colors.neutral9,
+                            color = colors.neutral7,
                         )
                     }
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "今天",
-                    style = YohakuType.copy13,
-                    color = colors.neutral7,
-                    modifier = Modifier
-                        .clickable { scope.launch { pagerState.animateScrollToPage(initialPage) } }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    YohakuChip(
-                        text = "周",
-                        selected = !isDayMode,
-                        onClick = { isDayMode = false },
-                    )
-                    YohakuChip(
-                        text = "日",
-                        selected = isDayMode,
-                        onClick = { isDayMode = true },
-                    )
-                }
-                Text(
-                    text = "添加",
-                    style = YohakuType.copy13,
-                    color = colors.accent,
-                    modifier = Modifier
-                        .clickable { showAdd = true }
-                        .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-                )
-            }
+                Spacer(modifier = Modifier.height(4.dp))
 
-            // 日期 + 周信息(天气挪到左上角后,日期单独一行)。
-            // 日模式下这一天由 DayList 逐页绘制(随翻页一起滑动),这里不再画一遍 ——
-            // 否则表头与列表会各显示一次同一个日期。
-            if (!isDayMode) {
-                val todayDate = LocalDate.now()
-                Column(
-                    modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
-                ) {
-                    Text(
-                        text = "${todayDate.monthValue}月${todayDate.dayOfMonth}日 " +
-                            "周${"一二三四五六日"[todayDate.dayOfWeek.value - 1]}",
-                        style = YohakuType.title20,
-                        color = colors.neutral10,
-                    )
-                    Text(
-                        text = weekLabel,
-                        style = YohakuType.copy13,
-                        color = colors.neutral7,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f),
-                beyondViewportPageCount = 1,
-            ) { page ->
-                if (!isDayMode) {
-                    val pageWeek = page + 1
-                    val dayNumbers = remember(settings.semesterStartDay, pageWeek) {
-                        Schedule.weekDayNumbers(settings.semesterStartDay, pageWeek)
-                    }
-                    val teachingDays = remember(
-                        adjustments,
-                        settings.semesterStartDay,
-                        settings.semesterWeekCount,
-                        pageWeek,
-                    ) {
-                        resolveTeachingDays(
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f),
+                    beyondViewportPageCount = 1,
+                ) { page ->
+                    if (!dayMode) {
+                        val pageWeek = page + 1
+                        val dayNumbers = remember(settings.semesterStartDay, pageWeek) {
+                            Schedule.weekDayNumbers(settings.semesterStartDay, pageWeek)
+                        }
+                        val teachingDays = remember(
                             adjustments,
                             settings.semesterStartDay,
                             settings.semesterWeekCount,
                             pageWeek,
-                        )
-                    }
-                    // 「休」= 这天停课;「补」= 这天上的不是本来的星期(补别的日子的课)
-                    val marks = teachingDays.mapIndexed { index, teaching ->
-                        when {
-                            teaching == null -> "休"
-                            teaching.second != index + 1 -> "补"
-                            else -> null
+                        ) {
+                            resolveTeachingDays(
+                                adjustments,
+                                settings.semesterStartDay,
+                                settings.semesterWeekCount,
+                                pageWeek,
+                            )
                         }
-                    }
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        WeekdayHeader(
-                            dayNumbers = dayNumbers,
-                            today = today,
-                            marks = marks,
-                            // 切周视差:表头比网格移动得稍慢一点,横向拖动时有一点层次
-                            modifier = Modifier.graphicsLayer {
-                                translationX = pagerState.currentPageOffsetFraction * YohakuMotion.headerParallaxPx
-                            },
-                        )
-                        WeekGrid(
+                        // 「休」= 这天停课;「补」= 这天上的不是本来的星期(补别的日子的课)
+                        val marks = teachingDays.mapIndexed { index, teaching ->
+                            when {
+                                teaching == null -> "休"
+                                teaching.second != index + 1 -> "补"
+                                else -> null
+                            }
+                        }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            WeekdayHeader(
+                                dayNumbers = dayNumbers,
+                                today = today,
+                                marks = marks,
+                                onDayClick = { d ->
+                                    anchorWeek = pageWeek
+                                    anchorWeekday = d
+                                    isDayMode = true
+                                },
+                                // 切周视差:表头比网格移动得稍慢一点,横向拖动时有一点层次
+                                modifier = Modifier.graphicsLayer {
+                                    translationX = pagerState.currentPageOffsetFraction * YohakuMotion.headerParallaxPx
+                                },
+                            )
+                            WeekGrid(
+                                courses = courses,
+                                periods = periods,
+                                week = pageWeek,
+                                today = today,
+                                nowMinute = nowMinute,
+                                showNowLine = pageWeek == realWeek,
+                                teachingDays = teachingDays,
+                                prefs = prefs,
+                                entrance = entrance,
+                                onCourseClick = { detailCourse = it },
+                                // 网格排在悬浮导航之上,最后一两节不会被导航栏永久压住
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(bottom = YohakuDimens.navReservedHeight),
+                            )
+                        }
+                    } else {
+                        val pageWeek = page / 7 + 1
+                        val weekday = page % 7 + 1
+                        val date = dayDate(settings.semesterStartDay, pageWeek, weekday, today)
+                        DayList(
+                            date = date,
+                            weekLabel = weekLabel,
                             courses = courses,
                             periods = periods,
-                            week = pageWeek,
-                            today = today,
+                            adjustments = adjustments,
+                            semesterStartDay = settings.semesterStartDay,
+                            semesterWeekCount = settings.semesterWeekCount,
                             nowMinute = nowMinute,
-                            showNowLine = pageWeek == realWeek,
-                            teachingDays = teachingDays,
-                            prefs = prefs,
+                            isToday = date == LocalDate.now(),
                             onCourseClick = { detailCourse = it },
-                            // 网格排在悬浮导航之上,最后一两节不会被导航栏永久压住
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(bottom = YohakuDimens.navReservedHeight),
+                            entrance = entrance,
+                            modifier = Modifier.weight(1f),
                         )
                     }
-                } else {
-                    val pageWeek = page / 7 + 1
-                    val weekday = page % 7 + 1
-                    val date = dayDate(settings.semesterStartDay, pageWeek, weekday, today)
-                    DayList(
-                        date = date,
-                        weekLabel = weekLabel,
-                        courses = courses,
-                        periods = periods,
-                        adjustments = adjustments,
-                        semesterStartDay = settings.semesterStartDay,
-                        semesterWeekCount = settings.semesterWeekCount,
-                        nowMinute = nowMinute,
-                        isToday = date == LocalDate.now(),
-                        onCourseClick = { detailCourse = it },
-                        modifier = Modifier.weight(1f),
-                    )
                 }
             }
         }

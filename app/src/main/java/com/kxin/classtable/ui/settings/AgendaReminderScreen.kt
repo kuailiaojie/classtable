@@ -106,12 +106,12 @@ fun AgendaReminderScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             SettingsSection(title = "日程提醒") {
-                SettingBlock(
+                SettingSwitchRow(
                     title = "日程提醒",
                     subtitle = "开启后,在日程开始前提醒你。每条日程可在它自己的编辑页单独开关、并选提前多久。",
-                ) {
-                    ChipToggle(selected = enabled) { enabled = it }
-                }
+                    checked = enabled,
+                    onCheckedChange = { enabled = it },
+                )
                 if (enabled) {
                     DividerLine()
                     SettingBlock(

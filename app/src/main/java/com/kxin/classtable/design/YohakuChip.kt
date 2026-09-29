@@ -37,6 +37,7 @@ fun YohakuChip(
     contentAlignment: Alignment = Alignment.Center,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val shape = RoundedCornerShape(YohakuDimens.radiusChip)
     val spec = YohakuMotion.tween<Color>(YohakuMotion.durBase)
     val background by animateColorAsState(
@@ -59,7 +60,14 @@ fun YohakuChip(
             .clip(shape)
             .background(background)
             .border(1.dp, outline, shape)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = {
+                    haptics.tick()
+                    onClick()
+                },
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = contentAlignment,
     ) {

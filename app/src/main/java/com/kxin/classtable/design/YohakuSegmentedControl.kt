@@ -30,6 +30,10 @@ import androidx.compose.ui.unit.dp
  *
  * 与 [YohakuChip] 的区别:chip 是「若干可多选的标签」,分段控件表达的是「同一处的几个互斥视图」——
  * 用它来切「日程 / 倒计时」,选中指示块滑动过去,而不是两个各自变色的 chip。
+ *
+ * [progress] 缺省时指示块按 [selectedIndex] 自己缓动(点选)。当它由外部的可拖动来源驱动
+ * (如 `pagerState.currentPage + currentPageOffsetFraction`)时传进来 —— 指示块就**跟着手指走**,
+ * 点选与滑动共用同一个位移,不再各动各的(过程可控)。
  */
 @Composable
 fun YohakuSegmentedControl(
@@ -37,14 +41,17 @@ fun YohakuSegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    progress: Float? = null,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val shape = RoundedCornerShape(YohakuDimens.radiusControl)
-    val position by animateFloatAsState(
+    val animated by animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
         animationSpec = YohakuMotion.tween(YohakuMotion.durBase, YohakuMotion.easeOut),
         label = "segmentedPosition",
     )
+    val position = progress ?: animated
     BoxWithConstraints(
         modifier = modifier
             .height(34.dp)
@@ -80,7 +87,10 @@ fun YohakuSegmentedControl(
                         .selectable(
                             selected = selected,
                             role = Role.RadioButton,
-                            onClick = { onSelect(index) },
+                            onClick = {
+                                if (index != selectedIndex) haptics.tick()
+                                onSelect(index)
+                            },
                         ),
                     contentAlignment = Alignment.Center,
                 ) {

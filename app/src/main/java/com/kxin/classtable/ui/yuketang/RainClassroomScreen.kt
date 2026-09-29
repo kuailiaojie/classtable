@@ -1,7 +1,6 @@
 package com.kxin.classtable.ui.yuketang
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +29,6 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.yuketang.YuketangClient
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
-import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuTextField
@@ -38,9 +36,9 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.ui.settings.DividerLine
-import com.kxin.classtable.ui.settings.SettingBlock
 import com.kxin.classtable.ui.settings.SettingRow
 import com.kxin.classtable.ui.settings.SettingRowWithSubtitle
+import com.kxin.classtable.ui.settings.SettingSwitchRow
 import com.kxin.classtable.ui.settings.SettingsSection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -276,73 +274,61 @@ fun RainClassroomScreen(
         }
 
         SettingsSection(title = "公告") {
-            SettingBlock(
+            SettingSwitchRow(
                 title = "雨课堂公告",
                 subtitle = "总开关。关闭后不发通知、课前提醒里也不带公告,后台不再拉取。",
-            ) {
-                ChipToggle(
-                    selected = settings.yuketangEnabled,
-                    onSelected = { enabled ->
-                        viewModel.setOptions(
-                            enabled = enabled,
-                            includeInReminder = settings.yuketangIncludeInReminder,
-                            backgroundFetch = settings.yuketangBackgroundFetch,
-                            notifyNew = settings.yuketangNotifyNew,
-                        )
-                    },
-                )
-            }
+                checked = settings.yuketangEnabled,
+                onCheckedChange = { enabled ->
+                    viewModel.setOptions(
+                        enabled = enabled,
+                        includeInReminder = settings.yuketangIncludeInReminder,
+                        backgroundFetch = settings.yuketangBackgroundFetch,
+                        notifyNew = settings.yuketangNotifyNew,
+                    )
+                },
+            )
             DividerLine()
-            SettingBlock(
+            SettingSwitchRow(
                 title = "课前提醒包含最新公告",
                 subtitle = "每节课开始前的提醒里附上该课程最新一条公告的标题(读本机缓存,不联网)。",
-            ) {
-                ChipToggle(
-                    selected = settings.yuketangIncludeInReminder,
-                    onSelected = { enabled ->
-                        viewModel.setOptions(
-                            enabled = settings.yuketangEnabled,
-                            includeInReminder = enabled,
-                            backgroundFetch = settings.yuketangBackgroundFetch,
-                            notifyNew = settings.yuketangNotifyNew,
-                        )
-                    },
-                )
-            }
+                checked = settings.yuketangIncludeInReminder,
+                onCheckedChange = { enabled ->
+                    viewModel.setOptions(
+                        enabled = settings.yuketangEnabled,
+                        includeInReminder = enabled,
+                        backgroundFetch = settings.yuketangBackgroundFetch,
+                        notifyNew = settings.yuketangNotifyNew,
+                    )
+                },
+            )
             DividerLine()
-            SettingBlock(
+            SettingSwitchRow(
                 title = "后台自动拉取",
                 subtitle = "每小时检查一次(仅联网时),把公告同步到本机,供课程详情与课前提醒使用。",
-            ) {
-                ChipToggle(
-                    selected = settings.yuketangBackgroundFetch,
-                    onSelected = { enabled ->
-                        viewModel.setOptions(
-                            enabled = settings.yuketangEnabled,
-                            includeInReminder = settings.yuketangIncludeInReminder,
-                            backgroundFetch = enabled,
-                            notifyNew = settings.yuketangNotifyNew,
-                        )
-                    },
-                )
-            }
+                checked = settings.yuketangBackgroundFetch,
+                onCheckedChange = { enabled ->
+                    viewModel.setOptions(
+                        enabled = settings.yuketangEnabled,
+                        includeInReminder = settings.yuketangIncludeInReminder,
+                        backgroundFetch = enabled,
+                        notifyNew = settings.yuketangNotifyNew,
+                    )
+                },
+            )
             DividerLine()
-            SettingBlock(
+            SettingSwitchRow(
                 title = "新公告提醒",
                 subtitle = "发现新公告时发一条通知(独立渠道,不覆盖课程提醒)。",
-            ) {
-                ChipToggle(
-                    selected = settings.yuketangNotifyNew,
-                    onSelected = { enabled ->
-                        viewModel.setOptions(
-                            enabled = settings.yuketangEnabled,
-                            includeInReminder = settings.yuketangIncludeInReminder,
-                            backgroundFetch = settings.yuketangBackgroundFetch,
-                            notifyNew = enabled,
-                        )
-                    },
-                )
-            }
+                checked = settings.yuketangNotifyNew,
+                onCheckedChange = { enabled ->
+                    viewModel.setOptions(
+                        enabled = settings.yuketangEnabled,
+                        includeInReminder = settings.yuketangIncludeInReminder,
+                        backgroundFetch = settings.yuketangBackgroundFetch,
+                        notifyNew = enabled,
+                    )
+                },
+            )
         }
 
         SettingsSection(title = "数据") {
@@ -371,15 +357,6 @@ fun RainClassroomScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-/** 开 / 关一对 chip(项目没有 Switch,布尔项一律用 chip 对)。 */
-@Composable
-private fun ChipToggle(selected: Boolean, onSelected: (Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        YohakuChip(text = "开启", selected = selected, onClick = { onSelected(true) })
-        YohakuChip(text = "关闭", selected = !selected, onClick = { onSelected(false) })
     }
 }
 

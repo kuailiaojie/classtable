@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
@@ -53,6 +54,7 @@ internal fun DayList(
     nowMinute: Int,
     isToday: Boolean,
     onCourseClick: (Course) -> Unit,
+    entrance: EntranceTracker,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
@@ -149,17 +151,22 @@ internal fun DayList(
                     verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
                 ) {
                     itemsIndexed(dayCourses, key = { _, c -> c.id }) { index, course ->
-                        // 入场错峰:延迟按序号递增,但封顶,免得长列表末尾等太久
-                        val appear = remember(course.id) { Animatable(0f) }
+                        // 入场错峰:延迟按序号递增,但封顶,免得长列表末尾等太久。
+                        // 已在本屏出现过的课程直接呈现,不再因翻页回收而重演(见 EntranceTracker)。
+                        val animate = entrance.shouldAnimate(course.id)
+                        val appear = remember(course.id) { Animatable(if (animate) 0f else 1f) }
                         LaunchedEffect(course.id) {
-                            appear.animateTo(
-                                targetValue = 1f,
-                                animationSpec = YohakuMotion.tween(
-                                    durationMs = YohakuMotion.durBase,
-                                    easing = YohakuMotion.easeOut,
-                                    delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
-                                ),
-                            )
+                            if (animate) {
+                                appear.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = YohakuMotion.tween(
+                                        durationMs = YohakuMotion.durBase,
+                                        easing = YohakuMotion.easeOut,
+                                        delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
+                                    ),
+                                )
+                                entrance.markSeen(course.id)
+                            }
                         }
                         val isCurrent = Schedule.isCourseOngoing(course, periods)
                         YohakuCard(
@@ -171,6 +178,7 @@ internal fun DayList(
                                 },
                             accentBar = isCurrent,
                             containerColor = courseTint(course),
+                            onClick = { onCourseClick(course) },
                         ) {
                             Row(verticalAlignment = Alignment.Top) {
                                 Text(

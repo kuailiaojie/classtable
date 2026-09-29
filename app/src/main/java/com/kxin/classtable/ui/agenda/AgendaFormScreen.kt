@@ -1,5 +1,8 @@
 package com.kxin.classtable.ui.agenda
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,13 +36,17 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDatePicker
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTimePicker
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaKind
@@ -88,8 +95,15 @@ fun AgendaFormScreen(
             onBack = { nav.popBackStack() },
         )
         if (eventId != null && editing == null) {
-            // 编辑态:等目标条目从本地库出来再建表单,避免把「还没读到」当成新建
-            Spacer(modifier = Modifier.weight(1f))
+            // 编辑态:等目标条目从本地库出来再建表单,避免把「还没读到」当成新建。
+            // 加载中给一行轻提示,而不是留一整屏空白(那看起来像页面坏了)。
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "载入中…",
+                    style = YohakuType.copy14,
+                    color = colors.neutral6,
+                )
+            }
         } else {
             AgendaFormBody(
                 initial = editing,
@@ -144,6 +158,9 @@ private fun AgendaFormBody(
     var pickStartTime by remember { mutableStateOf(false) }
     var pickEndDate by remember { mutableStateOf(false) }
     var pickEndTime by remember { mutableStateOf(false) }
+    // 删除不可逆:补一层确认
+    var confirmDelete by remember { mutableStateOf(false) }
+    val haptics = rememberYohakuHaptics()
 
     val timeValid = allDay || endDate > startDate || (endDate == startDate && endMinute > startMinute)
     val valid = title.isNotBlank() && timeValid
@@ -296,37 +313,45 @@ private fun AgendaFormBody(
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("提醒")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YohakuChip(
-                    text = "提醒",
-                    selected = remindEnabled,
-                    onClick = { remindEnabled = true },
+            // 二值开关就用开关:与「全天」一致。此前这里用一对 chip 表示「提醒 / 不提醒」,
+            // 而同一个应用里别的二值项用的是开关 —— 同一个意思两种控件,人得逐个重新认。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "开启提醒",
+                    style = YohakuType.copy15,
+                    color = colors.neutral9,
+                    modifier = Modifier.weight(1f),
                 )
-                YohakuChip(
-                    text = "不提醒",
-                    selected = !remindEnabled,
-                    onClick = { remindEnabled = false },
+                YohakuSwitch(
+                    checked = remindEnabled,
+                    onCheckedChange = { remindEnabled = it },
                 )
             }
-            if (remindEnabled) {
-                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-                if (allDay) {
-                    Text(
-                        text = "「全天」日程在当天设置里的时刻提醒,可在「设置 → 提醒 → 日程提醒」修改。",
-                        style = YohakuType.label12,
-                        color = colors.neutral7,
-                    )
-                } else {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        REMIND_LEAD_OPTIONS.forEach { (minutes, label) ->
-                            YohakuChip(
-                                text = label,
-                                selected = remindLeadMinutes == minutes,
-                                onClick = { remindLeadMinutes = minutes },
-                            )
+            AnimatedVisibility(
+                visible = remindEnabled,
+                enter = fadeIn(YohakuMotion.tween(YohakuMotion.durBase)),
+                exit = fadeOut(YohakuMotion.tween(YohakuMotion.durFast)),
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                    if (allDay) {
+                        Text(
+                            text = "「全天」日程在当天设置里的时刻提醒,可在「设置 → 提醒 → 日程提醒」修改。",
+                            style = YohakuType.label12,
+                            color = colors.neutral7,
+                        )
+                    } else {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            REMIND_LEAD_OPTIONS.forEach { (minutes, label) ->
+                                YohakuChip(
+                                    text = label,
+                                    selected = remindLeadMinutes == minutes,
+                                    onClick = { remindLeadMinutes = minutes },
+                                )
+                            }
                         }
                     }
                 }
@@ -339,7 +364,8 @@ private fun AgendaFormBody(
                     style = YohakuType.copy13,
                     color = colors.error,
                     modifier = Modifier
-                        .clickable { onDelete(initial.id) }
+                        .yohakuTouchTarget()
+                        .clickable { confirmDelete = true }
                         .padding(vertical = 8.dp),
                 )
             }
@@ -409,6 +435,19 @@ private fun AgendaFormBody(
             initial = clockText(endMinute),
             onConfirm = { pickEndTime = false; ScheduleParse.toMinute(it)?.let { m -> endMinute = m } },
             onDismiss = { pickEndTime = false },
+        )
+    }
+
+    if (confirmDelete && initial != null) {
+        YohakuConfirmDialog(
+            title = "删除日程",
+            message = "「${initial.title}」会被删除,且无法撤销。",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                haptics.select()
+                confirmDelete = false
+                onDelete(initial.id)
+            },
         )
     }
 }

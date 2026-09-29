@@ -39,10 +39,13 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.yuketang.YuketangAnnouncement
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseMark
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -110,6 +113,22 @@ fun CourseDetailScreen(
         }
     }
 
+    // 删除不可逆:点一下直接删太容易误触,补一层确认
+    var confirmDelete by remember { mutableStateOf(false) }
+    val haptics = rememberYohakuHaptics()
+    if (confirmDelete && course != null) {
+        YohakuConfirmDialog(
+            title = "删除课程",
+            message = "「${course!!.name}」会从课表与已同步的设备上一并删除,且无法撤销。",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                haptics.select()
+                confirmDelete = false
+                viewModel.delete(courseId)
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,8 +138,12 @@ fun CourseDetailScreen(
 
         val c = course
         if (c == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "课程不存在或已删除", style = YohakuType.copy14, color = colors.neutral7)
+            // 删掉之后这里会短暂为空:已经存在过就留白交给出场转场,
+            // 不再画一帧「课程不存在或已删除」再去弹出去(闪一下就走的占位就是假的信息)。
+            if (!hadCourse) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "课程不存在或已删除", style = YohakuType.copy14, color = colors.neutral7)
+                }
             }
         } else {
             Column(
@@ -231,6 +254,7 @@ fun CourseDetailScreen(
                     style = YohakuType.copy13,
                     color = colors.accent,
                     modifier = Modifier
+                        .yohakuTouchTarget()
                         .clickable { nav.navigate("course_form?courseId=${c.id}") }
                         .padding(vertical = 8.dp),
                 )
@@ -239,7 +263,8 @@ fun CourseDetailScreen(
                     style = YohakuType.copy13,
                     color = colors.error,
                     modifier = Modifier
-                        .clickable { viewModel.delete(c.id) }
+                        .yohakuTouchTarget()
+                        .clickable { confirmDelete = true }
                         .padding(vertical = 8.dp),
                 )
 

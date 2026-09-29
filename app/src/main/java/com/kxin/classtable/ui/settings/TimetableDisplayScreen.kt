@@ -288,20 +288,12 @@ fun TimetableDisplayScreen(
                     }
                 }
                 DividerLine()
-                SettingBlock(title = "底色") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        YohakuChip(
-                            text = "课程淡彩",
-                            selected = prefs.showTint,
-                            onClick = { viewModel.update { it.copy(showTint = true) } },
-                        )
-                        YohakuChip(
-                            text = "纸面",
-                            selected = !prefs.showTint,
-                            onClick = { viewModel.update { it.copy(showTint = false) } },
-                        )
-                    }
-                }
+                SettingSwitchRow(
+                    title = "铺课程淡彩底",
+                    subtitle = "关掉就是纯文字块,课程颜色只落在左侧色标上。",
+                    checked = prefs.showTint,
+                    onCheckedChange = { on -> viewModel.update { it.copy(showTint = on) } },
+                )
             }
         }
 

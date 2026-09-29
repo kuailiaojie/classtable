@@ -37,6 +37,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -139,7 +140,14 @@ fun SemesterScreen(
         ) {
             Text(text = "开学日期", style = YohakuType.label12, color = colors.neutral7)
             Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // 整行都可点:此前只有「选择日期」四个字可点,而这一行本身就是那个控件
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .yohakuTouchTarget()
+                    .clickable { showPicker = true },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = startLabel,
                     style = YohakuType.copy15,
@@ -150,9 +158,7 @@ fun SemesterScreen(
                     text = "选择日期",
                     style = YohakuType.copy13,
                     color = colors.accent,
-                    modifier = Modifier
-                        .clickable { showPicker = true }
-                        .padding(8.dp),
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
             Box(
@@ -170,6 +176,15 @@ fun SemesterScreen(
                 placeholder = "如 20",
                 isError = weekCountValue <= 0,
             )
+            // 光把输入框标红不说明问题所在 —— 和这个应用别处的失效提示一样,写清原因
+            if (weekCountValue <= 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "请填写大于 0 的周数,如 20",
+                    style = YohakuType.label12,
+                    color = colors.error,
+                )
+            }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             Text(text = hint, style = YohakuType.copy13, color = colors.neutral7)

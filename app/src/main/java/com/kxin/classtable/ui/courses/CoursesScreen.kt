@@ -1,5 +1,11 @@
 package com.kxin.classtable.ui.courses
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,11 +44,15 @@ import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseMark
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -83,194 +93,236 @@ fun CoursesScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val haptics = rememberYohakuHaptics()
 
     // 多选:顶栏「选择」进入。选中态下点行 = 勾选(不再进详情),底部换成批量操作。
     var selecting by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val allIds = remember(courses) { courses.map { it.id }.toSet() }
 
-    Column(
+    if (confirmDelete) {
+        val count = selected.size
+        YohakuConfirmDialog(
+            title = "删除 $count 门课程",
+            message = "选中的 $count 门课会从课表与已同步的设备上一并删除,且无法撤销。",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                haptics.select()
+                confirmDelete = false
+                viewModel.deleteCourses(selected.toList())
+                selected = emptySet()
+                selecting = false
+            },
+        )
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(
-            title = if (selecting) "已选 ${selected.size} 门" else "课程",
-            actions = {
-                if (courses.isNotEmpty()) {
-                    Text(
-                        text = if (selecting) "取消" else "选择",
-                        style = YohakuType.copy13,
-                        color = colors.accent,
-                        modifier = Modifier
-                            .clickable {
-                                selecting = !selecting
-                                if (!selecting) selected = emptySet()
-                            }
-                            .padding(vertical = 4.dp),
-                    )
-                }
-            },
-        )
-
-        if (courses.isEmpty()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "还没有课程",
-                        style = YohakuType.copy14,
-                        color = colors.neutral7,
-                    )
-                    Text(
-                        text = "点周视图右上角「添加」:教务导入、手动添加或图片识别",
-                        style = YohakuType.label12,
-                        color = colors.neutral6,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(
-                    start = YohakuDimens.screenPadding,
-                    end = YohakuDimens.screenPadding,
-                    // 悬浮导航压在内容之上(列表中途会从栏下穿过),所以只在**滚动内容末尾**
-                    // 预留出栏体的高度,保证最后一门课能卷到栏上方,而不是被永久盖住。
-                    bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
-                ),
-            ) {
-                (1..7).forEach { day ->
-                    val dayCourses = courses
-                        .filter { it.isOnWeekday(day) }
-                        .sortedBy { Schedule.courseStartMinute(it, periods) ?: Int.MAX_VALUE }
-                    if (dayCourses.isEmpty()) return@forEach
-
-                    item(key = "head-$day") {
-                        Row(
+        Column(modifier = Modifier.fillMaxSize()) {
+            YohakuTopBar(
+                title = if (selecting) "已选 ${selected.size} 门" else "课程",
+                actions = {
+                    if (courses.isNotEmpty()) {
+                        Text(
+                            text = if (selecting) "取消" else "选择",
+                            style = YohakuType.copy13,
+                            color = colors.accent,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = YohakuDimens.gapCard, bottom = 4.dp),
-                            verticalAlignment = Alignment.Bottom,
-                        ) {
-                            Text(
-                                text = "周${Course.WEEKDAY_CHARS[day - 1]}",
-                                style = YohakuType.title20,
-                                color = colors.neutral10,
-                            )
-                            Text(
-                                text = "  ${dayCourses.size} 门",
-                                style = YohakuType.label12,
-                                color = colors.neutral7,
-                                modifier = Modifier.padding(bottom = 3.dp),
-                            )
-                        }
-                    }
-
-                    itemsIndexed(dayCourses, key = { _, c -> "$day-${c.id}" }) { index, course ->
-                        val isSelected = course.id in selected
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateItem()
-                                .background(if (isSelected) colors.neutral1 else Color.Transparent)
+                                .yohakuTouchTarget()
                                 .clickable {
-                                    if (selecting) {
-                                        selected = if (isSelected) {
-                                            selected - course.id
-                                        } else {
-                                            selected + course.id
-                                        }
-                                    } else {
-                                        nav.navigate("course_detail/${course.id}")
-                                    }
+                                    haptics.select()
+                                    selecting = !selecting
+                                    if (!selecting) selected = emptySet()
                                 }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (selecting) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) colors.accent else Color.Transparent)
-                                        .border(
-                                            1.dp,
-                                            if (isSelected) colors.accent else colors.neutral5,
-                                            CircleShape,
-                                        ),
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                            }
-                            Box(
+                                .padding(vertical = 4.dp),
+                        )
+                    }
+                },
+            )
+
+            if (courses.isEmpty()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "还没有课程",
+                            style = YohakuType.copy14,
+                            color = colors.neutral7,
+                        )
+                        Text(
+                            text = "点周视图右上角「添加」:教务导入、手动添加或图片识别",
+                            style = YohakuType.label12,
+                            color = colors.neutral6,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(
+                        start = YohakuDimens.screenPadding,
+                        end = YohakuDimens.screenPadding,
+                        // 悬浮导航压在内容之上(列表中途会从栏下穿过),所以只在**滚动内容末尾**
+                        // 预留出栏体的高度,保证最后一门课能卷到栏上方,而不是被永久盖住。
+                        // 批量操作条改为悬浮覆盖层后,不再额外往布局里塞一份高度。
+                        bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
+                    ),
+                ) {
+                    (1..7).forEach { day ->
+                        val dayCourses = courses
+                            .filter { it.isOnWeekday(day) }
+                            .sortedBy { Schedule.courseStartMinute(it, periods) ?: Int.MAX_VALUE }
+                        if (dayCourses.isEmpty()) return@forEach
+
+                        item(key = "head-$day") {
+                            Row(
                                 modifier = Modifier
-                                    .width(3.dp)
-                                    .height(30.dp)
-                                    .clip(RoundedCornerShape(YohakuDimens.radiusChip))
-                                    .background(courseMark(course)),
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                                    .fillMaxWidth()
+                                    .padding(top = YohakuDimens.gapCard, bottom = 4.dp),
+                                verticalAlignment = Alignment.Bottom,
+                            ) {
                                 Text(
-                                    text = course.name,
-                                    style = YohakuType.copy15,
+                                    text = "周${Course.WEEKDAY_CHARS[day - 1]}",
+                                    style = YohakuType.title20,
                                     color = colors.neutral10,
                                 )
-                                val meta = listOf(course.teacher, course.location)
-                                    .filter { it.isNotBlank() }.joinToString(" · ")
-                                if (meta.isNotEmpty()) {
+                                Text(
+                                    text = "  ${dayCourses.size} 门",
+                                    style = YohakuType.label12,
+                                    color = colors.neutral7,
+                                    modifier = Modifier.padding(bottom = 3.dp),
+                                )
+                            }
+                        }
+
+                        itemsIndexed(dayCourses, key = { _, c -> "$day-${c.id}" }) { index, course ->
+                            val isSelected = course.id in selected
+                            // 勾选底色缓动:从透明到淡底不再是一帧换掉
+                            val rowBackground by animateColorAsState(
+                                targetValue = if (isSelected) colors.neutral1 else Color.Transparent,
+                                animationSpec = YohakuMotion.tween(YohakuMotion.durFast),
+                                label = "courseRowBg",
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItem()
+                                    .background(rowBackground)
+                                    .clickable {
+                                        if (selecting) {
+                                            haptics.select()
+                                            selected = if (isSelected) {
+                                                selected - course.id
+                                            } else {
+                                                selected + course.id
+                                            }
+                                        } else {
+                                            nav.navigate("course_detail/${course.id}")
+                                        }
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                // 勾选圈 + 间距整块滑入/滑出:进入多选时行不跳,内容凭空平移
+                                AnimatedVisibility(visible = selecting) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isSelected) colors.accent else Color.Transparent)
+                                                .border(
+                                                    1.dp,
+                                                    if (isSelected) colors.accent else colors.neutral5,
+                                                    CircleShape,
+                                                ),
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .height(30.dp)
+                                        .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                                        .background(courseMark(course)),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = meta,
-                                        style = YohakuType.label12,
+                                        text = course.name,
+                                        style = YohakuType.copy15,
+                                        color = colors.neutral10,
+                                    )
+                                    val meta = listOf(course.teacher, course.location)
+                                        .filter { it.isNotBlank() }.joinToString(" · ")
+                                    if (meta.isNotEmpty()) {
+                                        Text(
+                                            text = meta,
+                                            style = YohakuType.label12,
+                                            color = colors.neutral7,
+                                        )
+                                    }
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = if (course.isCustomScheduled()) {
+                                            "自定义"
+                                        } else {
+                                            "第 ${course.startPeriod}-${course.endPeriod} 节"
+                                        },
+                                        style = YohakuType.timeMono,
                                         color = colors.neutral7,
+                                    )
+                                    Text(
+                                        text = Schedule.courseTimeText(course, periods),
+                                        style = YohakuType.timeMono,
+                                        color = colors.neutral6,
+                                    )
+                                }
+                                AnimatedVisibility(visible = !selecting) {
+                                    Text(
+                                        text = "›",
+                                        style = YohakuType.copy15,
+                                        color = colors.neutral6,
+                                        modifier = Modifier.padding(start = 8.dp),
                                     )
                                 }
                             }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = if (course.isCustomScheduled()) {
-                                        "自定义"
-                                    } else {
-                                        "第 ${course.startPeriod}-${course.endPeriod} 节"
-                                    },
-                                    style = YohakuType.timeMono,
-                                    color = colors.neutral7,
-                                )
-                                Text(
-                                    text = Schedule.courseTimeText(course, periods),
-                                    style = YohakuType.timeMono,
-                                    color = colors.neutral6,
+                            if (index < dayCourses.size - 1) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(colors.neutral3),
                                 )
                             }
-                            if (!selecting) {
-                                Text(
-                                    text = "›",
-                                    style = YohakuType.copy15,
-                                    color = colors.neutral6,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-                        }
-                        if (index < dayCourses.size - 1) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(colors.neutral3),
-                            )
                         }
                     }
                 }
             }
         }
 
-        if (selecting) {
+        // 批量操作条:悬浮覆盖层(不再挤占列表高度 —— 那样进出多选会让整列跳一下),
+        // 抬到悬浮导航之上,进出用自底部滑入 / 滑出。
+        AnimatedVisibility(
+            visible = selecting,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durBase, YohakuMotion.easeOut),
+            ) { it } + fadeIn(YohakuMotion.tween(YohakuMotion.durFast)),
+            exit = slideOutVertically(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durFast),
+            ) { it } + fadeOut(YohakuMotion.tween(YohakuMotion.durFast)),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = YohakuDimens.screenPadding)
-                    // 悬浮导航浮在内容之上:这条批量操作条必须抬到它上面,
-                    // 否则「删除 N 门」会和底部导航栏叠在一起(点不到、也看不清)
                     .padding(bottom = YohakuDimens.navReservedHeight),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -284,11 +336,7 @@ fun CoursesScreen(
                 YohakuButton(
                     text = "删除 ${selected.size} 门",
                     enabled = selected.isNotEmpty(),
-                    onClick = {
-                        viewModel.deleteCourses(selected.toList())
-                        selected = emptySet()
-                        selecting = false
-                    },
+                    onClick = { confirmDelete = true },
                     modifier = Modifier.weight(1f),
                 )
             }

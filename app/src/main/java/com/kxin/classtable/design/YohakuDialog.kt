@@ -91,12 +91,13 @@ fun YohakuDialog(
     }
 }
 
-/** 弹窗动作:纯文字按钮。[accent] = 主操作(全屏唯一 accent 纪律)。 */
+/** 弹窗动作:纯文字按钮。[accent] = 主操作(全屏唯一 accent 纪律);[destructive] = 删除这类不可逆动作。 */
 @Composable
 fun YohakuDialogAction(
     text: String,
     onClick: () -> Unit,
     accent: Boolean = false,
+    destructive: Boolean = false,
     enabled: Boolean = true,
 ) {
     val colors = LocalYohakuColors.current
@@ -105,6 +106,7 @@ fun YohakuDialogAction(
         style = YohakuType.copy14,
         color = when {
             !enabled -> colors.neutral5
+            destructive -> colors.error
             accent -> colors.accent
             else -> colors.neutral7
         },
@@ -113,4 +115,38 @@ fun YohakuDialogAction(
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 12.dp),
     )
+}
+
+/**
+ * 破坏性操作的二次确认:默认「取消 / 删除」。
+ *
+ * 课程、日程、调休、批量删除此前都是**点一下就直接生效** —— 删除不可逆,而动作本身
+ * 只是一个行尾小字,误触的代价太大。统一走这里:把后果写进 [message],确认动作染 error 色。
+ */
+@Composable
+fun YohakuConfirmDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    confirmText: String = "删除",
+    dismissText: String = "取消",
+    destructive: Boolean = true,
+) {
+    val colors = LocalYohakuColors.current
+    YohakuDialog(
+        onDismissRequest = onDismiss,
+        title = title,
+        actions = {
+            YohakuDialogAction(text = dismissText, onClick = onDismiss)
+            YohakuDialogAction(
+                text = confirmText,
+                accent = !destructive,
+                destructive = destructive,
+                onClick = onConfirm,
+            )
+        },
+    ) {
+        Text(text = message, style = YohakuType.copy14, color = colors.neutral9)
+    }
 }

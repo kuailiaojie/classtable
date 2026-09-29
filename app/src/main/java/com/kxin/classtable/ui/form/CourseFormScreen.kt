@@ -1,6 +1,12 @@
 package com.kxin.classtable.ui.form
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,10 +48,14 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.CoursePalette
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.AppSettings
@@ -208,6 +218,22 @@ fun CourseFormScreen(
     }
     val weekValid = weekTypeIdx != 3 || weekSpec.weeks.isNotEmpty()
 
+    /** 颜色:留空 = 自动配色;填了就必须是 #RRGGBB / #RRGGBBAA。 */
+    val colorValid = colorHex.isBlank() ||
+        Regex("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$").matches(colorHex.trim())
+
+    // 保存条件收齐:课名、周次、自定义时间、颜色。此前按钮只按周次启用,而 submit() 还拦了
+    // 课名与时间 —— 于是点了没反应,用户看不出为什么。现在禁用即说明原因。
+    val canSave = name.isNotBlank() && weekValid &&
+        (timeMode == 0 || customTimeValid) && colorValid
+    val blockingHint = when {
+        name.isBlank() -> "填写课程名称后即可保存"
+        !weekValid -> "周次:自定义至少要选一周"
+        timeMode == 1 && !customTimeValid -> "自定义时间需为 HH:MM,且结束晚于开始"
+        !colorValid -> "颜色格式应为 #RRGGBB(如 #C56473)"
+        else -> null
+    }
+
     fun toggleWeek(week: Int) {
         val picked = pickedWeeks.toMutableSet()
         if (!picked.add(week)) picked.remove(week)
@@ -297,6 +323,22 @@ fun CourseFormScreen(
     val weekNames = listOf("一", "二", "三", "四", "五", "六", "日")
     val weekTypeNames = listOf("每周", "单周", "双周", "自定义")
 
+    // 删除不可逆:补一层确认,别让行尾一个小字决定一门课的去留
+    var confirmDelete by remember { mutableStateOf(false) }
+    val haptics = rememberYohakuHaptics()
+    if (confirmDelete) {
+        YohakuConfirmDialog(
+            title = "删除课程",
+            message = "这门课会从课表与已同步的设备上一并删除,且无法撤销。",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                haptics.select()
+                confirmDelete = false
+                editing?.let { viewModel.delete(it.id) }
+            },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -384,55 +426,69 @@ fun CourseFormScreen(
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
-            if (timeMode == 0) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    periods.indices.forEach { i ->
-                        val n = i + 1
-                        YohakuChip(
-                            text = "$n",
-                            selected = n in periodStart..periodEnd,
-                            onClick = { tapPeriod(n) },
+            // 「按节次 ↔ 自定义时间」是同一处内容的两种形态:淡入 + 轻微上移接替,不再硬切
+            AnimatedContent(
+                targetState = timeMode,
+                transitionSpec = {
+                    (fadeIn(YohakuMotion.tween(YohakuMotion.durBase)) + slideInVertically { it / 10 }) togetherWith
+                        fadeOut(YohakuMotion.tween(YohakuMotion.durFast))
+                },
+                label = "timeMode",
+            ) { mode ->
+                if (mode == 0) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            periods.indices.forEach { i ->
+                                val n = i + 1
+                                YohakuChip(
+                                    text = "$n",
+                                    selected = n in periodStart..periodEnd,
+                                    onClick = { tapPeriod(n) },
+                                )
+                            }
+                        }
+                        val selText = if (periodStart == periodEnd) "第 $periodStart 节" else "第 $periodStart-$periodEnd 节"
+                        Text(
+                            text = if (pickingEnd) {
+                                "已选:$selText · 再点一节作为结束"
+                            } else {
+                                "已选:$selText · ${Schedule.periodRange(periods, periodStart, periodEnd)}"
+                            },
+                            style = YohakuType.timeMono,
+                            color = colors.neutral7,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            YohakuTextField(
+                                value = customTimeStart,
+                                onValueChange = { customTimeStart = it },
+                                label = "开始时间",
+                                placeholder = "18:30",
+                                modifier = Modifier.weight(1f),
+                            )
+                            YohakuTextField(
+                                value = customTimeEnd,
+                                onValueChange = { customTimeEnd = it },
+                                label = "结束时间",
+                                placeholder = "20:00",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Text(
+                            text = if (customTimeValid) {
+                                "适合不在作息表内的课程(如晚间讲座、临时加课),不随作息变化。"
+                            } else {
+                                "时间格式应为 HH:MM,且结束时间需晚于开始时间。"
+                            },
+                            style = YohakuType.label12,
+                            color = if (customTimeValid) colors.neutral7 else colors.error,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 }
-                val selText = if (periodStart == periodEnd) "第 $periodStart 节" else "第 $periodStart-$periodEnd 节"
-                Text(
-                    text = if (pickingEnd) {
-                        "已选:$selText · 再点一节作为结束"
-                    } else {
-                        "已选:$selText · ${Schedule.periodRange(periods, periodStart, periodEnd)}"
-                    },
-                    style = YohakuType.timeMono,
-                    color = colors.neutral7,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    YohakuTextField(
-                        value = customTimeStart,
-                        onValueChange = { customTimeStart = it },
-                        label = "开始时间",
-                        placeholder = "18:30",
-                        modifier = Modifier.weight(1f),
-                    )
-                    YohakuTextField(
-                        value = customTimeEnd,
-                        onValueChange = { customTimeEnd = it },
-                        label = "结束时间",
-                        placeholder = "20:00",
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Text(
-                    text = if (customTimeValid) {
-                        "适合不在作息表内的课程(如晚间讲座、临时加课),不随作息变化。"
-                    } else {
-                        "时间格式应为 HH:MM,且结束时间需晚于开始时间。"
-                    },
-                    style = YohakuType.label12,
-                    color = if (customTimeValid) colors.neutral7 else colors.error,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
@@ -450,13 +506,29 @@ fun CourseFormScreen(
                 CoursePalette.PRESETS.forEach { (label, hex) ->
                     val selected = colorHex.equals(hex, ignoreCase = true)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        // 选中态用一圈描边表达 —— 与「外观 → 强调色」色板同一套(此前这里只让文字变色,
+                        // 同一个「选中了哪一格」在应用里有两套画法)。
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(Color(android.graphics.Color.parseColor(hex)))
+                                .yohakuTouchTarget()
                                 .clickable { colorHex = hex },
-                        )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .then(
+                                        if (selected) {
+                                            Modifier.border(2.dp, colors.neutral10, CircleShape)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(android.graphics.Color.parseColor(hex))),
+                            )
+                        }
                         Text(
                             text = label,
                             style = YohakuType.label12,
@@ -475,6 +547,14 @@ fun CourseFormScreen(
                 singleLine = true,
                 modifier = Modifier.padding(top = 10.dp),
             )
+            if (!colorValid) {
+                Text(
+                    text = "颜色格式应为 #RRGGBB,如 #C56473。",
+                    style = YohakuType.label12,
+                    color = colors.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
             FieldLabel("周次")
@@ -536,15 +616,21 @@ fun CourseFormScreen(
                         text = "全选",
                         style = YohakuType.copy13,
                         color = colors.accent,
-                        modifier = Modifier.clickable {
-                            customWeeks = WeekSpec.encode((1..weekCount).toList())
-                        },
+                        modifier = Modifier
+                            .yohakuTouchTarget()
+                            .clickable {
+                                customWeeks = WeekSpec.encode((1..weekCount).toList())
+                            }
+                            .padding(vertical = 6.dp),
                     )
                     Text(
                         text = "清空",
                         style = YohakuType.copy13,
                         color = colors.neutral7,
-                        modifier = Modifier.clickable { customWeeks = "" },
+                        modifier = Modifier
+                            .yohakuTouchTarget()
+                            .clickable { customWeeks = "" }
+                            .padding(vertical = 6.dp),
                     )
                 }
             }
@@ -566,12 +652,26 @@ fun CourseFormScreen(
                     style = YohakuType.copy13,
                     color = colors.error,
                     modifier = Modifier
-                        .clickable { viewModel.delete(editing!!.id) }
+                        .yohakuTouchTarget()
+                        .clickable { confirmDelete = true }
                         .padding(vertical = 8.dp),
                 )
             }
         }
 
+        // 保存不了时把原因写在按钮上方:禁用的按钮不解释自己,人就不知道为什么点不动
+        blockingHint?.let { hint ->
+            Text(
+                text = hint,
+                style = YohakuType.label12,
+                color = colors.neutral7,
+                modifier = Modifier.padding(
+                    start = YohakuDimens.screenPadding,
+                    end = YohakuDimens.screenPadding,
+                    top = 4.dp,
+                ),
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -581,7 +681,7 @@ fun CourseFormScreen(
                 text = if (editing != null) "保存修改" else "保存",
                 onClick = ::submit,
                 modifier = Modifier.weight(1f),
-                enabled = weekValid,
+                enabled = canSave,
             )
         }
     }

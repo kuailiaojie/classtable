@@ -32,6 +32,7 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDatePicker
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
@@ -40,6 +41,8 @@ import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.HolidayClient
 import com.kxin.classtable.domain.HolidayPlan
@@ -158,6 +161,9 @@ fun AdjustmentsScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     var year by remember { mutableStateOf(LocalDate.now().year.toString()) }
     var draft by remember { mutableStateOf<Draft?>(null) }
+    // 删除不可逆:补一层确认(此前点一下就少一条安排)
+    var pendingDelete by remember { mutableStateOf<ScheduleAdjustment?>(null) }
+    val haptics = rememberYohakuHaptics()
     // 正在改的补课建议:(假期下标, 补班日下标)。自动匹配只是建议,学校细则不同时要能改。
     var editingMakeup by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
@@ -373,6 +379,7 @@ fun AdjustmentsScreen(
                         style = YohakuType.label12,
                         color = colors.accent,
                         modifier = Modifier
+                            .yohakuTouchTarget()
                             .clickable { draft = Draft.of(item) }
                             .padding(8.dp),
                     )
@@ -381,7 +388,8 @@ fun AdjustmentsScreen(
                         style = YohakuType.label12,
                         color = colors.error,
                         modifier = Modifier
-                            .clickable { viewModel.save(items - item) }
+                            .yohakuTouchTarget()
+                            .clickable { pendingDelete = item }
                             .padding(8.dp),
                     )
                 }
@@ -413,6 +421,19 @@ fun AdjustmentsScreen(
                 draft = null
             },
             onDismiss = { draft = null },
+        )
+    }
+
+    pendingDelete?.let { target ->
+        YohakuConfirmDialog(
+            title = "删除调休安排",
+            message = "${dateLabel(target.date.toEpochDay())} · ${target.summary()} 会被删除,且无法撤销。",
+            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                haptics.select()
+                viewModel.save(items - target)
+                pendingDelete = null
+            },
         )
     }
 }

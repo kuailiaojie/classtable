@@ -24,6 +24,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -56,6 +62,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -72,9 +79,11 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
@@ -323,18 +332,52 @@ fun ImportScreen(
                 }
             },
         )
-        Text(
-            text = "第 $step 步 / 共 3 步",
-            style = YohakuType.label12,
-            color = colors.neutral7,
-            modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
-        )
+        // 步骤进度:三段条按当前步填充(颜色缓动)。比一行纯文字更早看出「到哪一步、还剩几步」。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = YohakuDimens.screenPadding),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            (1..3).forEach { i ->
+                val reached = i <= step
+                val barColor by animateColorAsState(
+                    targetValue = if (reached) colors.accent else colors.neutral3,
+                    animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
+                    label = "stepBar",
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(3.dp)
+                        .background(barColor, RoundedCornerShape(2.dp)),
+                )
+            }
+            Text(
+                text = "第 $step / 3 步",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+                modifier = Modifier.padding(start = 10.dp),
+            )
+        }
         if (indexError) {
             IndexErrorPanel(
                 onSync = { nav.navigate(SettingsHub.IMPORT.route) },
                 onRetry = { indexReload++ },
             )
-        } else when (step) {
+        } else AnimatedContent(
+            targetState = step,
+            modifier = Modifier.weight(1f),
+            transitionSpec = {
+                // 步骤是同一条流程上的前后移动:横向共享轴,退场整幅滑出、入场整幅滑入
+                val forward = targetState > initialState
+                val spec = YohakuMotion.tween<IntOffset>(YohakuMotion.durSlow, YohakuMotion.easeOut)
+                slideInHorizontally(animationSpec = spec) { if (forward) it else -it } togetherWith
+                    slideOutHorizontally(animationSpec = spec) { if (forward) -it else it }
+            },
+            label = "importStep",
+        ) { s -> when (s) {
             1 -> StepSchool(
                 schools = visibleSchools,
                 adapters = adapters,
@@ -398,7 +441,7 @@ fun ImportScreen(
                 onApplyDetectedOnly = { viewModel.applyDetectedOnly() },
                 onSkip = { nav.popBackStack() },
             )
-        }
+        } }
     }
 }
 
@@ -729,6 +772,7 @@ private fun StepLogin(
                 style = YohakuType.title20,
                 color = if (canGoBack) colors.neutral9 else colors.neutral5,
                 modifier = Modifier
+                    .yohakuTouchTarget(minWidth = 40.dp)
                     .clickable(enabled = canGoBack) { holder.active.goBack() }
                     .padding(horizontal = 6.dp),
             )
@@ -737,6 +781,7 @@ private fun StepLogin(
                 style = YohakuType.title20,
                 color = if (canGoForward) colors.neutral9 else colors.neutral5,
                 modifier = Modifier
+                    .yohakuTouchTarget(minWidth = 40.dp)
                     .clickable(enabled = canGoForward) { holder.active.goForward() }
                     .padding(horizontal = 6.dp),
             )
@@ -745,6 +790,7 @@ private fun StepLogin(
                 style = YohakuType.copy13,
                 color = colors.neutral9,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(onClick = onReload)
                     .padding(horizontal = 8.dp),
             )

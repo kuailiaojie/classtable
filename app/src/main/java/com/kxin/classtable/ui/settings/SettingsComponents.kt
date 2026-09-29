@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuType
 
 /** 卡片内左右内边距:与卡片外的小标题对齐。 */
@@ -57,9 +59,14 @@ internal fun SettingsSection(
     }
 }
 
-/** 卡片内的设置行:标题 + 当前值 + ›。 */
+/** 卡片内的设置行:标题 + 当前值 + ›(外部链接改用 ↗,别让同一个符号指两种去向)。 */
 @Composable
-internal fun SettingRow(title: String, value: String, onClick: () -> Unit) {
+internal fun SettingRow(
+    title: String,
+    value: String,
+    external: Boolean = false,
+    onClick: () -> Unit,
+) {
     val colors = LocalYohakuColors.current
     Row(
         modifier = Modifier
@@ -76,7 +83,7 @@ internal fun SettingRow(title: String, value: String, onClick: () -> Unit) {
         )
         Text(text = value, style = YohakuType.copy13, color = colors.neutral7)
         Text(
-            text = "›",
+            text = if (external) "↗" else "›",
             style = YohakuType.copy15,
             color = colors.neutral6,
             modifier = Modifier.padding(start = 8.dp),
@@ -111,6 +118,38 @@ internal fun SettingRowWithSubtitle(title: String, subtitle: String, onClick: ()
             color = colors.neutral6,
             modifier = Modifier.padding(start = 8.dp),
         )
+    }
+}
+
+/**
+ * 卡片内的「标题 + 说明 + 开关」行。
+ *
+ * 布尔项统一走这里:此前同样的「一开一关」有的用 chip 对、有的用开关,同一个意思两种控件,
+ * 人得逐个重新认。现在**二值用开关**,chip 只留给多选与选项。
+ */
+@Composable
+internal fun SettingSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rowHPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = YohakuType.copy15, color = colors.neutral9)
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(text = subtitle, style = YohakuType.label12, color = colors.neutral7)
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        YohakuSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

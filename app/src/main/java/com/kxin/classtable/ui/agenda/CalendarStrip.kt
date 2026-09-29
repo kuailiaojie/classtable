@@ -1,6 +1,10 @@
 package com.kxin.classtable.ui.agenda
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +35,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.domain.LunarDate
 import java.time.LocalDate
 
@@ -77,11 +82,21 @@ internal fun CalendarStrip(
                 .padding(horizontal = YohakuDimens.screenPadding, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "${displayedMonday.monthValue}月",
-                style = YohakuType.copy15,
-                color = colors.neutral10,
-            )
+            // 月份随翻周变化:交叉淡化,不再在过阈值那一帧硬跳
+            AnimatedContent(
+                targetState = displayedMonday.monthValue,
+                transitionSpec = {
+                    fadeIn(YohakuMotion.tween(YohakuMotion.durBase)) togetherWith
+                        fadeOut(YohakuMotion.tween(YohakuMotion.durFast))
+                },
+                label = "stripMonth",
+            ) { month ->
+                Text(
+                    text = "$month 月",
+                    style = YohakuType.copy15,
+                    color = colors.neutral10,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             // 「今天」:回到本周并选中今天
             Surface(
@@ -138,6 +153,7 @@ private fun DayCell(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val shape = RoundedCornerShape(YohakuDimens.radiusChip)
     // 选中 / 今天的底色与描边都带缓动(切换日期时不硬跳)
     val background by animateColorAsState(
@@ -155,7 +171,10 @@ private fun DayCell(
     Column(
         modifier = modifier
             .clip(shape)
-            .clickable(onClick = onClick)
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

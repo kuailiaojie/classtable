@@ -197,23 +197,12 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
             IconGrid(current = currentIcon, onSelect = iconViewModel::select)
         }
         DividerLine()
-        SettingBlock(
+        SettingSwitchRow(
             title = "图标轮播",
             subtitle = "开启后自动在 9 张图之间轮换;关闭时保持你选中的那一张。",
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YohakuChip(
-                    text = "开启",
-                    selected = settings.iconCarouselEnabled,
-                    onClick = { iconViewModel.setCarousel(true, cadence) },
-                )
-                YohakuChip(
-                    text = "关闭",
-                    selected = !settings.iconCarouselEnabled,
-                    onClick = { iconViewModel.setCarousel(false, cadence) },
-                )
-            }
-        }
+            checked = settings.iconCarouselEnabled,
+            onCheckedChange = { on -> iconViewModel.setCarousel(on, cadence) },
+        )
         DividerLine()
         SettingBlock(title = "轮换节奏") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -385,15 +374,15 @@ private fun ClassDndSection(settings: AppSettings) {
     }
 
     SettingsSection(title = "上课免打扰") {
-        SettingBlock(
+        SettingSwitchRow(
             title = "自动免打扰",
             subtitle = "每节课开始时把手机切进免打扰(完全静音),下课时退回原来的状态;连着上的课算作一段,中途不退出。",
-        ) {
-            ChipToggle(selected = enabled) {
+            checked = enabled,
+            onCheckedChange = {
                 enabled = it
                 dndViewModel.save(it)
-            }
-        }
+            },
+        )
         if (!granted) {
             DividerLine()
             SettingBlock(
@@ -418,7 +407,7 @@ private fun AboutHub(nav: NavHostController) {
         SettingRow("关于", "v${BuildConfig.VERSION_NAME}") { nav.navigate("about") }
         DividerLine()
         // 邀请弹窗关了之后不是死路:这里常驻入口,想填随时能填
-        SettingRow("用户问卷", "两分钟 · 帮我们改进") {
+        SettingRow("用户问卷", "两分钟 · 帮我们改进", external = true) {
             runCatching { uriHandler.openUri(SurveyPrompt.FORM_URL) }
         }
     }

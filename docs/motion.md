@@ -29,6 +29,7 @@
 | `durBase` | 280ms | 通用入场 / 状态切换 |
 | `durSlow` | 460ms | 页面转场、面板滑入 |
 | `durXSlow` | 700ms | 开屏品牌条生长 |
+| `durPulse` | 1400ms | 「正在上」呼吸条的一次往返(半程 = 700ms) |
 | `stagger` | 40ms | 默认错峰步长(列表项) |
 | `staggerTight` | 22ms | 一屏塞得下的网格(周视图课程块) |
 | `staggerLoose` | 60ms | 条目少、要逐一看清(权限引导) |
@@ -90,22 +91,36 @@ LaunchedEffect(Unit) {
 | `design/YohakuChip.kt` | 选中时底 / 边 / 字三色缓动 |
 | `design/YohakuIndication.kt` | 自绘按压遮罩(替代涟漪) |
 | `design/YohakuDialog.kt` | 入场过冲 + 淡入(`easeBackOut`) |
-| `design/YohakuSegmentedControl.kt` | 指示块位移 + 文字变色 |
+| `design/YohakuSegmentedControl.kt` | 指示块位移 + 文字变色;`progress` 非空时改由外部(可拖动来源)驱动,跟着手指走 |
 | `design/YohakuSwitch.kt` | 轨道变色 + 滑块回弹(`bouncySpring`) |
+| `design/EntranceTracker.kt` | 一次性入场守卫:同一个 key 在一次屏幕存活期内只播一次入场(翻页回收后回头不重播) |
 | `ui/SplashOverlay.kt` | 开屏时间线(条生长 → 扫光 → 标题 / 副标题 → 收场) |
 | `ui/BrandMark.kt` | 品牌条生长与扫光的绘制(受开屏时间线驱动) |
-| `ui/timetable/WeekGrid.kt` | 「现在」线缓动、课程块错峰入场、当前课 accent 条 |
-| `ui/timetable/DayList.kt` | 卡片错峰入场 + 列表增删重排 |
-| `ui/timetable/TimetableScreen.kt` | 温度数字滚动、翻页、表头视差 |
-| `ui/agenda/CalendarStrip.kt` | 翻周、日期格选中 / 今天变色 |
-| `ui/agenda/AgendaTimeline.kt` | 条目错峰入场 + 列表重排 |
-| `ui/agenda/AgendaScreen.kt` | 「日程 ↔ 倒计时」页签切换 |
-| `ui/agenda/CountdownList.kt` | 「已结束」折叠箭头旋转 |
-| `ui/courses/CoursesScreen.kt` | 列表增删 / 选择模式重排 |
+| `ui/timetable/WeekGrid.kt` | 「现在」线缓动、课程块错峰入场(受 `EntranceTracker` 去重)、当前课 accent 条**呼吸**(`durPulse` 无限动画,初值 1f) |
+| `ui/timetable/DayList.kt` | 卡片错峰入场(受 `EntranceTracker` 去重)+ 列表增删重排 |
+| `ui/timetable/TimetableScreen.kt` | 温度数字滚动、翻页、表头视差;**周 ↔ 日切换的横向共享轴转场** |
+| `ui/agenda/CalendarStrip.kt` | 翻周、日期格选中 / 今天变色、月份文字交叉淡化 |
+| `ui/agenda/AgendaTimeline.kt` | 条目错峰入场(受 `EntranceTracker` 去重)+ 列表重排 |
+| `ui/agenda/AgendaScreen.kt` | 「日程 ↔ 倒计时」用可拖动 pager 承载,分段指示块由 `currentPageOffsetFraction` 驱动 |
+| `ui/agenda/CountdownList.kt` | 条目错峰入场 + `animateItem` 增删 / 展开「已结束」、折叠箭头旋转 |
+| `ui/courses/CoursesScreen.kt` | 多选进出(勾选圈滑入 / 行底色缓动)、底部操作条滑入 / 滑出 |
 | `ui/permissions/PermissionRow.kt` | 状态点缩放 + 文字变色 |
 | `ui/onboarding/OnboardingScreen.kt` | 整页 stagger 入场 + CTA 文案切换 |
-| `MainActivity.kt` | 导航转场(根标签串行淡化 / 二级页分层视差)、引导覆盖层出入场 |
+| `ui/form/CourseFormScreen.kt` | 「按节次 ↔ 自定义时间」交叉淡化 + 轻微上移 |
+| `ui/importer/ImportScreen.kt` | 步骤条颜色缓动 + 步骤间横向共享轴转场 |
+| `MainActivity.kt` | 导航转场(根标签串行淡化 / 二级页首尾相接滑入滑出)、引导覆盖层出入场 |
 | `design/YohakuTopBar.kt` | 返回 ‹ 的按压缩放 |
+
+### 周 ↔ 日切换
+
+与二级页导航同一条铁律:`AnimatedContent` 里两页**整幅**滑入 / 滑出(同 `durSlow` + `easeOut`),
+边界线严格重合,任意时刻屏上只可能有一页的像素。顶栏固定不参与转场 —— 切换的是内容,不是页头。
+
+### 触感
+
+触感不在这套 token 里,但它属于「反馈明确」:见 `design/Haptics.kt`。只在**状态确凿改变**处调用
+(选日期 / 切页签 / 拨开关 → 轻 tick;进入多选、勾选、破坏性确认 → 实一下),滚动与入场动画一律不给。
+
 
 导航转场由**系统返回手势驱动**(targetSdk 36 起预测性返回默认开启):手指拖到哪、两页就停在哪,松手前随时能退回。
 所以 `navEnter` / `navExit` / `navPopEnter` / `navPopExit`(见 `MainActivity.kt`)只允许用**可被拖动定位**的补间

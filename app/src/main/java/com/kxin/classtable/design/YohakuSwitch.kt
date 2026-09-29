@@ -32,6 +32,7 @@ fun YohakuSwitch(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val shape = RoundedCornerShape(percent = 50)
     val track by animateColorAsState(
         targetValue = if (checked) colors.accent else colors.neutral3,
@@ -49,7 +50,14 @@ fun YohakuSwitch(
             .clip(shape)
             .background(track)
             .border(1.dp, if (checked) colors.accent else colors.line, shape)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = {
+                    haptics.tick()
+                    onCheckedChange(it)
+                },
+            ),
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(

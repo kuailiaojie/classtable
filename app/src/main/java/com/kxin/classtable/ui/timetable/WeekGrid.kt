@@ -1,7 +1,11 @@
 package com.kxin.classtable.ui.timetable
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,25 +42,30 @@ import com.kxin.classtable.data.BlockCorner
 import com.kxin.classtable.data.GridDensity
 import com.kxin.classtable.data.NameSize
 import com.kxin.classtable.data.TimetablePrefs
+import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
+import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.Course
 
-/** 表头:一~日 + 该天日号;今天用 accent 标出,调休日标「休 / 补」。 */
+/** 表头:一~日 + 该天日号;今天用 accent 标出,调休日标「休 / 补」。点某一天 → 进入那一天的日视图。 */
 @Composable
 internal fun WeekdayHeader(
     dayNumbers: List<Int>,
     today: Int,
     marks: List<String?>,
+    onDayClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -68,7 +77,15 @@ internal fun WeekdayHeader(
             val isToday = d == today
             val mark = marks.getOrNull(d - 1)
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                    .clickable {
+                        haptics.tick()
+                        onDayClick(d)
+                    }
+                    .yohakuTouchTarget()
+                    .padding(vertical = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -128,6 +145,7 @@ internal fun WeekGrid(
     showNowLine: Boolean,
     teachingDays: List<Pair<Int, Int>?>,
     prefs: TimetablePrefs,
+    entrance: EntranceTracker,
     onCourseClick: (Course) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -222,6 +240,7 @@ internal fun WeekGrid(
                             prefs = prefs,
                             periods = periods,
                             staggerIndex = dayIdx + blockIdx,
+                            entrance = entrance,
                             onClick = onCourseClick,
                         )
                     }
@@ -245,9 +264,11 @@ internal fun WeekGrid(
                             .height(1.5.dp)
                             .background(colors.accent),
                     )
+                    // 「现在」标签贴在线旁:线靠顶时改放到下方,免得被顶到 y=0 压住线本身
+                    val labelY = if (lineY >= 12.dp) lineY - 12.dp else lineY + 2.dp
                     Box(
                         modifier = Modifier
-                            .offset(x = lineX, y = (lineY - 12.dp).coerceAtLeast(0.dp))
+                            .offset(x = lineX, y = labelY)
                             .background(colors.paper)
                             .padding(horizontal = 3.dp),
                     ) {
@@ -276,6 +297,7 @@ private fun CourseBlock(
     prefs: TimetablePrefs,
     periods: List<Schedule.Period>,
     staggerIndex: Int,
+    entrance: EntranceTracker,
     onClick: (Course) -> Unit,
 ) {
     val colors = LocalYohakuColors.current
@@ -286,24 +308,40 @@ private fun CourseBlock(
     val shape = RoundedCornerShape(cornerRadius(prefs.corner))
     val tinted = prefs.showTint
 
-    // 入场:淡入 + 轻微放大,按序号错峰(GSAP stagger 的 Compose 版)
-    val appear = remember { Animatable(0f) }
+    // 入场:淡入 + 轻微放大,按序号错峰(GSAP stagger 的 Compose 版)。
+    // 同一门课在本屏只演一次:翻页回收后回头不再重播(EntranceTracker)。
+    val animateIn = entrance.shouldAnimate(course.id)
+    val appear = remember { Animatable(if (animateIn) 0f else 1f) }
     LaunchedEffect(Unit) {
-        appear.animateTo(
-            targetValue = 1f,
-            animationSpec = YohakuMotion.tween(
-                durationMs = YohakuMotion.durBase,
-                easing = YohakuMotion.easeExpoOut,
-                delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
-            ),
-        )
+        if (animateIn) {
+            appear.animateTo(
+                targetValue = 1f,
+                animationSpec = YohakuMotion.tween(
+                    durationMs = YohakuMotion.durBase,
+                    easing = YohakuMotion.easeExpoOut,
+                    delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
+                ),
+            )
+            entrance.markSeen(course.id)
+        }
     }
-    // 「正在上」的 accent 条轻微呼吸
-    val barAlpha by animateFloatAsState(
-        targetValue = if (isCurrent) 1f else 0.98f,
-        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow),
-        label = "barAlpha",
-    )
+    // 「正在上」的 accent 条呼吸:真实的脉冲(此前在 1f↔0.98f 之间摆,肉眼等于没动)。
+    // 只有当前课才起这条无限动画;初值取 1f,系统「移除动画」时无限动画停在初值 ——
+    // 停在满亮,而不是半亮的残缺态(不做残缺动画)。
+    val barAlpha = if (isCurrent) {
+        val pulse = rememberInfiniteTransition(label = "currentPulse")
+        pulse.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.55f,
+            animationSpec = infiniteRepeatable(
+                animation = YohakuMotion.tween<Float>(YohakuMotion.durPulse / 2, YohakuMotion.easeInOut),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "barAlpha",
+        ).value
+    } else {
+        1f
+    }
 
     val metas = buildList {
         if (prefs.showPeriod && !course.isCustomScheduled()) {

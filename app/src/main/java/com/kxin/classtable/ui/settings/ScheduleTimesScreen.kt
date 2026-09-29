@@ -53,6 +53,7 @@ import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTimePicker
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -634,6 +635,7 @@ private fun BreakBlock(
                 style = YohakuType.label12,
                 color = colors.accent,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(onClick = onAddClass)
                     .padding(horizontal = 6.dp, vertical = 8.dp),
             )
@@ -643,6 +645,7 @@ private fun BreakBlock(
                 style = YohakuType.copy15,
                 color = colors.neutral6,
                 modifier = Modifier
+                    .yohakuTouchTarget(minWidth = 40.dp)
                     .clickable { onResize(span.block.minutes - 1) }
                     .padding(horizontal = 6.dp, vertical = 6.dp),
             )
@@ -656,6 +659,7 @@ private fun BreakBlock(
                 style = YohakuType.copy15,
                 color = colors.neutral6,
                 modifier = Modifier
+                    .yohakuTouchTarget(minWidth = 40.dp)
                     .clickable { onResize(span.block.minutes + 1) }
                     .padding(horizontal = 6.dp, vertical = 6.dp),
             )

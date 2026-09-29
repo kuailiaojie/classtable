@@ -135,12 +135,12 @@ fun CourseReminderScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             SettingsSection(title = "课前提醒") {
-                SettingBlock(
+                SettingSwitchRow(
                     title = "课程提醒",
                     subtitle = "在每节课开始前发送通知;内容在触发那一刻才算(剩余分钟 / 开始时间 / 地点)。",
-                ) {
-                    ChipToggle(selected = enabled) { enabled = it }
-                }
+                    checked = enabled,
+                    onCheckedChange = { enabled = it },
+                )
                 DividerLine()
                 SettingBlock(title = "提前多少分钟提醒") {
                     val leadOptions = listOf(
@@ -189,12 +189,12 @@ fun CourseReminderScreen(
             }
 
             SettingsSection(title = "明日课程预告") {
-                SettingBlock(
+                SettingSwitchRow(
                     title = "明日课程预告",
                     subtitle = "前一天提醒「明天有 N 门课 · 第一节几点、在哪」。",
-                ) {
-                    ChipToggle(selected = tomorrowEnabled) { tomorrowEnabled = it }
-                }
+                    checked = tomorrowEnabled,
+                    onCheckedChange = { tomorrowEnabled = it },
+                )
                 if (tomorrowEnabled) {
                     DividerLine()
                     SettingBlock(title = "提醒时刻") {
@@ -247,15 +247,6 @@ fun CourseReminderScreen(
                 modifier = Modifier.weight(1f),
             )
         }
-    }
-}
-
-/** 开 / 关一对 chip(项目没有 Switch,布尔项一律用 chip 对)。 */
-@Composable
-internal fun ChipToggle(selected: Boolean, onSelected: (Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        YohakuChip(text = "开启", selected = selected, onClick = { onSelected(true) })
-        YohakuChip(text = "关闭", selected = !selected, onClick = { onSelected(false) })
     }
 }
 

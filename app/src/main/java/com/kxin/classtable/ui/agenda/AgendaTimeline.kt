@@ -32,11 +32,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.LunarDate
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaPriority
@@ -52,6 +54,7 @@ internal fun AgendaTimeline(
     events: List<AgendaEvent>,
     onAdd: () -> Unit,
     onEventClick: (AgendaEvent) -> Unit,
+    entrance: EntranceTracker,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
@@ -109,7 +112,7 @@ internal fun AgendaTimeline(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            AddButton(onClick = onAdd)
+            AgendaAddButton(onClick = onAdd)
         }
 
         if (events.isEmpty()) {
@@ -141,16 +144,21 @@ internal fun AgendaTimeline(
                         )
                     }
                     itemsIndexed(items, key = { _, e -> e.id }) { index, event ->
-                        val appear = remember(event.id) { Animatable(0f) }
+                        // 已出现过的条目不重演入场(切页签会重建组合,否则每次都重播)
+                        val animate = entrance.shouldAnimate(event.id)
+                        val appear = remember(event.id) { Animatable(if (animate) 0f else 1f) }
                         LaunchedEffect(event.id) {
-                            appear.animateTo(
-                                targetValue = 1f,
-                                animationSpec = YohakuMotion.tween(
-                                    durationMs = YohakuMotion.durBase,
-                                    easing = YohakuMotion.easeOut,
-                                    delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
-                                ),
-                            )
+                            if (animate) {
+                                appear.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = YohakuMotion.tween(
+                                        durationMs = YohakuMotion.durBase,
+                                        easing = YohakuMotion.easeOut,
+                                        delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
+                                    ),
+                                )
+                                entrance.markSeen(event.id)
+                            }
                         }
                         AgendaRow(
                             event = event,
@@ -240,24 +248,32 @@ private fun AgendaRow(
     }
 }
 
+/** 议程 / 倒计时共用的「＋」:圆形浮起面 + 细边框 + accent 字,两处入口长得一样(经验迁移)。 */
 @Composable
-private fun AddButton(onClick: () -> Unit) {
+internal fun AgendaAddButton(onClick: () -> Unit) {
     val colors = LocalYohakuColors.current
     val shape = CircleShape
+    // 视觉仍是 36dp 的圆,可点范围补到 44dp(圆形按钮贴在拇指最容易够到的位置,不该只有 36)
     Box(
         modifier = Modifier
-            .size(36.dp)
-            .clip(shape)
-            .background(colors.raised)
-            .border(BorderStroke(1.dp, colors.line), shape)
+            .yohakuTouchTarget()
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = "＋",
-            style = YohakuType.title20,
-            color = colors.accent,
-            textAlign = TextAlign.Center,
-        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(shape)
+                .background(colors.raised)
+                .border(BorderStroke(1.dp, colors.line), shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "＋",
+                style = YohakuType.title20,
+                color = colors.accent,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

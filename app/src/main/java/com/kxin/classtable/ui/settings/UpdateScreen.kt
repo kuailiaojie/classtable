@@ -40,6 +40,7 @@ import com.kxin.classtable.data.UpdateRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMarkdown
 import com.kxin.classtable.design.YohakuTopBar
@@ -274,18 +275,16 @@ fun UpdateScreen(
             Text(text = "更新选项", style = YohakuType.label12, color = colors.neutral7)
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-            Text(text = "自动检查更新", style = YohakuType.copy13, color = colors.neutral9)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YohakuChip(
-                    text = "开启",
-                    selected = settings.autoCheckUpdate,
-                    onClick = { viewModel.setAutoCheckUpdate(true) },
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "自动检查更新",
+                    style = YohakuType.copy13,
+                    color = colors.neutral9,
+                    modifier = Modifier.weight(1f),
                 )
-                YohakuChip(
-                    text = "关闭",
-                    selected = !settings.autoCheckUpdate,
-                    onClick = { viewModel.setAutoCheckUpdate(false) },
+                YohakuSwitch(
+                    checked = settings.autoCheckUpdate,
+                    onCheckedChange = { viewModel.setAutoCheckUpdate(it) },
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -320,18 +319,16 @@ fun UpdateScreen(
             )
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-            Text(text = "接收预发行版", style = YohakuType.copy13, color = colors.neutral9)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YohakuChip(
-                    text = "仅正式版",
-                    selected = !settings.includePrerelease,
-                    onClick = { viewModel.setIncludePrerelease(false) },
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "接收预发行版",
+                    style = YohakuType.copy13,
+                    color = colors.neutral9,
+                    modifier = Modifier.weight(1f),
                 )
-                YohakuChip(
-                    text = "含预发行版",
-                    selected = settings.includePrerelease,
-                    onClick = { viewModel.setIncludePrerelease(true) },
+                YohakuSwitch(
+                    checked = settings.includePrerelease,
+                    onCheckedChange = { viewModel.setIncludePrerelease(it) },
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))

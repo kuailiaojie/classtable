@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.agenda
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,12 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,11 +33,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import java.time.Instant
@@ -52,6 +57,7 @@ internal fun CountdownList(
     now: Long,
     onAdd: () -> Unit,
     onEventClick: (AgendaEvent) -> Unit,
+    entrance: EntranceTracker,
     modifier: Modifier = Modifier,
 ) {
     val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -72,13 +78,25 @@ internal fun CountdownList(
         if (upcoming.isEmpty()) {
             item(key = "empty") { EmptyCountdownCard(onAdd = onAdd) }
         } else {
-            item(key = "summary") { CountdownSummary(upcoming, today) }
-            items(upcoming, key = { it.id }) { event ->
-                CountdownCard(
+            // 汇总行右侧常驻「＋」:此前只有空态才有添加入口,已经有一条倒计时后就再也加不了
+            item(key = "summary") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.weight(1f)) { CountdownSummary(upcoming, today) }
+                    AgendaAddButton(onClick = onAdd)
+                }
+            }
+            itemsIndexed(upcoming, key = { _, e -> e.id }) { index, event ->
+                CountdownItem(
                     event = event,
                     today = today,
                     finished = false,
+                    index = index,
+                    entrance = entrance,
                     onClick = { onEventClick(event) },
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -92,17 +110,63 @@ internal fun CountdownList(
                 )
             }
             if (showFinished) {
-                items(finished, key = { it.id }) { event ->
-                    CountdownCard(
+                itemsIndexed(finished, key = { _, e -> e.id }) { index, event ->
+                    CountdownItem(
                         event = event,
                         today = today,
                         finished = true,
+                        index = index,
+                        entrance = entrance,
                         onClick = { onEventClick(event) },
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * 一条倒计时:入场错峰(与议程一致)+ 列表增删位移动画。
+ *
+ * 展开「已结束」时,新插入的条目此前是硬冒出来的 —— `.animateItem()`(由调用方从
+ * LazyItemScope 传入)让它们按插入动画进场,与折叠箭头的转动对上。
+ */
+@Composable
+private fun CountdownItem(
+    event: AgendaEvent,
+    today: LocalDate,
+    finished: Boolean,
+    index: Int,
+    entrance: EntranceTracker,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val animate = entrance.shouldAnimate(event.id)
+    val appear = remember(event.id) { Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(event.id) {
+        if (animate) {
+            appear.animateTo(
+                targetValue = 1f,
+                animationSpec = YohakuMotion.tween(
+                    durationMs = YohakuMotion.durBase,
+                    easing = YohakuMotion.easeOut,
+                    delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
+                ),
+            )
+            entrance.markSeen(event.id)
+        }
+    }
+    CountdownCard(
+        event = event,
+        today = today,
+        finished = finished,
+        onClick = onClick,
+        modifier = modifier.graphicsLayer {
+            alpha = appear.value
+            translationY = (1f - appear.value) * 20f
+        },
+    )
 }
 
 @Composable
@@ -111,6 +175,7 @@ private fun CountdownCard(
     today: LocalDate,
     finished: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
     val startDay = event.startLocal().toLocalDate()
@@ -127,7 +192,7 @@ private fun CountdownCard(
     val rightColor = if (finished) colors.error else colors.accent
 
     YohakuCard(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
         containerColor = if (finished) null else categoryTint(event.category),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -258,6 +323,7 @@ private fun EmptyCountdownCard(onAdd: () -> Unit) {
                 style = YohakuType.copy13,
                 color = colors.accent,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(onClick = onAdd)
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
