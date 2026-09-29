@@ -991,6 +991,16 @@
    "description": "适配淮南师范学院库表图融合门户，登入后直接执行导入"
   },
   {
+   "folder": "HNPTC",
+   "adapter_id": "HNPTC_01",
+   "adapter_name": "湘邮教学管理平台",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hnptc_01.js",
+   "import_url": "http://jx.hnxyjf.com:10081/jsxsd/",
+   "maintainer": "小漫君",
+   "description": "登录湘邮教学管理平台学生端后选择学期导入，读取整学期课表与教学周历。作息时间参考学校 2025-2026 学年校历，请按最新安排核对。"
+  },
+  {
    "folder": "HNSF",
    "adapter_id": "HNSF_01",
    "adapter_name": "河南师范大学适配教务",
@@ -1521,6 +1531,16 @@
    "description": "东北农业大学适配教务,非本校开发者适配如果有误建议提交issues"
   },
   {
+   "folder": "NEFU",
+   "adapter_id": "NEFU_01",
+   "adapter_name": "东北林业大学本部本科生院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "nefu.js",
+   "import_url": "https://jwxt.nefu.edu.cn/jsxsd/",
+   "maintainer": "Chr0n0stasis",
+   "description": "本部本科个人课表。登录后选择学期导入，保留原有作息和学期设置。"
+  },
+  {
    "folder": "NENU",
    "adapter_id": "NENU_01",
    "adapter_name": "东北师范大学适配教务",
@@ -1731,6 +1751,16 @@
    "description": "适配青岛理工大学正方教务系统"
   },
   {
+   "folder": "SANYEDU",
+   "adapter_id": "SANYEDU",
+   "adapter_name": "湖南三一工业职业技术学院教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sany.js",
+   "import_url": "https://ehall.sanyedu.com/new/index.html",
+   "maintainer": "Haooz",
+   "description": "湖南三一工业职业技术学院课表导入，请先登录并打开个人课表页面，再点击导入！"
+  },
+  {
    "folder": "SCEMI",
    "adapter_id": "SCEMI_01",
    "adapter_name": "四川机电职业技术学院教务",
@@ -1839,6 +1869,16 @@
    "import_url": "https://jw.shiep.edu.cn/eams/index.action",
    "maintainer": "zt11125",
    "description": "从统一身份认证入口登录后进入教务系统"
+  },
+  {
+   "folder": "SHNU",
+   "adapter_id": "SHNU_01",
+   "adapter_name": "上海师范大学树维教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "shnu.js",
+   "import_url": "https://course.shnu.edu.cn/",
+   "maintainer": "FaQxD233",
+   "description": "上海师范大学本科生教务系统(course.shnu.edu.cn/eams)适配，支持选择学期。登录之后直接导入不用点网页，加载不出来不重要。"
   },
   {
    "folder": "SHUFEZJ",
