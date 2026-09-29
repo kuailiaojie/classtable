@@ -219,8 +219,22 @@ fun TimetableScreen(
 
     // 与模式无关的锚点:锚定「第几周 + 星期几」。切周 / 日只是换粒度,不换位置(任务连续);
     // 首次进入仍落在真实当前周 / 今天。用 remember(非 saveable):重建即回到当前周,与既有行为一致。
+    //
+    // 但 settings 是异步流入的:首帧还是 AppSettings() 默认值(开学日 = 0),此时算出的「当前周」
+    // 恒为第 1 周。锚点若只在首帧 remember 一次,真实学期到了也不会再落 —— 冷启动就会停在第 1 周
+    // 而不是今天。所以真实开学日到达后再补正一次(瞬时,不演一段从第 1 周滑过去的动画)。
     var anchorWeek by remember { mutableIntStateOf(realWeek) }
     var anchorWeekday by remember { mutableIntStateOf(today) }
+    var anchorSynced by remember { mutableStateOf(false) }
+    var snapAnchor by remember { mutableStateOf(false) }
+    LaunchedEffect(realWeek, settings.semesterStartDay) {
+        if (!anchorSynced && settings.semesterStartDay > 0L) {
+            anchorSynced = true
+            snapAnchor = true
+            anchorWeek = realWeek
+            anchorWeekday = today
+        }
+    }
     val atToday = if (dayMode) anchorWeek == realWeek && anchorWeekday == today else anchorWeek == realWeek
 
     Column(
@@ -326,10 +340,14 @@ fun TimetableScreen(
             } else {
                 (anchorWeek - 1).coerceIn(0, weekCount - 1)
             }
-            // 锚点 → 分页:点「今天」或点星期头后,把当前模式的分页滚过去
+            // 锚点 → 分页:点「今天」或点星期头后,把当前模式的分页滚过去。
+            // 开学日补正那一次瞬时跳转 —— 否则冷启动会演一段从第 1 周滑到第 N 周的动画。
             LaunchedEffect(anchorWeek, anchorWeekday, dayMode) {
                 val target = pageFor()
-                if (pagerState.currentPage != target) pagerState.animateScrollToPage(target)
+                if (pagerState.currentPage != target) {
+                    if (snapAnchor) pagerState.scrollToPage(target) else pagerState.animateScrollToPage(target)
+                }
+                snapAnchor = false
             }
             // 分页 → 锚点:滑动落定后把锚点写成当前所看的位置,切模式时才接得上
             LaunchedEffect(pagerState, dayMode) {

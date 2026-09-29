@@ -407,19 +407,20 @@ private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
  * 两个层级用两套动作:根标签之间是「同层切换」,不该有方向感 —— 淡出 → 淡入;
  * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
  *
- * **铁律:同一时刻两页绝不能都留在屏内。** NavHost 把退场页与入场页叠在同一个容器里,
- * 各自只沿水平轴平移。只要有一帧两页都还在屏内,重叠区就会把**错的那一页**画在上面
- * (退场页的卡片压在入场页的文字上、把行内文字截断),看起来就是「两页同时出现又互相遮挡」。
- * 所以两页必须**首尾相接、恒不重叠**:退场页整幅滑出屏幕,入场页整幅滑入 —— 两页同曲线、
- * 同时长,边界线严格重合,任意时刻屏幕上只可能有一页的像素。
+ * **铁律:一次转场只让一层在动。** NavHost 把退场页与入场页叠在同一个容器里,而这两层
+ * 谁画在上面**由库决定、并不保证** —— 预测性返回下尤其如此(见 Google Issue 345993681:
+ * 返回手势进行中,被弹出的那一页有时会被画到另一页**后面**)。一旦两层同时平移,或同时
+ * 改 alpha,重叠的那一帧就会把**错的那一页**画在上面:退场页的卡片压在入场页的文字上、
+ * 把行内文字截断,看起来就是「两页同时出现又互相遮挡」。此前几版一直在调两页各自的位移
+ * 与曲线(2.6.0 的分层视差、2.6.1 的「首尾相接」),都没离开「两层同时动」这个前提,所以
+ * 始终没除根。正确的做法只有一个:**推进时只有入场页在动**(旧页原地不动,当作背景),
+ * **返回时只有退场页在动**(被压住的那页原地不动、原地露出来)。这样无论库把哪一层画在
+ * 上面,任意时刻屏上都只有一页的像素在变化,重叠也不可能看出来。
  *
- * 由此推出两条:**别让任何一页「只走一小段」**(那必然与另一页重叠);也不要让两页同时改
- * alpha(那是同一类问题的另一种形态 —— 双重曝光)。「残影」与「文字被另一页截断」是同一个
- * 根因的两种表现。
- *
- * 转场由**系统的返回手势驱动**(targetSdk 36 起预测性返回默认开启):手指拖到哪,两页就
- * 停在哪、松手前随时能退回 —— 过程可控,而不是先放手、再看一段固定时长的动画。所以这里
- * 只用可被「拖动定位」的补间(slide / fade / scale + tween),不掺动画协程这类写死的驱动。
+ * 转场由**系统的返回手势驱动**(targetSdk 36 起预测性返回默认开启,且不再能关掉):手指
+ * 拖到哪,退场页就停在哪、松手前随时能退回 —— 过程可控,而不是先放手、再看一段固定时长
+ * 的动画。所以这里只用可被「拖动定位」的补间(slide + tween),不掺动画协程这类写死的
+ * 驱动;被压住的那一页用 [EnterTransition.None] 保持在原地,不参与 seek。
  */
 private fun navEnter(from: String?, to: String?): EnterTransition =
     if (isRootTab(from) && isRootTab(to)) {
@@ -433,7 +434,7 @@ private fun navEnter(from: String?, to: String?): EnterTransition =
                 initialScale = 0.98f,
             )
     } else {
-        // 入场页:整幅推入(必须整幅 —— 少走一点就会与退场页重叠,见上)
+        // 推进:只有入场页整幅推入,退场页原地不动(等它被新页盖住)
         slideInHorizontally(
             animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
             initialOffsetX = { it },
@@ -448,19 +449,12 @@ private fun navExit(from: String?, to: String?): ExitTransition =
                 targetScale = 1.01f,
             )
     } else {
-        // 退场页:整幅滑出——与入场页共用同一条曲线与时长的「胶片」,边界线始终重合
-        slideOutHorizontally(
-            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-            targetOffsetX = { -it },
-        )
+        // 推进时退场页不动 —— 只让入场页动,两层就永远不会同时出现在屏上(见上)
+        ExitTransition.None
     }
 
-/** 返回:被压住的页从左侧整幅滑回,当前页整幅向右滑出(两页同曲线同长,见 [navEnter])。 */
-private fun navPopEnter(): EnterTransition =
-    slideInHorizontally(
-        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
-        initialOffsetX = { -it },
-    )
+/** 返回:只有当前页整幅向右滑出;被压住的那页原地不动、原地露出来。 */
+private fun navPopEnter(): EnterTransition = EnterTransition.None
 
 private fun navPopExit(): ExitTransition =
     slideOutHorizontally(
