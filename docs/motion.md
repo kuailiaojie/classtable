@@ -134,6 +134,12 @@ LaunchedEffect(Unit) {
 入场页在动**(退场页原地不动,当背景),**返回时只有退场页在动**(被压住的页原地不动、原地露出来,用
 `EnterTransition.None`)。这样无论库把哪一层画在上面,任意时刻屏上都只有一页的像素在变化。
 
+**手势路径要单独钉。** Navigation 2.10 起,手势返回不再复用 `popEnterTransition` / `popExitTransition`,
+改走 `NavHost` 新加的 `predictivePopEnterTransition` / `predictivePopExitTransition`;不传就落到库的
+`DefaultNavTransitions` 缺省值(退场页 `scaleOut(0.7f)` 缩向屏幕中央 + 底层页 `fadeIn`)——两层同时动、
+还带 alpha,正好踩穿上面的铁律(「关于 → 设置」手势返回时「关于」缩在屏幕正中、压住「设置」行内文字,
+就是这么来的)。所以这两个参数必须显式钉成同一套:被压页 `EnterTransition.None`、退场页整幅滑出。
+
 由此两条禁令:**别让两页同时平移**(2.6.0 的分层视差、2.6.1 的「首尾相接」都出在这一条上),**别让两页同时改
 alpha**(双重曝光)。根标签之间是唯一例外,但用的是**串行**淡化:旧页先淡出、新页等它走完再淡入,任意时刻只有
 一页在变 alpha。

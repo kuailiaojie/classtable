@@ -215,6 +215,12 @@ fun ClasstableRoot(
                     exitTransition = { navExit(initialState.destination.route, targetState.destination.route) },
                     popEnterTransition = { navPopEnter() },
                     popExitTransition = { navPopExit() },
+                    // Navigation 2.10 起,手势返回不再复用 popEnter/popExit,改走这两个参数;
+                    // 缺省值是库的 DefaultNavTransitions(退场页 scaleOut(0.7) 缩向屏幕中央 +
+                    // 底层页 fadeIn)——两层同时动还带 alpha,正好踩穿下面那条铁律(「关于」缩在
+                    // 屏幕正中、压住「设置」的行内文字)。这里把手势路径钉回同一套:只让一层在动。
+                    predictivePopEnterTransition = { navPopEnter() },
+                    predictivePopExitTransition = { navPopExit() },
                 ) {
                 composable("week") { TimetableScreen(nav) }
                 composable(
