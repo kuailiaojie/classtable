@@ -351,7 +351,7 @@ fun TimetableScreen(
                             marks = marks,
                             // 切周视差:表头比网格移动得稍慢一点,横向拖动时有一点层次
                             modifier = Modifier.graphicsLayer {
-                                translationX = pagerState.currentPageOffsetFraction * 56f
+                                translationX = pagerState.currentPageOffsetFraction * YohakuMotion.headerParallaxPx
                             },
                         )
                         WeekGrid(

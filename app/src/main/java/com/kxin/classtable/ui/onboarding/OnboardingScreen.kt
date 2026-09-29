@@ -44,6 +44,7 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.motionTimeline
 import com.kxin.classtable.ui.permissions.PermissionRow
 import com.kxin.classtable.ui.permissions.PermissionsViewModel
 
@@ -106,14 +107,28 @@ fun OnboardingScreen(
         }
     }
 
-    // 逐项错峰入场:序号 → 延迟
-    val header by entrance(0)
-    val desc by entrance(1)
-    val notifRow by entrance(2)
-    val alarmRow by entrance(3)
-    val batteryRow by entrance(4)
-    val autoStartRow by entrance(5)
-    val bottomBlock by entrance(6)
+    // 整页按序入场(标题 → 逐项 → 底部按钮):一条时间线的 stagger 编排,而不是七个各自 delay。
+    // 序号固定为 7(标题、说明、通知 / 精确闹钟 / 电池 / 自启动四行、底部按钮块)。
+    val entrance = remember { List(ENTRANCE_STEPS) { Animatable(0f) } }
+    LaunchedEffect(Unit) {
+        motionTimeline {
+            stagger(
+                count = ENTRANCE_STEPS,
+                stepMs = YohakuMotion.staggerLoose,
+                durationMs = YohakuMotion.durSlow,
+                position = "0",
+            ) { index, duration ->
+                entrance[index].animateTo(1f, YohakuMotion.tween(duration, YohakuMotion.easeExpoOut))
+            }
+        }
+    }
+    val header = entrance[0].value
+    val desc = entrance[1].value
+    val notifRow = entrance[2].value
+    val alarmRow = entrance[3].value
+    val batteryRow = entrance[4].value
+    val autoStartRow = entrance[5].value
+    val bottomBlock = entrance[6].value
 
     Column(
         modifier = Modifier
@@ -249,22 +264,8 @@ fun OnboardingScreen(
     }
 }
 
-/** 入场进度 0 → 1:第 [index] 项带错峰延迟。 */
-@Composable
-private fun entrance(index: Int): androidx.compose.runtime.State<Float> {
-    val anim = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        anim.animateTo(
-            targetValue = 1f,
-            animationSpec = YohakuMotion.tween(
-                durationMs = YohakuMotion.durSlow,
-                easing = YohakuMotion.easeExpoOut,
-                delayMs = YohakuMotion.staggerDelay(index, 60),
-            ),
-        )
-    }
-    return anim.asState()
-}
+/** 入场编排的步数:标题、说明,通知 / 精确闹钟 / 电池白名单 / 自启动四行,再加底部按钮块。 */
+private const val ENTRANCE_STEPS = 7
 
 /** 把入场进度落到合成层:淡入 + 上移,不触发布局。 */
 private fun Modifier.entrance(progress: Float): Modifier = graphicsLayer {

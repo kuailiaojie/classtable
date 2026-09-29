@@ -231,6 +231,10 @@
 
     const versionBadge = document.querySelector('[data-hero-version]');
     if (versionBadge) versionBadge.textContent = `v${data.versionName}`;
+
+    // 下载面板刚被重建,版面变了 —— 通知 motion.js(GSAP)重算滚动动画的位置。
+    // 没装 motion.js 时这个事件没人听,无副作用。
+    window.dispatchEvent(new CustomEvent('yohaku:version'));
   }
 
   /* ---------- 3 · 大包分段下载 ---------- */

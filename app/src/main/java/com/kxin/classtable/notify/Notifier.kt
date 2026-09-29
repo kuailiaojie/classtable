@@ -203,18 +203,22 @@ object Notifier {
     }
 
     /**
-     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 课间中 → 已下课」,上课期间进度条随当前小节推进。
+     * 实时活动通知:覆盖「课前倒计时 → 上课中 → 课间中 → 已下课」。
      *
      * **正文只跟状态走,秒级倒计时交给系统的 `when` + Chronometer 自己走**:通知上写死一个
      * 倒计时目标([LiveUpdateStatus.nextTransitionAtMillis]),之后由系统逐秒自己走,我们不为了
-     * 刷新分钟数而重发 —— 重发正是国产胶囊「每隔一会儿跳出来一下」的来源。服务只在相位切换、
-     * 以及每分钟(只为推进确定态进度条,它系统不会自己动)原地重画。
+     * 刷新分钟数而重发 —— 重发正是国产胶囊「每隔一会儿跳出来一下」的来源。服务只在相位切换时
+     * 原地重画一帧。
+     *
+     * **不挂进度条**。进度条系统不会自己动,要推进就得每隔一会儿重发同一条通知;而国产胶囊
+     * (荣耀灵动胶囊 / 小米超级岛)把每次更新都当成「又一条新提醒」再展开一次 —— 这正是「每次
+     * 更新时跳出」的根因。去掉进度条后,两次相变之间零重发,胶囊只在真的换状态时才展开。
      *
      * 每次刷新都是同一身份 → 同一槽位的那条通知(原地更新 + `setOnlyAlertOnce`),不重起服务、
      * 不另发一条;只有跨到新相位时才换到另一个槽位,让胶囊在新状态重新展开一次(见 [postLiveUpdate])。
      *
      * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊认的是
-     * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求只在平台 Builder 上可达。
+     * Android 16 的 Live Updates 规范,提升请求只在平台 Builder 上可达。
      * 条件见 [CapsuleCompat] 的说明。
      */
     fun buildLiveUpdate(
@@ -236,7 +240,6 @@ object Notifier {
                 append("\n最新公告:").append(it.take(ANNOUNCEMENT_MAX_CHARS))
             }
         }
-        val progress = status.progressPercent
         // 倒计时目标:下一个相变(课前 → 上课,课中 → 课间 / 下课,课间 → 上课)。没有目标就不挂计时
         val countdownTo = status.nextTransitionAtMillis
 
@@ -257,34 +260,16 @@ object Notifier {
             .setChronometerCountDown(true)
             // 固定用默认色:自定义颜色会让部分系统的胶囊强制按普通通知渲染
             .setColor(Notification.COLOR_DEFAULT)
-            .setCategory(
-                if (progress != null) Notification.CATEGORY_PROGRESS else Notification.CATEGORY_EVENT,
-            )
-
-        if (Build.VERSION.SDK_INT >= 36 && progress != null) {
-            builder.setStyle(
-                Notification.ProgressStyle()
-                    // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
-                    .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
-                    .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
-                    // 确定态:按当前小节推进,由服务每分钟原地更新一次(进度条系统不会自己动)
-                    .setProgress(progress),
-            )
-        } else {
-            builder.setStyle(Notification.BigTextStyle().bigText(expandedText))
-            if (progress != null) builder.setProgress(100, progress, false)
-        }
-
-        // 进行中时展开区已被进度条占满,不再摆按钮;课前 / 刚下课才给「取消本节课提醒」
-        if (progress == null) {
-            builder.addAction(
+            .setCategory(Notification.CATEGORY_EVENT)
+            // 不挂进度条:进度条不会自己动,推进它就得重发同一条通知 —— 那正是胶囊每次更新跳出的来源
+            .setStyle(Notification.BigTextStyle().bigText(expandedText))
+            .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, R.drawable.ic_notify),
                     "取消本节课提醒",
                     cancelLivePendingIntent(context, payload.muteKey, payload.endAtMillis() ?: 0L),
                 ).build(),
             )
-        }
 
         CapsuleCompat.requestPromotion(builder)
 

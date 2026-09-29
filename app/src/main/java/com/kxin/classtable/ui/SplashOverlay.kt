@@ -2,7 +2,6 @@ package com.kxin.classtable.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideOutVertically
@@ -27,8 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.kxin.classtable.design.motionTimeline
 
 /**
  * 首屏品牌过渡:轻量、可跳过,不阻塞主界面加载。
@@ -49,27 +47,30 @@ fun SplashOverlay(onExitStart: () -> Unit = {}) {
     val title = remember { Animatable(0f) }
     val tagline = remember { Animatable(0f) }
 
+    // 一条时间线管到底:三根条生长 → 柔光扫过 → 标题上浮 → 副标题跟上 → 停留后收场。
+    // 起点用绝对毫秒(GSAP 的 position 参数),各自重叠多少一目了然,不再散落一串 delay()。
+    // 顺带修掉一个老问题:原来的 delay() 不随系统「移除动画」缩放,整块仍要卡满 1.9s;
+    // 现在 motionTimeline 会按 MotionDurationScale 压缩起点偏移,关掉动画即瞬时收场。
     LaunchedEffect(Unit) {
-        launch { reveal.animateTo(1f, YohakuMotion.tween(700, LinearEasing)) }
-        launch {
-            delay(620)
-            sheen.animateTo(1f, YohakuMotion.tween(520, YohakuMotion.easeInOut))
+        motionTimeline {
+            step(YohakuMotion.durXSlow, "0") { d ->
+                reveal.animateTo(1f, YohakuMotion.tween(d, YohakuMotion.easeLinear))
+            }
+            step(YohakuMotion.durSlow, "620") { d ->
+                sheen.animateTo(1f, YohakuMotion.tween(d, YohakuMotion.easeInOut))
+            }
+            step(YohakuMotion.durSlow, "880") { d ->
+                title.animateTo(1f, YohakuMotion.tween(d, YohakuMotion.easeExpoOut))
+            }
+            step(YohakuMotion.durSlow, "1040") { d ->
+                tagline.animateTo(1f, YohakuMotion.tween(d, YohakuMotion.easeExpoOut))
+            }
+            // 收场:通知上层把「引导入场」接上,并把整块交给 AnimatedVisibility 擦除
+            step(0, "1900") {
+                onExitStart()
+                visible = false
+            }
         }
-        launch {
-            delay(880)
-            title.animateTo(1f, YohakuMotion.tween(420, YohakuMotion.easeExpoOut))
-        }
-        launch {
-            delay(1040)
-            tagline.animateTo(1f, YohakuMotion.tween(420, YohakuMotion.easeExpoOut))
-        }
-    }
-
-    // 退场:独立于任何资源解码,保底也要把开屏收掉(异常时不让界面卡住)
-    LaunchedEffect(Unit) {
-        delay(1900)
-        onExitStart()
-        visible = false
     }
 
     AnimatedVisibility(

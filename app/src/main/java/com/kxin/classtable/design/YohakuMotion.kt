@@ -4,6 +4,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
@@ -13,13 +14,23 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 
 /**
- * 动效 token。
+ * 动效 token —— 全应用动画的**唯一数值来源**。
  *
- * 取自 GSAP 的运动原则(不是它的 API —— 那是 JS 库,在 Compose 里跑不了):
- * - **缓动统一**:GSAP 的 `power2.out` / `power2.inOut` / `expo.out` / `back.out` 就是
- *   三次贝塞尔曲线,这里逐一对应成 [CubicBezierEasing];同类元素用同一条曲线,动作才像一套。
- * - **时长克制**:多数交互落在 180–460ms(GSAP 的惯例),只有开屏这类「编排」才用更长的时间线。
- * - **错峰 = stagger**:同类元素依次入场,用 [staggerDelay] 把序号变成延迟,而不是串一堆 delay。
+ * 取自 GSAP 的运动原则(不是它的 API —— 那是 JS 库,在 Compose 里跑不了),
+ * 对应关系见 [YohakuTimeline] 与本文件各成员:
+ *
+ * | GSAP | 这里 |
+ * | --- | --- |
+ * | `gsap.timeline()` + position 参数 / `stagger` | [YohakuTimeline] |
+ * | `power2.out` / `power2.inOut` / `expo.out` / `back.out` | [easeOut] / [easeInOut] / [easeExpoOut] / [easeBackOut] |
+ * | `ease: "none"` | [easeLinear] |
+ * | duration(秒) | [durFast] / [durBase] / [durSlow] / [durXSlow] |
+ * | `stagger: { each }` | [staggerDelay] 与 [YohakuTimeline.stagger] |
+ * | `prefers-reduced-motion` + `gsap.matchMedia()` | Compose 的 `MotionDurationScale`([YohakuTimeline.play] 已对齐) |
+ *
+ * 三条铁律:
+ * - **缓动统一**:同类元素用同一条曲线,动作才像一套;
+ * - **时长克制**:交互落在 180–460ms,只有开屏这类「编排」才用更长的时间线;
  * - **只动合成层**:动画一律作用在 alpha / translation / scale 上,不碰会触发布局的属性。
  */
 object YohakuMotion {
@@ -32,11 +43,27 @@ object YohakuMotion {
     /** 页面转场、面板滑入。 */
     const val durSlow = 460
 
-    /** 开屏时间线。 */
+    /** 开屏时间线(品牌条生长)。 */
     const val durXSlow = 700
 
     /** 错峰步长:列表项、课程块依次入场的间隔。 */
     const val stagger = 40
+
+    /** 紧凑错峰:一屏内塞得下的网格(周视图课程块)。 */
+    const val staggerTight = 22
+
+    /** 疏松错峰:条目少、需要被逐一看清时(权限引导)。 */
+    const val staggerLoose = 60
+
+    /**
+     * 周视图表头随翻页的视差量(px)。
+     *
+     * 只用于 [graphicsLayer] 的 translationX(单位是像素,不是 dp),别照搬去写 dp。
+     */
+    const val headerParallaxPx = 56f
+
+    /** GSAP `ease: "none"` —— 匀速,用于进度驱动(品牌条生长、扫光)。 */
+    val easeLinear: Easing = LinearEasing
 
     /** GSAP `power2.out` ≈ easeOutCubic。 */
     val easeOut: Easing = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)

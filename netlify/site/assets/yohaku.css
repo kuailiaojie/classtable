@@ -13,6 +13,10 @@
  *   · 背景模糊只有四档(thick/default/thin/ultrathin),半径上限 rounded-2xl(16px)。
  *   · 深度来自 1px 描边或 whisper 阴影,禁止硬投影。
  *   · accent 覆盖面积 ≤ 5%:CTA、焦点环、品牌标记、引用条。
+ *
+ * 动效:过渡与滚动动画由 assets/motion.js(GSAP)接管。本文件只提供两处配合 ——
+ * `html.anim-ready [data-reveal]` 的首帧隐藏态,以及 `.scroll-progress` 的视觉。
+ * 减动效时 motion.js 不注册任何动画,上面的隐藏态由媒体查询强制还原为可见。
  */
 
 /* ============================================================
@@ -170,6 +174,17 @@ button {
 
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+/* ============================================================
+   2.5 · 动效初始态(仅当 JS 已就绪)
+   ============================================================ */
+
+/* index.html 的 <head> 内联脚本同步加上 `anim-ready`(开了「减少动态效果」时不加),
+   并在 2.5s 后自动撤掉 —— motion.js 若没跑起来(断网 / 被拦),类会被收回,
+   内容照原样可见。GSAP 接管后每个元素都以 inline style 呈现,这里的规则只防首帧闪一下。 */
+html.anim-ready [data-reveal] {
+  opacity: 0;
 }
 
 /* ============================================================
@@ -493,6 +508,19 @@ b {
 
 .nav-toggle {
   display: none;
+}
+
+/* 滚动进度:motion.js 插入到页头底部的 1px 强调色条;没有 JS 时它根本不存在 */
+.scroll-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
 }
 
 /* ============================================================
@@ -1148,5 +1176,12 @@ b {
   *::before,
   *::after {
     transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  /* 双保险:motion.js 在减动效下不注册任何动画,元素本就该原样可见 */
+  html.anim-ready [data-reveal] {
+    opacity: 1 !important;
   }
 }

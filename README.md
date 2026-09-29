@@ -205,6 +205,7 @@
 | 文档 | 内容 |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | 技术栈、整体架构、目录结构、数据模型与同步策略 |
+| [`docs/motion.md`](docs/motion.md) | 动效规范:token、时间线原语、GSAP 对应关系与减动效处理 |
 | [`docs/import-system.md`](docs/import-system.md) | 教务导入系统的数据流、适配脚本契约、适配仓库更新流程 |
 | [`docs/yuketang-api.md`](docs/yuketang-api.md) | 雨课堂接口使用备忘(认证、已实现端点、公告端点抓包与收敛办法) |
 | [`docs/backend-setup.md`](docs/backend-setup.md) | 账号 / 同步 / 推送 / 更新接口的后端部署与配置 |

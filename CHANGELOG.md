@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.5.0 (2026-09-29)
+
+动效收进一套语言(Android 与官网各一份实现),并去掉实时活动的进度条 —— 它正是胶囊每次更新时跳出的来源。
+
+### 提醒
+- **实时活动不再挂进度条**。进度条系统不会自己动,要推进它只能每隔一会儿重发同一条通知;而国产胶囊
+  (荣耀灵动胶囊 / 小米超级岛)把每次更新都当成「又一条新提醒」再展开一次 —— 这正是「每次更新时跳出」
+  的根因。现在通知上没有任何随时间变化的部件:正文只跟状态走,秒级倒计时交给系统的 `when` +
+  Chronometer 自己走,两次相变之间**零重发**。服务按相变醒来只做一件事:换一帧(同一身份 → 同一槽位;
+  跨相位才换槽位让胶囊重新展开)。
+- 展开区空出来后,「取消本节课提醒」按钮在四个相位下都在(此前课中被进度条挤掉)。
+
+### 动效
+- **新增 `design/YohakuTimeline.kt`**:把 GSAP 的 `timeline()` + position 参数搬进 Compose ——
+  `step(duration, position)` 与 `stagger(count, step)` 按「这一步多长、从哪开始」声明编排,替代散落的
+  `launch { delay(...) }`。`position` 语法与 GSAP 一致(`"0"` / `"+="` / `"<"` / `">"` 等)。
+- **减动效对齐 `prefers-reduced-motion`**:`delay()` 不随系统的动画缩放归零,所以时间线会读同一个
+  `MotionDurationScale`,把各步的**起点偏移**按同系数压缩 —— 系统「移除动画」时,开屏这类编排瞬时收场,
+  不再卡满 1.9s。
+- **token 补全**:新增 `easeLinear`、`staggerTight`(22ms,周视图课程块)、`staggerLoose`(60ms,权限引导)、
+  `headerParallaxPx`(表头视差);散落的字面量(30 / 56 / 60ms 与 56f)收回 token。
+- 迁移到时间线 / token:开屏(条生长 → 扫光 → 标题 / 副标题 → 收场一条时间线管到底)、首次权限引导
+  (七步 stagger)、周视图课程块错峰(改为按天算,不再跨整周累积延迟 —— 周五的课不必等近一秒)。
+- **弹窗改用 `back.out` 过冲入场**,开关滑块改回弹 spring,更贴合「出现 / 拨动」的手感。
+
+### 官网
+- **动效换成真正的 GSAP**(`gsap` + `ScrollTrigger` + `ScrollToPlugin`,本地 vendoring):Hero 入场
+  时间线、页头 1px 滚动进度条、分区 `ScrollTrigger.batch()` 错峰渐显、Hero 手机视差、FAQ 展开与锚点平滑滚动。
+- 全部动效装在 `gsap.matchMedia()` 里,`prefers-reduced-motion: reduce` 时**一行都不注册**(保持静态页);
+  GSAP 未加载则直接返回;`<head>` 内联脚本的 `anim-ready` 有 2.5s 兜底定时器,内容不会留白。
+
+### 文档
+- 新增 [`docs/motion.md`](docs/motion.md):动效规范(token 表、时间线原语与 GSAP position 语法对应、
+  减动效处理、各处动画归属)。README 文档索引补一行。
+
+### 版本
+- 2.4.1(70) → 2.5.0(71)。
+
 ## 2.4.1 (2026-09-29)
 
 修掉返回时上一页的残影,并把实时活动的秒级倒计时交回系统。

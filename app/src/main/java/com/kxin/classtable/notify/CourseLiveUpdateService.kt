@@ -28,17 +28,17 @@ import kotlinx.coroutines.withContext
  * 课前倒计时 → 上课中 → 课间中 → 下课,下课即收。
  *
  * 这套结构参照 SleepDown-Schedule 的实时活动:一节课只有**一个**闹钟,不会再排「提醒后
- * 1/3/5 分钟」那种没有新状态的重发。课中只做两件事:上课期间每分钟原地更新一次确定态进度条
- * (进度条系统不会自己动;秒级倒计时由系统的 `when` + Chronometer 自己走,不需要我们重发),
- * 相位切换时换槽上屏 —— 都是同一条通知(同一身份 → 同一槽位)、同一个服务实例,不重起前台服务、
+ * 1/3/5 分钟」那种没有新状态的重发;课中也不挂进度条 —— 进度条不会自己动,推进它就得每分钟
+ * 重发一次。秒级倒计时交给系统的 `when` + Chronometer 自己走,所以两次相变之间**零重发**,
+ * 只在相位切换时换槽上屏 —— 都是同一条通知(同一身份 → 同一槽位)、同一个服务实例,不重起前台服务、
  * 也不另发一条(通知本身 `setOnlyAlertOnce`,见 [Notifier.buildLiveUpdate])。
  *
- * - **平台 Notification.Builder + ProgressStyle / 提升请求**:状态栏胶囊只提升符合
+ * - **平台 Notification.Builder + 提升请求**:状态栏胶囊只提升符合
  *   Android 16 Live Updates 规范的通知,细节见 [CapsuleCompat]。
  * - **前台服务类型 specialUse**(而非 dataSync):实时活动是「持续展示进行中状态」,dataSync 在
  *   Android 15+ 有每日时长上限,且胶囊机型按 specialUse 判定(清单里另有子类型说明)。
- * - **按相变 / 整分精确醒来**:[LiveUpdate.nextRefreshAtMillis] 给出下一个该重画的时刻,
- *   不无脑每分钟重画(重画在国产胶囊眼里可能被当成新提醒)。息屏时另由边界闹钟兜底(见 [ReminderPlanner])。
+ * - **按相变精确醒来**:[LiveUpdate.nextRefreshAtMillis] 给出下一个该重画的时刻(相位边界),
+ *   两次相变之间不重画(重画在国产胶囊眼里可能被当成新提醒)。息屏时另由边界闹钟兜底(见 [ReminderPlanner])。
  * - **payload 持久化 + 恢复**:进程被杀后服务重启(START_STICKY)仍能接着显示同一节课。
  * - **静音检查**:点了「取消本节课提醒」立即收掉,重试与重启后依然生效。
  * - 通知权限/渠道被关掉时自停,不做无意义的常驻。
@@ -110,7 +110,7 @@ class CourseLiveUpdateService : Service() {
     }
 
     /**
-     * 睡到「下一次需要重画」的那一刻再醒:进度条要推进的整分、或相位切换。
+     * 睡到「下一次需要重画」的那一刻再醒 —— 也就是下一个相位边界。
      *
      * 每次唤醒都先判断该不该继续(下课 / 静音 / 权限被关),再原地更新同一条通知的一部分:
      * 同一个身份 → 同一个槽位,只有跨相位才会换槽(见 [Notifier.postLiveUpdate])。

@@ -157,7 +157,7 @@ internal fun DayList(
                                 animationSpec = YohakuMotion.tween(
                                     durationMs = YohakuMotion.durBase,
                                     easing = YohakuMotion.easeOut,
-                                    delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), 30),
+                                    delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
                                 ),
                             )
                         }

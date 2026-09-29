@@ -201,12 +201,13 @@ internal fun WeekGrid(
                     }
                 }
 
-                // 课程块(按天分列,同一天内按车道并排)。staggerIndex 让入场动画逐块错峰。
-                var staggerIndex = 0
+                // 课程块(按天分列,同一天内按车道并排)。错峰序号取「第几天 + 当天第几块」——
+                // 早先是一个横跨整周自增的计数器,越到周末延迟越大(周五的课要等近一秒才出现)。
+                // 按天算既有列到列的波,又不会累积。
                 lanesPerDay.forEachIndexed { dayIdx, (blocks, laneCount) ->
                     val used = laneCount.coerceAtMost(3)
                     val laneW = colW / used
-                    blocks.forEach { block ->
+                    blocks.forEachIndexed { blockIdx, block ->
                         CourseBlock(
                             course = block.course,
                             rowH = rowH,
@@ -220,7 +221,7 @@ internal fun WeekGrid(
                                 Schedule.isCourseOngoing(block.course, periods),
                             prefs = prefs,
                             periods = periods,
-                            staggerIndex = staggerIndex++,
+                            staggerIndex = dayIdx + blockIdx,
                             onClick = onCourseClick,
                         )
                     }
@@ -293,7 +294,7 @@ private fun CourseBlock(
             animationSpec = YohakuMotion.tween(
                 durationMs = YohakuMotion.durBase,
                 easing = YohakuMotion.easeExpoOut,
-                delayMs = YohakuMotion.staggerDelay(staggerIndex, 22),
+                delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
             ),
         )
     }

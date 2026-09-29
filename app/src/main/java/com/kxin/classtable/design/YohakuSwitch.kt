@@ -40,7 +40,7 @@ fun YohakuSwitch(
     )
     val thumbX by animateDpAsState(
         targetValue = if (checked) 22.dp else 2.dp,
-        animationSpec = YohakuMotion.snappySpring(),
+        animationSpec = YohakuMotion.bouncySpring(),
         label = "switchThumb",
     )
     Box(

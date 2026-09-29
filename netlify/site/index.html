@@ -10,7 +10,7 @@
 <link rel="canonical" href="https://classtablek.netlify.app/" />
 <link rel="icon" href="assets/img/app_icon_02.png" />
 <link rel="apple-touch-icon" href="assets/img/app_icon_02.png" />
-<link rel="stylesheet" href="assets/yohaku.css?v=2" />
+<link rel="stylesheet" href="assets/yohaku.css?v=3" />
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="余课 · 极简课程表" />
@@ -29,6 +29,19 @@
       document.documentElement.dataset.theme = theme;
       document.documentElement.dataset.themeChoice = choice;
       document.documentElement.style.colorScheme = theme;
+    } catch (e) {}
+  })();
+
+  // 动效首帧:同步标记 `anim-ready`,CSS 据此先把待入场元素藏起来,避免「先满后缩」的闪动。
+  // 开了「减少动态效果」就不标 —— 那类用户看到的应是静态页面。兜底定时器保证:
+  // 万一 assets/motion.js 没跑起来(断网 / 被拦),2.5s 后把类撤掉,内容照常可见。
+  (function () {
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      document.documentElement.classList.add('anim-ready');
+      window.__yohakuAnimFallback = window.setTimeout(function () {
+        document.documentElement.classList.remove('anim-ready');
+      }, 2500);
     } catch (e) {}
   })();
 </script>
@@ -111,7 +124,7 @@
   <!-- 界面 -->
   <section class="section" id="shots">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">界面</p>
         <h2 class="text-title-28 font-medium text-neutral-10">屏幕上只剩课表</h2>
         <p class="lede text-copy-15">
@@ -167,7 +180,7 @@
   <!-- 功能 -->
   <section class="section" id="features">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">它能帮上什么</p>
         <h2 class="text-title-28 font-medium text-neutral-10">课表本该一眼看完</h2>
         <p class="lede text-copy-15">
@@ -176,7 +189,7 @@
       </div>
 
       <div class="grid">
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">01</p>
           <h3 class="text-copy-15">一屏看全一周</h3>
           <p class="text-copy-13">
@@ -185,7 +198,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">02</p>
           <h3 class="text-copy-15">四种导入方式</h3>
           <p class="text-copy-13">
@@ -194,7 +207,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">03</p>
           <h3 class="text-copy-15">提醒准点,但不吵</h3>
           <p class="text-copy-13">
@@ -203,7 +216,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">04</p>
           <h3 class="text-copy-15">一眼认出是哪门课</h3>
           <p class="text-copy-13">
@@ -212,7 +225,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">05</p>
           <h3 class="text-copy-15">桌面小组件</h3>
           <p class="text-copy-13">
@@ -221,7 +234,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">06</p>
           <h3 class="text-copy-15">雨课堂公告</h3>
           <p class="text-copy-13">
@@ -231,7 +244,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">07</p>
           <h3 class="text-copy-15">9 张图标任选</h3>
           <p class="text-copy-13">
@@ -240,7 +253,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <p class="card-index">08</p>
           <h3 class="text-copy-15">不注册也能用</h3>
           <p class="text-copy-13">
@@ -255,7 +268,7 @@
   <!-- 导入 -->
   <section class="section" id="import">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">导入</p>
         <h2 class="text-title-28 font-medium text-neutral-10">把课表弄进来</h2>
         <p class="lede text-copy-15">
@@ -264,7 +277,7 @@
       </div>
 
       <div class="grid grid-2">
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">教务系统导入</h3>
           <p class="text-copy-13">
             选中你的学校,读完适配说明再确认。学校账号在应用内登录,脚本把课程、作息时间和
@@ -273,7 +286,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">手动添加</h3>
           <p class="text-copy-13">
             自己填一门课,补录或者临时调整都靠它。一页表单填到底:星期能多选,一周上几天都行;
@@ -282,7 +295,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">表格 / Excel 导入</h3>
           <p class="text-copy-13">
             把 CSV / TSV 粘进来,或者直接选 Excel 文件。表头和中文编码它会自己认;
@@ -290,7 +303,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">AI 图片导入</h3>
           <p class="text-copy-13">
             接 Google Gemini,也接任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 都行)。
@@ -305,7 +318,7 @@
   <!-- 设计 -->
   <section class="section" id="design">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">设计取向</p>
         <h2 class="text-title-28 font-medium text-neutral-10">把课表当纸看</h2>
         <p class="lede text-copy-15">
@@ -314,7 +327,7 @@
       </div>
 
       <div class="principles">
-        <div class="principle">
+        <div class="principle" data-reveal>
           <h3 class="text-copy-16">一抹强调色</h3>
           <p class="text-copy-13">
             全局只用一个强调色,默认梅色,另有五色可选。它只出现在「此刻正在上」和选中态
@@ -322,14 +335,14 @@
           </p>
         </div>
 
-        <div class="principle">
+        <div class="principle" data-reveal>
           <h3 class="text-copy-16">三档中性</h3>
           <p class="text-copy-13">
             浅色和深色各一套暖纸面色板,层次全交给明度。
           </p>
         </div>
 
-        <div class="principle">
+        <div class="principle" data-reveal>
           <h3 class="text-copy-16">课程淡彩</h3>
           <p class="text-copy-13">
             每门课按课名分到一层彩度很低的底色,方便扫读。它不代表任何意思,
@@ -337,14 +350,14 @@
           </p>
         </div>
 
-        <div class="principle">
+        <div class="principle" data-reveal>
           <h3 class="text-copy-16">余者尽留为白</h3>
           <p class="text-copy-13">
             没课的位置什么都不画。那片空本身就是「这里没课」。
           </p>
         </div>
 
-        <div class="principle">
+        <div class="principle" data-reveal>
           <h3 class="text-copy-16">衬线纸感</h3>
           <p class="text-copy-13">
             内置思源宋体和等宽字体,时间和节次排得像表格一样齐。
@@ -352,7 +365,7 @@
         </div>
       </div>
 
-      <figure class="quote mt-8">
+      <figure class="quote mt-8" data-reveal>
         <p class="text-copy-15">
           这也是「余课」这名字的来头:该留白的地方,就留白。
         </p>
@@ -363,13 +376,13 @@
   <!-- 外观 -->
   <section class="section" id="appearance">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">外观</p>
         <h2 class="text-title-28 font-medium text-neutral-10">和色、图标与小组件</h2>
       </div>
 
       <div class="grid grid-2">
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">主题</h3>
           <p class="text-copy-13">浅色、深色、跟随系统三种。</p>
           <p class="text-copy-13 mt-1">
@@ -378,7 +391,7 @@
           </p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">强调色</h3>
           <p class="text-copy-13">六个和色任选,克制的,不开放自由取色。</p>
           <div class="swatches mt-2">
@@ -410,7 +423,7 @@
         </article>
       </div>
 
-      <div class="card mt-4">
+      <div class="card mt-4" data-reveal>
         <h3 class="text-copy-15">应用图标</h3>
         <p class="text-copy-13">
           9 张角色图任选,点一张桌面图标立刻跟着换。也可以打开轮播,让它按你定的节奏自己换。
@@ -429,17 +442,17 @@
       </div>
 
       <div class="grid mt-4">
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">今日课表 · 4×2</h3>
           <p class="text-copy-13">今天要上的课排开,正在上的那节标出来。</p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">明日课程 · 2×2</h3>
           <p class="text-copy-13">今天就能看见明天上什么,不用等到第二天。</p>
         </article>
 
-        <article class="card">
+        <article class="card" data-reveal>
           <h3 class="text-copy-15">下节课 · 1×1</h3>
           <p class="text-copy-13">下一节课叫什么、几点、在哪。调休的停课补课也照实显示。</p>
         </article>
@@ -450,25 +463,25 @@
   <!-- 安装 -->
   <section class="section" id="install">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">安装</p>
         <h2 class="text-title-28 font-medium text-neutral-10">三步装好</h2>
       </div>
 
       <ol class="steps container-narrow mb-8 list-flush">
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span>
             下载安装包。发布包按 CPU 架构拆开,<b>拿不准就下通吃包</b>,它认所有机型,
             只是体积大些。第一次装要在系统里允许「安装未知应用」。
           </span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span>
             第一次打开会带你逐项打开通知、精确闹钟、电池白名单和自启动。
             国产系统的省电策略会在后台清掉闹钟,这几项开齐,提醒才准。
           </span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span>
             打开周视图右上角的「添加」,把课表弄进来。
           </span>
@@ -476,7 +489,7 @@
       </ol>
 
       <div class="download">
-        <div class="panel">
+        <div class="panel" data-reveal>
           <div class="panel-title">
             <h3 class="text-title-20 font-medium text-neutral-10">下载最新版</h3>
             <p class="text-copy-13 text-neutral-7">
@@ -512,7 +525,7 @@
           </p>
         </div>
 
-        <div class="panel">
+        <div class="panel" data-reveal>
           <div class="panel-title">
             <h3 class="text-title-20 font-medium text-neutral-10">该下哪一个</h3>
             <p class="text-copy-13 text-neutral-7">近几年的手机基本都是 64 位。</p>
@@ -567,7 +580,7 @@
   <!-- 隐私 -->
   <section class="section" id="privacy">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">隐私与数据</p>
         <h2 class="text-title-28 font-medium text-neutral-10">默认只存在你自己的手机上</h2>
         <p class="lede text-copy-15">
@@ -576,22 +589,22 @@
       </div>
 
       <ul class="plain-list container-narrow mx-auto">
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>课表和设置默认只在本机</b>。不注册也能用,数据躺在你自己的设备上。</span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>云同步是可选项</b>。注册账号之后,课表和设置在你的设备和云端之间来回同步,删掉的课跟着删。</span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>学校账号只用这一次登录</b>。教务系统登录在应用内的浏览器会话里完成,密码不进应用数据库。</span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>雨课堂的会话同样只留在本机</b>。拿到的是会话 Cookie,加密存在你的设备上,不上云,退出登录就清掉。</span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>AI 图片识别要你先配上密钥才会启用</b>。上传的图片发给你挑的那家服务商,不经过余课。</span>
         </li>
-        <li class="text-copy-14">
+        <li class="text-copy-14" data-reveal>
           <span><b>天气按出口 IP 定位</b>,数据来自第三方接口,请求里不带账号,也不带设备信息。应用不申请系统定位权限。</span>
         </li>
       </ul>
@@ -601,13 +614,13 @@
   <!-- 常见问题 -->
   <section class="section" id="faq">
     <div class="container container-narrow">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">常见问题</p>
         <h2 class="text-title-28 font-medium text-neutral-10">装之前想问的</h2>
       </div>
 
       <div class="faq">
-        <details open>
+        <details open data-reveal>
           <summary class="text-copy-15">提醒没响或不准?</summary>
           <p class="faq-body text-copy-14">
             先到「设置 → 提醒可靠性」逐项打开通知、精确闹钟、电池白名单和自启动。
@@ -616,7 +629,7 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">我的学校不在列表里怎么办?</summary>
           <p class="faq-body text-copy-14">
             先试「手动表格导入」或者「AI 图片导入」。学校教务系统要是比较通用,
@@ -624,7 +637,7 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">节次时间和我们学校不一样?</summary>
           <p class="faq-body text-copy-14">
             到「设置 → 作息时间」逐节改成你们学校的。节次能增能删,不限于 12 节;
@@ -633,7 +646,7 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">换了图标,桌面怎么没变?</summary>
           <p class="faq-body text-copy-14">
             桌面图标由系统缓存,一般几秒就更新了。个别第三方桌面慢一些,
@@ -641,7 +654,7 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">装不上 / 装完打不开?</summary>
           <p class="faq-body text-copy-14">
             多半是下载了跟你手机架构对不上的安装包,换成通吃包再装。
@@ -649,7 +662,7 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">换手机后课表怎么带过去?</summary>
           <p class="faq-body text-copy-14">
             登录同一个账号就同步过去了。没登录的话数据只在本机,卸载或者换机会丢,
@@ -657,14 +670,14 @@
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">课程的颜色可以自己改吗?</summary>
           <p class="faq-body text-copy-14">
             目前不开放。颜色按课名自动分配,同一门课哪天都是同一个色,不用你手动维护。
           </p>
         </details>
 
-        <details>
+        <details data-reveal>
           <summary class="text-copy-15">能收到预发行版吗?</summary>
           <p class="faq-body text-copy-14">
             默认只推正式版。想第一时间试新功能、也愿意接受偶尔不稳,在「设置 → 接收预发行版」
@@ -678,7 +691,7 @@
   <!-- 开源 -->
   <section class="section" id="opensource">
     <div class="container">
-      <div class="section-head">
+      <div class="section-head" data-reveal>
         <p class="eyebrow">开源</p>
         <h2 class="text-title-28 font-medium text-neutral-10">MIT 协议,源码全在 GitHub</h2>
         <p class="lede text-copy-15">
@@ -687,7 +700,7 @@
       </div>
 
       <div class="download">
-        <div class="panel">
+        <div class="panel" data-reveal>
           <h3 class="text-copy-15">构建</h3>
           <figure class="code">
             <header>
@@ -702,7 +715,7 @@
           </p>
         </div>
 
-        <div class="panel">
+        <div class="panel" data-reveal>
           <h3 class="text-copy-15">文档</h3>
           <ul class="plain-list">
             <li class="text-copy-13">
@@ -754,6 +767,13 @@
 <!-- ?v= 是缓存破冰:`_headers` 给 /assets/* 定了 immutable 的一年缓存,
      改了样式或脚本必须换 URL,否则回访用户一年内仍跑旧版。
      动过 assets/ 下任一文件,就把这里和 <head> 里 yohaku.css 的数字一起加一。 -->
-<script src="assets/site.js?v=2" defer></script>
+<script src="assets/site.js?v=3" defer></script>
+
+<!-- 动效:vendor/ 下是随站分发的 GSAP(见 vendor/LICENSE-gsap.txt),motion.js 是本站的动效代码。
+     不引任何 CDN —— 大陆也要放得出来。顺序不能换:核心 → 插件 → 自家的。 -->
+<script src="assets/vendor/gsap.min.js?v=1" defer></script>
+<script src="assets/vendor/ScrollTrigger.min.js?v=1" defer></script>
+<script src="assets/vendor/ScrollToPlugin.min.js?v=1" defer></script>
+<script src="assets/motion.js?v=1" defer></script>
 </body>
 </html>

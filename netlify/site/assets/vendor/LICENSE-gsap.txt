@@ -1,0 +1,16 @@
+GSAP (GreenSock Animation Platform)
+===================================
+
+本目录下的 gsap.min.js / ScrollTrigger.min.js / ScrollToPlugin.min.js 来自
+npm 包 gsap@3.13.0（dist/），原样收录，未做修改。
+
+Copyright (c) GreenSock / Webflow, Inc.
+License: Standard "No Charge" GreenSock License
+         —— 免费使用，含商业用途。
+https://gsap.com/community/standard-license/
+https://gsap.com/licensing/
+
+自 Webflow 收购 GSAP 起，包含 SplitText、MorphSVG 在内的全部插件均已免费，
+无需 Club 会员或私有源；本仓库只收录了官网动效实际用到的核心与两个插件。
+
+这些文件随站分发（本地 vendoring），不依赖任何外部 CDN。

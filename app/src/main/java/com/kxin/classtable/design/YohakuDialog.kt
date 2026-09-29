@@ -49,12 +49,12 @@ fun YohakuDialog(
 ) {
     val colors = LocalYohakuColors.current
     Dialog(onDismissRequest = onDismissRequest) {
-        // 入场:轻微放大 + 淡入(弹窗「出现」的动作,退出交给系统窗口)
+        // 入场:轻微过冲 + 淡入(弹窗这种「出现」的动作,取 GSAP 的 back.out;退出交给系统窗口)
         var shown by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { shown = true }
         val progress by animateFloatAsState(
             targetValue = if (shown) 1f else 0f,
-            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeBackOut),
             label = "dialogIn",
         )
         val shape = RoundedCornerShape(YohakuDimens.radiusSheet)
@@ -62,7 +62,8 @@ fun YohakuDialog(
             modifier = modifier
                 .fillMaxWidth()
                 .graphicsLayer {
-                    alpha = progress
+                    // back.out 会略微冲过 1,alpha 得夹住;scale 的超调正好就是那点回弹
+                    alpha = progress.coerceIn(0f, 1f)
                     val s = 0.94f + 0.06f * progress
                     scaleX = s
                     scaleY = s
