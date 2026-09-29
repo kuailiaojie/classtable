@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -208,6 +209,8 @@ fun ClasstableRoot(
                 NavHost(
                     navController = nav,
                     startDestination = "week",
+                    // 转场期间两页会各自平移出屏幕;裁到内容区,别让退场页从系统栏那一侧漏出来
+                    modifier = Modifier.fillMaxSize().clipToBounds(),
                     enterTransition = { navEnter(initialState.destination.route, targetState.destination.route) },
                     exitTransition = { navExit(initialState.destination.route, targetState.destination.route) },
                     popEnterTransition = { navPopEnter() },
@@ -401,23 +404,31 @@ private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
 /**
  * 导航转场。
  *
- * 两个层级用两套动作:根标签之间是「同层平移」,不该有方向感 —— 淡入 + 轻微缩放;
+ * 两个层级用两套动作:根标签之间是「同层切换」,不该有方向感 —— 淡出 → 淡入;
  * 二级页则是「上/下钻」,用共享轴水平滑入滑出,层级关系一眼可辨。
  *
- * 层级页的转场**不叠 alpha**:新页面淡入时,正在退场的旧页面会透过半透明的新页面显出来,
- * 看起来就是「上一个界面的残影」。改成两页各自完整滑入 / 滑出 —— 滑动本身就带方向感,
- * 没有淡入淡出也就没有双重曝光。
+ * 「上一个界面的残影」= 两页在同一时刻各自半透明、互相透出来。所以这里只做两件事,
+ * 让任意时刻要么只有一页在画,要么两页首尾相接、绝不重叠:
+ *
+ * - **根标签串行淡化**:旧页先淡出([YohakuMotion.durFast]),新页等到它走完再淡入
+ *   (入门动画带同长的 delay)。两页的 alpha 从不同时变化,也就不会双重曝光。
+ * - **二级页同曲线同长**:进入 / 退出的时长与曲线完全一致,两页像一条连续胶片一起平移,
+ *   始终首尾相接 —— 曲线不一致时两页会短暂重叠,退场页会盖在新页上。
  */
 private fun navEnter(from: String?, to: String?): EnterTransition =
     if (isRootTab(from) && isRootTab(to)) {
-        fadeIn(YohakuMotion.tween(YohakuMotion.durBase)) +
+        fadeIn(YohakuMotion.tween(YohakuMotion.durBase, delayMs = YohakuMotion.durFast)) +
             scaleIn(
-                animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
+                animationSpec = YohakuMotion.tween(
+                    YohakuMotion.durBase,
+                    YohakuMotion.easeOut,
+                    YohakuMotion.durFast,
+                ),
                 initialScale = 0.98f,
             )
     } else {
         slideInHorizontally(
-            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+            animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
             initialOffsetX = { it },
         )
     }
@@ -426,7 +437,7 @@ private fun navExit(from: String?, to: String?): ExitTransition =
     if (isRootTab(from) && isRootTab(to)) {
         fadeOut(YohakuMotion.tween(YohakuMotion.durFast)) +
             scaleOut(
-                animationSpec = YohakuMotion.tween(YohakuMotion.durBase, YohakuMotion.easeInOut),
+                animationSpec = YohakuMotion.tween(YohakuMotion.durFast, YohakuMotion.easeInOut),
                 targetScale = 1.01f,
             )
     } else {
@@ -436,10 +447,10 @@ private fun navExit(from: String?, to: String?): ExitTransition =
         )
     }
 
-/** 返回:被压住的页面从左侧滑回、当前页向右滑出。同样不叠 alpha(见 [navEnter])。 */
+/** 返回:被压住的页面从左侧滑回、当前页向右滑出。两页同曲线同长,始终首尾相接(见 [navEnter])。 */
 private fun navPopEnter(): EnterTransition =
     slideInHorizontally(
-        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeExpoOut),
+        animationSpec = YohakuMotion.tween(YohakuMotion.durSlow, YohakuMotion.easeOut),
         initialOffsetX = { -it },
     )
 

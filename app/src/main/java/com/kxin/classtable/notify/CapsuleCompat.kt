@@ -23,9 +23,8 @@ import org.json.JSONObject
  * 2. 通知本身 `ongoing`、有 `contentTitle`、使用受支持的样式(BigTextStyle / ProgressStyle 等),
  *    且**不能**用自定义 RemoteViews、不能 colorized、不能是分组摘要、渠道不能是 IMPORTANCE_MIN;
  * 3. 主动请求提升(`setRequestPromotedOngoing(true)` / `EXTRA_REQUEST_PROMOTED_ONGOING`)。
- *    胶囊那一格的文字用 [setShortCriticalText] 写成**我们自己算出的分钟数**:系统的
- *    `when` + Chronometer 计时器在部分机型(尤其 OPPO/一加)会被提升通知的渲染器吞掉,
- *    所以不把倒计时交给它 —— 分钟数由服务在「翻页的那一秒」原地更新同一条通知。
+ *    胶囊那一格的倒计时交给系统的 `when` + Chronometer 自己走(通知上写死目标时刻),
+ *    我们不写 `android.shortCriticalText` —— 它优先级高于计时器,写上就只能靠重发刷新。
  *
  * 任何一条不满足系统都不会放进胶囊 —— 这也是「装到手机上不出胶囊」最常见的原因。
  * 小米(澎湃 OS)另外提供 `miui.focus.param` 扩展参数作为第三方上岛的公开途径,见 [XiaomiIsland]。
@@ -77,25 +76,6 @@ object CapsuleCompat {
     }
 
     /**
-     * 写胶囊短文案(状态栏胶囊那一格 / 锁屏 AOD 的短行)。
-     *
-     * 方法在公开 SDK 里同样没有导出,按规范 extras 键 + 反射两手都写。**不要**留给系统的
-     * `when` + Chronometer:短文案非空时它本来就不生效,部分机型还会被整块吞掉。
-     */
-    fun setShortCriticalText(builder: Notification.Builder, text: CharSequence) {
-        builder.extras.putCharSequence(EXTRA_SHORT_CRITICAL_TEXT, text)
-        runCatching {
-            builder.javaClass
-                .getMethod("setShortCriticalText", CharSequence::class.java)
-                .invoke(builder, text)
-        }.recoverCatching {
-            builder.javaClass
-                .getMethod("setShortCriticalText", String::class.java)
-                .invoke(builder, text.toString())
-        }.onFailure { Log.d(TAG, "setShortCriticalText 不可用(${it.javaClass.simpleName}),以 extras 提交短文案") }
-    }
-
-    /**
      * 构建后的自检日志:`promotable` = 系统认为是否具备提升条件(不含用户开关),
      * `requested` = 我们是否请求了提升。装到真机上先看这两项,比猜胶囊为什么不出现快得多。
      */
@@ -113,7 +93,6 @@ object CapsuleCompat {
     }
 
     const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
-    const val EXTRA_SHORT_CRITICAL_TEXT = "android.shortCriticalText"
 }
 
 /**
@@ -194,20 +173,20 @@ object XiaomiIsland {
     /**
      * 给构建好的通知补上超级岛参数与图片。设备不支持时是空操作。
      *
-     * @param shortText 胶囊/锁屏短文案(如「10分钟」「教学楼 A101」)
+     * @param islandTitle 超级岛标题(课前给地点,课中 / 课后给状态)
      */
     fun decorate(
         context: Context,
         notification: Notification,
         payload: LiveUpdate,
         status: LiveUpdateStatus,
-        shortText: String,
+        islandTitle: String,
     ) {
         if (!state(context).usable) return
         runCatching {
             notification.extras.putString(
                 FocusParameter,
-                parameters(payload, status, shortText, System.currentTimeMillis(), context.packageName),
+                parameters(payload, status, islandTitle, System.currentTimeMillis(), context.packageName),
             )
             val icon = Icon.createWithResource(context, R.mipmap.ic_launcher)
             notification.extras.putBundle(
@@ -226,13 +205,13 @@ object XiaomiIsland {
     internal fun parameters(
         payload: LiveUpdate,
         status: LiveUpdateStatus,
-        shortText: String,
+        islandTitle: String,
         nowMillis: Long = System.currentTimeMillis(),
         packageName: String = "com.kxin.classtable",
     ): String {
         val beforeClass = status.phase == LiveUpdatePhase.BEFORE_CLASS
         val timerAt = status.nextTransitionAtMillis?.takeIf { beforeClass && it > nowMillis }
-        val courseName = payload.name.ifBlank { shortText }
+        val courseName = payload.name.ifBlank { islandTitle }
         val placeText = payload.location.ifBlank { "未设置地点" }
         val islandStatus = when (status.phase) {
             LiveUpdatePhase.BEFORE_CLASS -> placeText
@@ -240,7 +219,7 @@ object XiaomiIsland {
             LiveUpdatePhase.BREAK -> "课间"
             LiveUpdatePhase.FINISHED -> "已下课"
         }
-        // 小岛左侧固定显示课名;右侧课前给短文案(地点/分钟),课中给状态
+        // 小岛左侧固定显示课名;右侧课前给地点,课中 / 课后给状态
         val left = JSONObject().put("type", 1).put(
             "textInfo",
             JSONObject()
@@ -256,7 +235,7 @@ object XiaomiIsland {
                 "textInfo",
                 JSONObject()
                     .put("frontTitle", "")
-                    .put("title", if (beforeClass) shortText else islandStatus)
+                    .put("title", if (beforeClass) islandTitle else islandStatus)
                     .put("content", "")
                     .put("showHighlightColor", false)
                     .put("narrowFont", false),

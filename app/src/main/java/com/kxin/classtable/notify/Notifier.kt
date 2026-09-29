@@ -205,16 +205,16 @@ object Notifier {
     /**
      * 实时活动通知:覆盖「课前倒计时 → 上课中 → 课间中 → 已下课」,上课期间进度条随当前小节推进。
      *
-     * 文案(状态 + 分钟数)由服务按 [LiveUpdate.nextRefreshAtMillis] 精确刷新;胶囊那一格的
-     * 短文案用 [CapsuleCompat.setShortCriticalText] 写我们自己算的分钟数 / 地点,**不交给**
-     * 系统的 `when` + Chronometer —— 短文案非空时它本来就不生效,部分机型(OPPO / 一加)还会被
-     * 提升通知的渲染器整块吞掉。
+     * **正文只跟状态走,秒级倒计时交给系统的 `when` + Chronometer 自己走**:通知上写死一个
+     * 倒计时目标([LiveUpdateStatus.nextTransitionAtMillis]),之后由系统逐秒自己走,我们不为了
+     * 刷新分钟数而重发 —— 重发正是国产胶囊「每隔一会儿跳出来一下」的来源。服务只在相位切换、
+     * 以及每分钟(只为推进确定态进度条,它系统不会自己动)原地重画。
      *
      * 每次刷新都是同一身份 → 同一槽位的那条通知(原地更新 + `setOnlyAlertOnce`),不重起服务、
      * 不另发一条;只有跨到新相位时才换到另一个槽位,让胶囊在新状态重新展开一次(见 [postLiveUpdate])。
      *
      * 这里用**平台** `Notification.Builder` 而不是 compat 版本:状态栏胶囊认的是
-     * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求 + 短文案只在平台 Builder 上可达。
+     * Android 16 的 Live Updates 规范,`ProgressStyle` + 提升请求只在平台 Builder 上可达。
      * 条件见 [CapsuleCompat] 的说明。
      */
     fun buildLiveUpdate(
@@ -228,8 +228,7 @@ object Notifier {
 
         val status = payload.statusAt(now)
         val placeText = payload.location.ifBlank { "未设置地点" }
-        val shortText = chipText(payload, status, placeText)
-        val bodyText = "${cardStatusText(status)} · ${payload.timeText}"
+        val bodyText = "${status.statusText} · ${payload.timeText}"
         val expandedText = buildString {
             append(bodyText)
             if (payload.location.isNotBlank()) append("\n").append(placeText)
@@ -238,6 +237,8 @@ object Notifier {
             }
         }
         val progress = status.progressPercent
+        // 倒计时目标:下一个相变(课前 → 上课,课中 → 课间 / 下课,课间 → 上课)。没有目标就不挂计时
+        val countdownTo = status.nextTransitionAtMillis
 
         val builder = Notification.Builder(context, CHANNEL_COURSE_LIVE)
             .setSmallIcon(R.drawable.ic_notify)
@@ -248,24 +249,17 @@ object Notifier {
             .setDeleteIntent(cancelLivePendingIntent(context, payload.muteKey, payload.endAtMillis() ?: 0L))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            // 倒计时不交给系统:短文案与正文的分钟数都由服务在「翻页的那一秒」原地刷新
-            .setShowWhen(false)
-            .setUsesChronometer(false)
-            .setChronometerCountDown(false)
+            // 秒级倒计时交给系统的 when + Chronometer 自己走:写死目标时刻,由系统逐秒更新,
+            // 我们不必为了刷新分钟数重发(重发在国产胶囊眼里就是又一条新提醒)
+            .setShowWhen(countdownTo != null)
+            .setWhen(countdownTo ?: (payload.endAtMillis() ?: now))
+            .setUsesChronometer(countdownTo != null)
+            .setChronometerCountDown(true)
             // 固定用默认色:自定义颜色会让部分系统的胶囊强制按普通通知渲染
             .setColor(Notification.COLOR_DEFAULT)
             .setCategory(
                 if (progress != null) Notification.CATEGORY_PROGRESS else Notification.CATEGORY_EVENT,
             )
-
-        if (progress != null) {
-            val countdownLine = if (status.phase == LiveUpdatePhase.BREAK) {
-                "还有${status.minutesToTransition}分钟上课"
-            } else {
-                "还有${status.minutesToTransition}分钟下课"
-            }
-            builder.setContentText("${status.detailText} · ${payload.timeText}\n$countdownLine")
-        }
 
         if (Build.VERSION.SDK_INT >= 36 && progress != null) {
             builder.setStyle(
@@ -273,7 +267,7 @@ object Notifier {
                     // 单个白色小圆点作为进度点:再叠 Point 会出现两个重叠的进度图示
                     .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_live_dot))
                     .setProgressSegments(listOf(Notification.ProgressStyle.Segment(100)))
-                    // 确定态:按当前小节推进,由服务在「翻页的那一秒」原地更新
+                    // 确定态:按当前小节推进,由服务每分钟原地更新一次(进度条系统不会自己动)
                     .setProgress(progress),
             )
         } else {
@@ -293,31 +287,28 @@ object Notifier {
         }
 
         CapsuleCompat.requestPromotion(builder)
-        CapsuleCompat.setShortCriticalText(builder, shortText)
 
         return builder.build().also { notification ->
             notification.extras.putString(EXTRA_LIVE_IDENTITY, payload.notificationIdentityAt(now))
-            XiaomiIsland.decorate(context, notification, payload, status, shortText)
+            // 小米超级岛自己不会按秒走,只给它状态 / 地点这类不随时间变的文字
+            XiaomiIsland.decorate(
+                context,
+                notification,
+                payload,
+                status,
+                islandText(payload, status, placeText),
+            )
             CapsuleCompat.logPromotionState(context, notification)
         }
     }
 
-    /** 胶囊短文案:课前给地点(没有地点就用课名),课中给分钟数,下课给状态。 */
-    private fun chipText(payload: LiveUpdate, status: LiveUpdateStatus, placeText: String): String =
-        when (status.phase) {
-            LiveUpdatePhase.BEFORE_CLASS -> if (payload.location.isBlank()) payload.name else placeText
-            LiveUpdatePhase.FINISHED -> "已下课"
-            else -> "${status.minutesToTransition.coerceAtLeast(0)}分钟"
+    /** 小米超级岛的标题:课前给地点(没有地点就用课名),课中 / 课后给状态。 */
+    private fun islandText(payload: LiveUpdate, status: LiveUpdateStatus, placeText: String): String =
+        if (status.phase == LiveUpdatePhase.BEFORE_CLASS) {
+            if (payload.location.isBlank()) payload.name else placeText
+        } else {
+            status.statusText
         }
-
-    /** 通知正文里的状态短句(通知卡片与展开区共用)。 */
-    private fun cardStatusText(status: LiveUpdateStatus): String = when (status.phase) {
-        LiveUpdatePhase.BEFORE_CLASS ->
-            if (status.minutesToTransition <= 0) "准备上课" else "还剩${status.minutesToTransition}分钟"
-
-        LiveUpdatePhase.IN_CLASS, LiveUpdatePhase.BREAK -> status.detailText
-        LiveUpdatePhase.FINISHED -> "已下课"
-    }
 
     /**
      * 实时活动通知槽位:同一身份沿用原槽位(分钟刷新原地更新,胶囊不重弹);

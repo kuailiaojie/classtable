@@ -4,11 +4,8 @@ import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import kotlin.math.ceil
 
 /** 「预览实时活动」用独立的静音键前缀:预览不会覆盖真实提醒,也能单独取消。 */
 const val PREVIEW_MUTE_PREFIX = "preview:"
@@ -24,12 +21,15 @@ data class LiveUpdateSegment(val startAtMillis: Long, val endAtMillis: Long)
 /** 实时活动的四个阶段。相变的时刻即 [LiveUpdate.refreshBoundaries]。 */
 enum class LiveUpdatePhase { BEFORE_CLASS, IN_CLASS, BREAK, FINISHED }
 
-/** 某一时刻的展示状态:胶囊短文案、正/副文本、进度、以及下一个相变时刻。 */
+/**
+ * 某一时刻的展示状态:**只跟相位走的一行状态文案**、下一个相变时刻(即倒计时目标)、以及进度。
+ *
+ * 文案里不写分钟数 —— 秒级倒计时交给系统的 `when` + Chronometer 自己走(见
+ * [Notifier.buildLiveUpdate]),我们只在相位边界、以及每分钟(为了推进确定态进度条)原地重画。
+ */
 data class LiveUpdateStatus(
     val phase: LiveUpdatePhase,
     val statusText: String,
-    val detailText: String,
-    val minutesToTransition: Int,
     val nextTransitionAtMillis: Long?,
     val progressPercent: Int? = null,
 )
@@ -37,8 +37,9 @@ data class LiveUpdateStatus(
 /**
  * 实时活动需要展示的一节课(课前倒计时 → 上课中 → 课间中 → 已下课)。
  *
- * **文案只跟相位走,分钟数由服务按 [nextRefreshAtMillis] 原地刷新**。分钟数翻页与相位切换各
- * 自是一个时刻,服务精确睡到那一刻再醒,而不是无脑每分钟重画一次。
+ * **文案只跟相位走,秒级倒计时交给系统**:通知上写 `when` + Chronometer,由系统自己走秒;
+ * 我们不为了刷新分钟数而重发。服务按 [nextRefreshAtMillis] 醒来只做两件事:相位切换时换一帧、
+ * 以及上课期间每分钟推进一次确定态进度条(进度条系统不会自己动)。
  *
  * **通知身份**([notificationIdentityAt])只包含相位与下一个相变时刻:分钟刷新期间身份不变,
  * 原地更新同一条通知(胶囊不会重弹);跨到新相位时身份变化,换到另一个通知槽 —— 让胶囊重新
@@ -71,10 +72,10 @@ data class LiveUpdate(
         .sorted()
 
     /**
-     * 下一次需要重绘通知的时刻:最近的相位边界,或「还有 N 分钟」翻页的那一秒。
+     * 下一次需要重绘通知的时刻:最近的相位边界,或下一个整分(用来推进确定态进度条)。
      *
-     * 分钟文本按 `ceil` 算,所以要对着目标时刻的**秒**对齐,而不是墙上的整分:
-     * 08:00:30 上课的课,「11分钟」变「10分钟」发生在 07:50:30。
+     * 对齐到目标时刻的**秒**而不是墙上的整分:进度按「当前小节起点 → 下一相变」算百分比,
+     * 重画的时刻贴着相变那一刻的秒,进度才不会差一秒。
      */
     fun nextRefreshAtMillis(now: Long = System.currentTimeMillis()): Long? {
         if (shouldStop(now)) return null
@@ -93,63 +94,33 @@ data class LiveUpdate(
         val first = timeline.firstOrNull()
         val last = timeline.lastOrNull()
         if (first == null || last == null) {
-            return LiveUpdateStatus(
-                phase = LiveUpdatePhase.BEFORE_CLASS,
-                statusText = "准备上课",
-                detailText = timeText,
-                minutesToTransition = 0,
-                nextTransitionAtMillis = null,
-            )
+            return LiveUpdateStatus(LiveUpdatePhase.BEFORE_CLASS, "即将开始", null)
         }
         if (now < first.startAtMillis) {
-            val minutes = minutesUntil(now, first.startAtMillis)
-            return LiveUpdateStatus(
-                phase = LiveUpdatePhase.BEFORE_CLASS,
-                statusText = if (minutes <= 0) "准备上课" else "还有${minutes}分钟上课",
-                detailText = timeText,
-                minutesToTransition = minutes,
-                nextTransitionAtMillis = first.startAtMillis,
-            )
+            return LiveUpdateStatus(LiveUpdatePhase.BEFORE_CLASS, "即将开始", first.startAtMillis)
         }
         timeline.forEachIndexed { index, segment ->
             if (now < segment.endAtMillis) {
                 val next = timeline.getOrNull(index + 1)
                 val transition = next?.startAtMillis ?: last.endAtMillis
-                val minutes = minutesUntil(now, transition)
-                val target = if (next != null) {
-                    "${formatTime(transition)}课间"
-                } else {
-                    "${formatTime(transition)}下课"
-                }
                 return LiveUpdateStatus(
                     phase = LiveUpdatePhase.IN_CLASS,
                     statusText = "上课中",
-                    detailText = "$target · 还有${minutes}分钟",
-                    minutesToTransition = minutes,
                     nextTransitionAtMillis = transition,
                     progressPercent = elapsedPercent(now, segment.startAtMillis, transition),
                 )
             }
             val next = timeline.getOrNull(index + 1)
             if (next != null && now < next.startAtMillis) {
-                val minutes = minutesUntil(now, next.startAtMillis)
                 return LiveUpdateStatus(
                     phase = LiveUpdatePhase.BREAK,
                     statusText = "课间中",
-                    detailText = "${formatTime(next.startAtMillis)}上课 · 还有${minutes}分钟",
-                    minutesToTransition = minutes,
                     nextTransitionAtMillis = next.startAtMillis,
                     progressPercent = elapsedPercent(now, segment.endAtMillis, next.startAtMillis),
                 )
             }
         }
-        return LiveUpdateStatus(
-            phase = LiveUpdatePhase.FINISHED,
-            statusText = "已下课",
-            detailText = "本次课程已经结束",
-            minutesToTransition = 0,
-            nextTransitionAtMillis = null,
-        )
+        return LiveUpdateStatus(LiveUpdatePhase.FINISHED, "已下课", null)
     }
 
     /** 写入通知 extras,供服务把「这是哪一帧」带出去([notificationIdentityAt])。 */
@@ -243,17 +214,8 @@ internal fun decodeLiveSegments(value: String): List<LiveUpdateSegment> = value
         LiveUpdateSegment(start, end).takeIf { it.endAtMillis > it.startAtMillis }
     }
 
-private fun minutesUntil(nowMillis: Long, targetMillis: Long): Int =
-    ceil((targetMillis - nowMillis).coerceAtLeast(0L) / 60_000.0).toInt()
-
 private fun elapsedPercent(nowMillis: Long, startMillis: Long, endMillis: Long): Int {
     val duration = endMillis - startMillis
     if (duration <= 0L) return 0
     return ((nowMillis - startMillis).coerceIn(0L, duration) * 100L / duration).toInt()
 }
-
-private fun formatTime(epochMillis: Long): String =
-    Instant.ofEpochMilli(epochMillis)
-        .atZone(ZoneId.systemDefault())
-        .toLocalTime()
-        .format(DateTimeFormatter.ofPattern("HH:mm"))
