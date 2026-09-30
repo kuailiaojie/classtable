@@ -1141,6 +1141,16 @@
    "description": "河南财经政法大学适配教务"
   },
   {
+   "folder": "HUNAU",
+   "adapter_id": "HUNAU_01",
+   "adapter_name": "湖南农业大学（强智教务）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hunau_01.js",
+   "import_url": "https://webvpn.hunau.edu.cn/login?cas_login=true",
+   "maintainer": "salt-fishes",
+   "description": "登录湖南农业大学教务系统后即可导入课表（校外经 WebVPN 访问）"
+  },
+  {
    "folder": "HUNNU",
    "adapter_id": "HUNNU",
    "adapter_name": "湖南师范大学教务",
@@ -1591,6 +1601,16 @@
    "description": "点击统一身份认证登录,登录后直接点击导入即可"
   },
   {
+   "folder": "NJCIT",
+   "adapter_id": "NJCIT",
+   "adapter_name": "南京信息职业技术学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "njcit.js",
+   "import_url": "https://jw.njcit.cn/sso/lyiotlogin",
+   "maintainer": "astraumbra",
+   "description": "南京信息职业技术学院教务适配，登录后可直接导入"
+  },
+  {
    "folder": "NJFU",
    "adapter_id": "NJFU_01",
    "adapter_name": "南京林业大学",
@@ -1751,6 +1771,16 @@
    "description": "适配青岛理工大学正方教务系统"
   },
   {
+   "folder": "QVTU",
+   "adapter_id": "QVTU",
+   "adapter_name": "泉州职业技术大学强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "qvtu.js",
+   "import_url": "https://jw.qvtu.edu.cn/jsxsd/",
+   "maintainer": "suiren0219",
+   "description": "泉州职业技术大学强智教务。登录教务系统后直接导入即可，可选择学期；开学日期与总周数取自教学周历。有问题请通过 GitHub 联系开发者。"
+  },
+  {
    "folder": "SANYEDU",
    "adapter_id": "SANYEDU",
    "adapter_name": "湖南三一工业职业技术学院教务系统",
@@ -1769,6 +1799,16 @@
    "import_url": "http://192.168.73.155/personal-center",
    "maintainer": "小漫君",
    "description": "四川机电职业技术学院正方新一代教务适配，仅校园网内可用：请在校园网环境下从校内门户 192.168.73.155/personal-center 登录，教务服务为 192.168.73.166/jwglxt（公网 zhjw.scemi.com 会被 webproxy 按来源网段拦截）。登录并进入教务后，在任意页面执行导入即可，无需进入课表查询页面；脚本自动读取学年学期并获取课表与真实节次作息。"
+  },
+  {
+   "folder": "SCETOP",
+   "adapter_id": "SCETOP_01",
+   "adapter_name": "四川托普信息技术职业学院-正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "scetop_zf_legacy.js",
+   "import_url": "http://zf.scetop.com/default2.aspx",
+   "maintainer": "psenY",
+   "description": "四川托普信息技术职业学院教务系统课表导入。登录后在「信息查询」里打开「学生个人课表」或「班级课表查询」，显示出周课表即可导入。导入会同时看三个页面：必修类的课以班级课表为准（班级课表调课会及时更新），选修课以个人课表为准；班级课表里没有的课会从个人课表补上，不会漏课。上课时间按学校作息自动设置（A 教学区以外的第 3、4 节和周五下午会单独调整）。没有固定上课时间的实践、实训类课程不会导入，可以手动添加。"
   },
   {
    "folder": "SCNU",
@@ -2429,6 +2469,16 @@
    "import_url": "https://xjwis.ynufe.edu.cn/jsxsd/",
    "maintainer": "AxelPLN",
    "description": "由于学校已于 2026 年上半年启用 aTrust 验证，登录教务系统之前必须使用云财小程序内登记的手机号完成短信验证，完成验证后再使用教务系统账号登录，若无法完成验证请确认是否在小程序登记了正确的手机号码或者向教务处反馈，对此不便开发者表示无能为力。登录教务系统后直接按下面的“执行导入”即可。"
+  },
+  {
+   "folder": "YSSDUFE",
+   "adapter_id": "YSSDUFE_01",
+   "adapter_name": "山东财经大学燕山学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "yssdufe_01.js",
+   "import_url": "https://ysjw.sdufe.edu.cn:8081/jsxsd/",
+   "maintainer": "星河欲转",
+   "description": "山东财经大学燕山学院强智教务，进入教务后直接点击开始导入，支持获取开学日期，非本校开发者适配如果有误建议提交issues"
   },
   {
    "folder": "YXHMC",
