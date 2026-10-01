@@ -143,12 +143,12 @@
   {
    "folder": "CJLU",
    "adapter_id": "CJLU",
-   "adapter_name": "中国计量大学正方教务",
+   "adapter_name": "中国计量大学（正方教务）",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "cjlu.js",
-   "import_url": "https://jwxt.cjlu.edu.cn/jwglxt/xtgl/login_slogin.html",
-   "maintainer": "ying-ck",
-   "description": "中国计量大学正方教务系统课表导入，登录后执行导入。"
+   "import_url": "https://jwxt.cjlu.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "salt-fishes, ying-ck",
+   "description": "登录中国计量大学教务系统后即可导入课表，支持选择学年学期，自动获取开学日期与作息时间"
   },
   {
    "folder": "CMC",
@@ -383,12 +383,12 @@
   {
    "folder": "CUST",
    "adapter_id": "CUST_01",
-   "adapter_name": "长春理工大学教务系统",
+   "adapter_name": "长春理工大学教务系统（朝阳校区）",
    "category": "BACHELOR_AND_ASSOCIATE",
-   "asset_js_path": "cust.js",
+   "asset_js_path": "cust_chaoyang.js",
    "import_url": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
    "maintainer": "itdong",
-   "description": ""
+   "description": "适用于朝阳校区，导入个人课程表并配置第 1～12 节作息时间。"
   },
   {
    "folder": "CWXU",
