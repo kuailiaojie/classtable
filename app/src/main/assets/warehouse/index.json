@@ -1427,6 +1427,12 @@
    "name": "浙江工商职业技术学院",
    "initial": "Z",
    "resource_folder": "ZJBTI"
+  },
+  {
+   "id": "XHSYSU",
+   "name": "广州新华学院",
+   "initial": "G",
+   "resource_folder": "XHSYSU"
   }
  ]
 }
