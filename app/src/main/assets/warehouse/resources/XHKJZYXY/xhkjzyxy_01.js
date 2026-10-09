@@ -1,28 +1,13 @@
-// 江苏电子信息职业学院(jsei.edu.cn) 拾光课程表适配脚本
+// 宣化科技职业学院(xhkjzyxy.edu.cn) 拾光课程表适配脚本
 // 基于正方教务系统接口适配
 // 非该大学开发者适配,开发者无法及时发现问题
 // 出现问题请提issues或者提交pr更改,这更加快速
 
-/**
- * 基础域名配置
- * 根据当前页面域名自动选择校园网直连或 WebVPN
- */
 const BASE_URLS = {
-    // 校园网直连
-    campus: "https://jwpd.jsei.edu.cn/jwglxt",
-    // WebVPN 代理
-    webvpn: "https://jwpd-443.webvpn.jsei.edu.cn/jwglxt"
+    campus: "https://xhkjzyxy.edu.cn:8387/jwglxt",
 };
 
-/**
- * 根据当前页面域名自动判断使用哪个基础地址
- * - 当前在 webvpn 域名下 -> 用 webvpn
- * - 否则 -> 用校园网直连
- */
 function getBaseUrl() {
-    if (window.location.hostname.includes("webvpn")) {
-        return BASE_URLS.webvpn;
-    }
     return BASE_URLS.campus;
 }
 
@@ -179,7 +164,7 @@ function parseJsonData(jsonData) {
     const initialCourseList = [];
 
     for (const rawCourse of rawCourseList) {
-        if (!rawCourse.kcmc || !rawCourse.xm || !rawCourse.cdmc || 
+        if (!rawCourse.kcmc || !rawCourse.xm || !rawCourse.cdmc ||
             !rawCourse.xqj || !rawCourse.jcs || !rawCourse.zcd) {
             continue;
         }
@@ -188,13 +173,13 @@ function parseJsonData(jsonData) {
         if (weeksArray.length === 0) {
             continue;
         }
-        
+
         const sectionParts = rawCourse.jcs.split('-');
         const startSection = Number(sectionParts[0]);
         const endSection = Number(sectionParts[sectionParts.length - 1]);
         const day = Number(rawCourse.xqj);
-        
-        if (isNaN(day) || isNaN(startSection) || isNaN(endSection) || 
+
+        if (isNaN(day) || isNaN(startSection) || isNaN(endSection) ||
             day < 1 || day > 7 || startSection > endSection) {
             continue;
         }
@@ -227,7 +212,7 @@ async function promptUserToStart() {
  */
 async function fetchAcademicOptions() {
     const url = `${getBaseUrl()}/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default`;
-    
+
     try {
         const response = await fetch(url, {
             method: "GET",
@@ -261,14 +246,14 @@ async function fetchAcademicOptions() {
         }
 
         const selectedIndex = allYearOptions.findIndex(opt => opt.selected);
-        
+
         if (selectedIndex === -1) {
             return {
                 yearOptions: allYearOptions.slice(0, 5),
                 semesterOptions,
                 defaultYearIndex: 0,
-                defaultSemesterIndex: semesterOptions.findIndex(opt => opt.selected) !== -1 
-                    ? semesterOptions.findIndex(opt => opt.selected) 
+                defaultSemesterIndex: semesterOptions.findIndex(opt => opt.selected) !== -1
+                    ? semesterOptions.findIndex(opt => opt.selected)
                     : 0
             };
         }
@@ -354,7 +339,7 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
             if (Array.isArray(json) && json.length > 0) {
                 // 优先找第1周，否则取第一项
                 const firstWeekObj = json.find(item => String(item.zs) === "1" || String(item.zsmc) === "1") || json[0];
-                
+
                 if (firstWeekObj.rq) {
                     const startDateStr = firstWeekObj.rq.split('/')[0];
                     if (/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
@@ -403,19 +388,37 @@ async function fetchTimeSlots(academicYear, semesterCode) {
         if (!response.ok) return null;
 
         const json = await response.json();
-        if (!Array.isArray(json)) return null;
 
-        // 过滤有效节次并转换格式
-        const timeSlots = json
-            .filter(item => item.jcmc && item.qssj && item.jssj)
-            .map(item => ({
-                number: Number(item.jcmc),
-                startTime: item.qssj.substring(0, 5), // "08:30:00" -> "08:30"
-                endTime: item.jssj.substring(0, 5)
-            }))
-            .sort((a, b) => a.number - b.number);
+        if (!Array.isArray(json) || json.length === 0) {
+            return null;
+        }
+
+        const seen = {};
+        const timeSlots = [];
+
+        for (let i = 0; i < json.length; i++) {
+            const item = json[i];
+            if (!item || !item.jcmc || !item.qssj || !item.jssj) {
+                continue;
+            }
+
+            const num = Number(item.jcmc);
+            if (isNaN(num) || seen[num]) {
+                continue;
+            }
+            seen[num] = true;
+
+            timeSlots.push({
+                number: num,
+                startTime: String(item.qssj).substring(0, 5),
+                endTime: String(item.jssj).substring(0, 5)
+            });
+        }
+
+        timeSlots.sort((a, b) => a.number - b.number);
 
         return timeSlots.length > 0 ? timeSlots : null;
+
     } catch (e) {
         return null;
     }
@@ -480,17 +483,16 @@ async function saveCourses(parsedCourses) {
 
 // 优先使用从教务系统接口动态获取的作息时间，获取失败时回退到此表
 const FALLBACK_TIME_SLOTS = [
-    { number: 1, startTime: "08:30", endTime: "09:15" },
-    { number: 2, startTime: "09:20", endTime: "10:05" },
-    { number: 3, startTime: "10:20", endTime: "11:05" },
-    { number: 4, startTime: "11:10", endTime: "11:55" },
-    { number: 5, startTime: "14:00", endTime: "14:45" },
-    { number: 6, startTime: "14:50", endTime: "15:35" },
-    { number: 7, startTime: "15:50", endTime: "16:35" },
-    { number: 8, startTime: "16:40", endTime: "17:25" },
-    { number: 9, startTime: "17:30", endTime: "18:15" },
-    { number: 10, startTime: "19:00", endTime: "19:45" },
-    { number: 11, startTime: "19:55", endTime: "20:40" }
+    { number: 1,  startTime: "08:30", endTime: "09:15" },
+    { number: 2,  startTime: "09:15", endTime: "10:00" },
+    { number: 3,  startTime: "10:20", endTime: "11:05" },
+    { number: 4,  startTime: "11:05", endTime: "11:50" },
+    { number: 5,  startTime: "14:30", endTime: "15:15" },
+    { number: 6,  startTime: "15:15", endTime: "16:00" },
+    { number: 7,  startTime: "16:20", endTime: "17:05" },
+    { number: 8,  startTime: "17:05", endTime: "17:50" },
+    { number: 9,  startTime: "19:00", endTime: "19:45" },
+    { number: 10, startTime: "19:45", endTime: "20:30" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {
@@ -541,7 +543,7 @@ async function runImportFlow() {
     if (!saveResult) {
         return;
     }
-    
+
     try {
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         let configMsg = "课表配置更新成功！";

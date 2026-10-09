@@ -263,6 +263,11 @@ schools:
     initial: "N"
     resource_folder: "NUAA"
 
+  - id: "USC"
+    name: "南华大学"
+    initial: "N"
+    resource_folder: "USC"
+
   - id: "XMCU"
     name: "厦门城市职业学院"
     initial: "X"
@@ -1217,3 +1222,23 @@ schools:
     name: "燕山大学"
     initial: "Y"
     resource_folder: "YSU"
+
+  - id: "XHKJZYXY"
+    name: "宣化科技职业学院"
+    initial: "X"
+    resource_folder: "XHKJZYXY"
+
+  - id: "HEBAU"
+    name: "河北农业大学"
+    initial: "H"
+    resource_folder: "HEBAU"
+    
+  - id: "BNUZH"
+    name: "北京师范大学珠海校区"
+    initial: "B"
+    resource_folder: "BNUZH"    
+
+  - id: "SCTBC"
+    name: "四川工商职业技术学院"
+    initial: "S"
+    resource_folder: "SCTBC"
