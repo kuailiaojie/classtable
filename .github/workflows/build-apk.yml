@@ -77,6 +77,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # 静态检查门禁:lint 发现 error 即失败(与本地 `./gradlew lintDebug` 同一套规则)。
+      - name: Lint
+        run: ./gradlew lintDebug --no-daemon --stacktrace
+
       - name: Prepare release keystore (optional)
         shell: bash
         run: |
@@ -92,6 +96,9 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          # 天气 key 由 Secrets 提供(源码里不再提交);未配置时留空 → 访客额度
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
 
       - name: Build release APK
         run: >-
@@ -101,6 +108,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

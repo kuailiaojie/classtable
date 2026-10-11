@@ -263,3 +263,15 @@ internal fun isValidImportUrl(url: String): Boolean {
     if (url.isBlank()) return false
     return !runCatching { URL(url).host }.getOrNull().isNullOrBlank()
 }
+
+/**
+ * 把 JS 桥注册到当前页面(注入脚本前刷新一次)。
+ *
+ * 单独包一层只为挂 `@SuppressLint("JavascriptInterface")`:lint 的该检查看不穿 Compose
+ * lambda 里 `target` 的静态类型,会误报「加入的接口 (T) 没有带 @JavascriptInterface 的方法」——
+ * 而 [ImportBridge] 的桥方法其实都带了注解。
+ */
+@SuppressLint("JavascriptInterface")
+internal fun WebView.installJavascriptBridge(bridge: ImportBridge) {
+    addJavascriptInterface(bridge, "AndroidBridgeNative")
+}

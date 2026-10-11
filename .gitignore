@@ -14,3 +14,5 @@ app/release/
 netlify/static/
 # 字体子集化的源字体(14MB,按需下载,见 tools/subset-font.py)
 tools/fonts/
+# 适配脚本由构建期从 warehouse/resources 生成(见 app/build.gradle.kts),不提交
+app/src/main/assets/warehouse/resources/

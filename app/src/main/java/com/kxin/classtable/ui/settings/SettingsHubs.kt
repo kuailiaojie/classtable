@@ -261,7 +261,7 @@ private fun ImportHub(nav: NavHostController, viewModel: SettingsViewModel) {
         SettingRow("教务导入", "3 步导入") { nav.navigate("import") }
         DividerLine()
         SettingRow(
-            title = "图片识别",
+            title = "AI 助手",
             value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
             onClick = { nav.navigate("ai_key") },
         )

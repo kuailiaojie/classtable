@@ -1,3 +1,14 @@
+import java.util.Properties
+import javax.inject.Inject
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -8,6 +19,24 @@ plugins {
     alias(libs.plugins.firebase.perf)
 }
 
+/**
+ * uapis.cn 天气接口的 key(日视图顶部的当前天气)。
+ *
+ * 从 `local.properties`(不进仓库)或环境变量 `WEATHER_API_KEY` 读取 —— 不再把密钥提交进
+ * 公开仓库。两者都没有时留空:代码会走 uapis 的访客额度,功能不受影响,只是不占自己的配额。
+ * CI 若要保留自有额度,在仓库 Secrets 里配一个 `WEATHER_API_KEY` 即可(workflow 已透传)。
+ */
+val weatherApiKey: String = run {
+    val props = Properties()
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        runCatching { localFile.inputStream().use { props.load(it) } }
+    }
+    props.getProperty("WEATHER_API_KEY")
+        ?.takeIf { it.isNotBlank() }
+        ?: System.getenv("WEATHER_API_KEY").orEmpty()
+}
+
 android {
     namespace = "com.kxin.classtable"
     compileSdk = 37
@@ -16,8 +45,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "3.0.0"
+        versionCode = 80
+        versionName = "3.1.0"
 
         // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
         resourceConfigurations += listOf("zh", "zh-rCN", "en")
@@ -36,13 +65,9 @@ android {
             "\"https://classtablek.netlify.app\"",
         )
 
-        // uapis.cn 天气接口的 key(日视图顶部的当前天气)。留空即走访客额度 ——
-        // 两者返回的字段一致,填了只是为了走自己的额度;失效时代码会自动降级。
-        buildConfigField(
-            "String",
-            "WEATHER_API_KEY",
-            "\"uapi-ywpozu2v7Bzo82vrK3TRcnVUL5vxuJb8AatC-27t\"",
-        )
+        // uapis.cn 天气接口的 key(日视图顶部的当前天气)。从 local.properties / 环境变量读取,
+        // 不提交进仓库;留空即走访客额度 —— 两者返回字段一致,失效时代码会自动降级。
+        buildConfigField("String", "WEATHER_API_KEY", "\"$weatherApiKey\"")
     }
 
     // CI 签名:配置 KEYSTORE_FILE 等环境变量时启用(未配置时 release 产出未签名 APK,本地构建不受影响)
@@ -157,4 +182,47 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
+}
+
+/**
+ * 把 warehouse/resources 下的适配脚本(.js)同步进一个生成目录,作为 assets 源。
+ *
+ * 为什么要有它:这些 .js 以前在仓库里存了两份(`warehouse/resources/` 源 +
+ * `app/src/main/assets/warehouse/resources/` 拷贝),后者 265 个文件约 3.9MB。现在 git 只留源,
+ * 构建期生成 —— APK 内容与路径完全不变(`assets/warehouse/resources/<SCHOOL>/<file>`),
+ * 只是仓库少一份重复拷贝。体积很小的 index.json / adapters.json 仍随源码提交。
+ */
+abstract class SyncWarehouseAssetsTask : DefaultTask() {
+
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val fileSystemOperations: FileSystemOperations
+
+    @TaskAction
+    fun sync() {
+        fileSystemOperations.sync {
+            into(outputDir)
+            from(sourceDir) {
+                include("**/*.js")
+                into("warehouse/resources")
+            }
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val syncTask = tasks.register<SyncWarehouseAssetsTask>(
+            "sync${variant.name.replaceFirstChar { it.uppercase() }}WarehouseAssets",
+        ) {
+            sourceDir.set(rootProject.layout.projectDirectory.dir("warehouse/resources"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(syncTask) { it.outputDir }
+    }
 }

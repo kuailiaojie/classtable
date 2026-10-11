@@ -206,20 +206,23 @@ class YuketangClient @Inject constructor(
         val results = json.optJSONObject("data")?.optJSONArray("results") ?: return emptyList()
         return (0 until results.length()).mapNotNull { index ->
             val item = results.optJSONObject(index) ?: return@mapNotNull null
-            val title = item.optString("topic_name").trim()
+            val rawTitle = item.optString("topic_name").trim()
             // 正文取 content.text;它为空时退回 content.app_text —— 雨课堂两种都出现过,
             // 只认 text 的话这类公告会变成「只有标题、没有正文」,看起来就是显示不全。
             val contentJson = item.optJSONObject("content")
-            val body = contentJson?.optString("text").orEmpty().trim()
+            val rawBody = contentJson?.optString("text").orEmpty().trim()
                 .ifBlank { contentJson?.optString("app_text").orEmpty().trim() }
-            if (title.isBlank() && body.isBlank()) return@mapNotNull null
+            if (rawTitle.isBlank() && rawBody.isBlank()) return@mapNotNull null
+            // 雨课堂偶尔把标签/实体塞进这两个字段:入库前统一转纯文本,详情页与通知才不会是「><」脸
+            val title = HtmlText.toPlain(rawTitle)
+            val body = HtmlText.toPlain(rawBody)
             val createdAt = item.optLong("publish_time", 0L).let { published ->
                 if (published > 0L) normalizeEpoch(published) else parseTimeText(item.optString("create_time"))
             }
             YuketangAnnouncement(
-                // id 缺失时退化成一个稳定可复现的键,便于去重比较
+                // id 缺失时退化成一个稳定可复现的键,便于去重比较(用原始标题,避免清洗差异造成重复行)
                 id = item.optString("id").takeIf { it.isNotBlank() }
-                    ?: "$classroomId:$createdAt:${title.hashCode()}",
+                    ?: "$classroomId:$createdAt:${rawTitle.hashCode()}",
                 classroomId = classroomId,
                 title = title.ifBlank { body.take(40) },
                 content = body,

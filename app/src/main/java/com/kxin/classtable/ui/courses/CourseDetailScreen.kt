@@ -317,7 +317,7 @@ private fun AnnouncementRow(announcement: YuketangAnnouncement) {
 /** 公告日期(「9/12」);解析不出发布时间时用破折号,不假装知道。 */
 private fun announcementDate(at: Long): String {
     if (at <= 0L) return "—"
-    val date = LocalDate.ofInstant(java.time.Instant.ofEpochMilli(at), java.time.ZoneId.systemDefault())
+    val date = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
     return "${date.monthValue}/${date.dayOfMonth}"
 }
 

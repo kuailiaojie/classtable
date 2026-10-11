@@ -364,6 +364,6 @@ fun RainClassroomScreen(
 private fun fetchedAtText(at: Long): String {
     if (at <= 0L) return "从未"
     val time = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalTime()
-    val date = LocalDate.ofInstant(Instant.ofEpochMilli(at), ZoneId.systemDefault())
+    val date = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalDate()
     return "上次 %d月%d日 %02d:%02d".format(date.monthValue, date.dayOfMonth, time.hour, time.minute)
 }

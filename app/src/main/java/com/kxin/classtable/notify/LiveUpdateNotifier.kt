@@ -1,5 +1,6 @@
 package com.kxin.classtable.notify
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
@@ -125,7 +126,11 @@ object LiveUpdateNotifier {
     /**
      * 上屏 / 原地更新实时活动:按身份挑槽位,上新槽后再收掉另一个槽。
      * [attachForeground] 把新槽重新挂回前台服务(槽位变了就得重挂)。
+     *
+     * 调用方(前台服务)已用 [NotifyChannels.canPost] 检查过 POST_NOTIFICATIONS;这里仍
+     * runCatching 兜底,权限被临时撤销也不会崩。
      */
+    @SuppressLint("MissingPermission")
     fun postLiveUpdate(
         context: Context,
         notification: Notification,

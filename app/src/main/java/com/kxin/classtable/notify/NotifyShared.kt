@@ -1,5 +1,6 @@
 package com.kxin.classtable.notify
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.content.Context
 import android.util.Log
@@ -11,7 +12,13 @@ internal const val ANNOUNCEMENT_MAX_CHARS = 60
 
 internal const val NOTIFY_TAG = "ClasstableNotify"
 
-/** 统一收口:权限被回收时 notify 会抛 SecurityException,不能让它冒到调用方。 */
+/**
+ * 统一收口:权限被回收时 notify 会抛 SecurityException,不能让它冒到调用方。
+ *
+ * 调用方在发通知前都先过了 [NotifyChannels.canPost](检查 POST_NOTIFICATIONS 与渠道开关);
+ * 这里再兜一层 runCatching,权限在两次检查之间被撤销也不会崩。
+ */
+@SuppressLint("MissingPermission")
 internal fun postNotification(context: Context, id: Int, notification: Notification) {
     runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
         .onFailure {

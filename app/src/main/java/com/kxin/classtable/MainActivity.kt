@@ -77,6 +77,7 @@ import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
 import com.kxin.classtable.ui.agenda.AgendaFormScreen
 import com.kxin.classtable.ui.agenda.AgendaScreen
+import com.kxin.classtable.ui.assistant.AssistantScreen
 import com.kxin.classtable.ui.courses.CourseDetailScreen
 import com.kxin.classtable.ui.courses.CoursesScreen
 import com.kxin.classtable.ui.form.CourseFormScreen
@@ -288,6 +289,7 @@ fun ClasstableRoot(
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),
                 ) { entry -> CourseDetailScreen(nav, entry.arguments?.getString("courseId") ?: "") }
                 composable("settings") { SettingsScreen(nav) }
+                composable("assistant") { AssistantScreen(nav) }
                 composable(
                     route = "settings_hub/{hub}",
                     arguments = listOf(navArgument("hub") { type = NavType.StringType }),
@@ -432,7 +434,7 @@ fun ClasstableRoot(
 }
 
 /** 底部导航覆盖的根标签页(二级页不显示导航,占满整屏)。 */
-private val ROOT_TABS = setOf("week", "courses", "agenda", "settings")
+private val ROOT_TABS = setOf("week", "courses", "agenda", "assistant", "settings")
 
 /** 权限/ROM 状态快照,供首次引导判断是否需要展示。 */
 private data class PermissionSnapshot(

@@ -54,6 +54,7 @@ fun YohakuBottomNav(
         "week" to "课表",
         "courses" to "课程",
         "agenda" to "日程",
+        "assistant" to "助手",
         "settings" to "设置",
     )
     Surface(

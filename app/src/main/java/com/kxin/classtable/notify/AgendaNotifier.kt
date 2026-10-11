@@ -57,10 +57,9 @@ object AgendaNotifier {
     }
 
     private fun clock(millis: Long): String {
-        val t = java.time.LocalTime.ofInstant(
-            java.time.Instant.ofEpochMilli(millis),
-            java.time.ZoneId.systemDefault(),
-        )
+        val t = java.time.Instant.ofEpochMilli(millis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalTime()
         return "%02d:%02d".format(t.hour, t.minute)
     }
 

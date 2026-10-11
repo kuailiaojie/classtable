@@ -451,7 +451,7 @@ fun ImportScreen(
                             val target = holder.active
                             // 注入脚本前先刷新桥对象:SSO 页面可能已经在本上下文里重写过文档,
                             // 旧对象会被判为「非注入」,导致脚本里所有桥调用失败。
-                            target.addJavascriptInterface(bridge, "AndroidBridgeNative")
+                            target.installJavascriptBridge(bridge)
                             bridge.bindWebView(target)
                             // 垫片 + 适配脚本原样注入(脚本不能被 IIFE 包裹,否则它的顶层
                             // 校验函数等声明进不了全局作用域,showPrompt 按名调用会 not defined)

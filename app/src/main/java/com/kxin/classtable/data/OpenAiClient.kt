@@ -60,4 +60,46 @@ object OpenAiClient {
             parseAiResult(raw, weekCount)
         }
     }
+
+    /** 文本对话(助手页用):返回模型原始文本(约定里是一段 JSON)。 */
+    suspend fun chat(
+        apiKey: String,
+        baseUrl: String,
+        model: String,
+        systemPrompt: String,
+        history: List<AiChatMessage>,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val messages = JSONArray()
+                .put(JSONObject().put("role", "system").put("content", systemPrompt))
+            history.forEach { m ->
+                messages.put(JSONObject().put("role", m.role).put("content", m.content))
+            }
+            val body = JSONObject()
+                .put("model", model)
+                .put("messages", messages)
+                .put("max_tokens", 1500)
+                .put("temperature", 0.4)
+                .toString()
+
+            val conn = URL(baseUrl.trimEnd('/') + "/chat/completions").openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 90_000
+            conn.doOutput = true
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.bufferedReader()?.use { it.readText() } ?: ""
+            conn.disconnect()
+            check(code in 200..299) { "AI 接口返回 $code:${text.take(200)}" }
+
+            JSONObject(text)
+                .getJSONArray("choices").getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content")
+        }
+    }
 }

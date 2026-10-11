@@ -147,7 +147,7 @@ private fun timeText(event: AgendaEvent): String {
     val zone = ZoneId.systemDefault()
     val day = Instant.ofEpochMilli(event.startAt).atZone(zone).toLocalDate()
     return if (day == LocalDate.now(zone)) {
-        java.time.LocalTime.ofInstant(Instant.ofEpochMilli(event.startAt), zone)
+        Instant.ofEpochMilli(event.startAt).atZone(zone).toLocalTime()
             .let { "%02d:%02d".format(it.hour, it.minute) }
     } else {
         "%d/%d".format(day.monthValue, day.dayOfMonth)

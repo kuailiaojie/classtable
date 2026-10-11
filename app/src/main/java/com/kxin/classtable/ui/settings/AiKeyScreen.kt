@@ -104,7 +104,7 @@ fun AiKeyScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "图片识别", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "AI 助手", onBack = { nav.popBackStack() })
 
         Column(
             modifier = Modifier

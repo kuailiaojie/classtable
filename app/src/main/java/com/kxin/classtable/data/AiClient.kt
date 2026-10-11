@@ -33,4 +33,28 @@ object AiClient {
             weekCount = weekCount,
         )
     }
+
+    /** 助手页的文本对话。返回模型原始文本(约定为一段 JSON,由调用方解析)。 */
+    suspend fun chat(
+        provider: AiProvider,
+        apiKey: String,
+        baseUrl: String,
+        model: String,
+        systemPrompt: String,
+        history: List<AiChatMessage>,
+    ): Result<String> = when (provider) {
+        AiProvider.GEMINI -> GeminiClient.chat(
+            apiKey = apiKey,
+            model = model.ifBlank { AiProvider.GEMINI.defaultModel },
+            systemPrompt = systemPrompt,
+            history = history,
+        )
+        AiProvider.OPENAI_COMPAT -> OpenAiClient.chat(
+            apiKey = apiKey,
+            baseUrl = baseUrl.ifBlank { AiProvider.OPENAI_COMPAT.defaultBaseUrl },
+            model = model.ifBlank { AiProvider.OPENAI_COMPAT.defaultModel },
+            systemPrompt = systemPrompt,
+            history = history,
+        )
+    }
 }
