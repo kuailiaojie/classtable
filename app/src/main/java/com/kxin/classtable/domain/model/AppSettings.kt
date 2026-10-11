@@ -35,8 +35,8 @@ enum class UpdateCadence(val days: Int, val label: String) {
 
 /** AI 供应商:Gemini 或任意 OpenAI 兼容接口(DeepSeek/通义千问/Kimi/智谱 GLM 等)。 */
 enum class AiProvider(val label: String, val defaultModel: String, val defaultBaseUrl: String) {
-    GEMINI("Gemini", "gemini-3.6-flash", "https://generativelanguage.googleapis.com/v1beta"),
-    OPENAI_COMPAT("OpenAI 兼容", "gpt-5.6-sol", "https://api.openai.com/v1"),
+    GEMINI("Gemini", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta"),
+    OPENAI_COMPAT("OpenAI 兼容", "gpt-4o", "https://api.openai.com/v1"),
 }
 
 data class AppSettings(

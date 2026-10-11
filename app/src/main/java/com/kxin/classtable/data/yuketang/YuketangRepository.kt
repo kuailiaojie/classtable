@@ -49,7 +49,7 @@ class YuketangRepository @Inject constructor(
     private val courseDao: CourseDao,
     private val settingsRepository: SettingsRepository,
     /** [loggedIn] 用:注入的应用级作用域,活到进程结束。 */
-    @ApplicationScope private val loggedInScope: CoroutineScope,
+    @param:ApplicationScope private val loggedInScope: CoroutineScope,
 ) {
     fun isLoggedIn(): Boolean = sessionStore.read() != null
 

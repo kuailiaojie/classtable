@@ -5,7 +5,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.installations.FirebaseInstallations
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -67,6 +67,16 @@ class ClasstableApp : Application() {
     @Inject
     @ApplicationScope
     lateinit var scope: CoroutineScope
+
+    /**
+     * 上报推送标识。FCM 已从「注册令牌」转向 Firebase Installation ID(FID):旧的
+     * `getToken()` / `onNewToken()` 都已废弃,改用 FID;FID 可直接当作定向投递的令牌用。
+     */
+    private fun uploadPushRegistration() {
+        FirebaseInstallations.getInstance().id.addOnSuccessListener { fid ->
+            scope.launch { fcmTokens.upload(fid) }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -138,9 +148,7 @@ class ClasstableApp : Application() {
                 Crash.log(if (user != null) "signed in" else "signed out")
                 if (user != null) {
                     syncWithRetry()
-                    FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                        scope.launch { fcmTokens.upload(token) }
-                    }
+                    uploadPushRegistration()
                 }
             }
         }

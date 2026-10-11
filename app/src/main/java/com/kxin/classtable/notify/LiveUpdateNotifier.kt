@@ -9,6 +9,7 @@ import android.graphics.drawable.Icon
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.kxin.classtable.R
+import com.kxin.classtable.data.yuketang.HtmlText
 
 /**
  * 实时活动(课程进行中的常驻通知)的通知构建与上屏。
@@ -51,8 +52,10 @@ object LiveUpdateNotifier {
         val expandedText = buildString {
             append(bodyText)
             if (payload.location.isNotBlank()) append("\n").append(placeText)
-            announcement?.takeIf { it.isNotBlank() }?.let {
-                append("\n最新公告:").append(it.take(ANNOUNCEMENT_MAX_CHARS))
+            // 公告标题来自缓存,正常已清洗;这里再洗一道兜底
+            val announcementText = announcement?.let { HtmlText.toPlain(it) }?.takeIf { it.isNotBlank() }
+            if (announcementText != null) {
+                append("\n最新公告:").append(announcementText.take(ANNOUNCEMENT_MAX_CHARS))
             }
         }
         // 倒计时目标:下一个相变(课前 → 上课,课中 → 课间 / 下课,课间 → 上课)。没有目标就不挂计时

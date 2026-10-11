@@ -11,8 +11,10 @@ package com.kxin.classtable.data.yuketang
  * 纯函数,无 Android 依赖。
  */
 internal object HtmlText {
+    private val SCRIPT_STYLE = Regex("(?is)<\\s*(script|style)\\b[^>]*>.*?<\\s*/\\s*\\1\\s*>")
     private val BREAK = Regex("(?i)<\\s*br\\s*/?\\s*>|<\\s*/\\s*(p|div|li|tr|h[1-6]|section|article|blockquote)\\s*>")
-    private val TAG = Regex("<[^>]*>")
+    // 标签名必须以字母开头(可带前导 /):这样「5 < 6 > 3」这种纯文本里的尖括号不会被误当标签吃掉
+    private val TAG = Regex("<\\s*/?\\s*[a-zA-Z][^>]*>")
     private val ENTITY = Regex("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]*);")
     private val HORIZONTAL_WS = Regex("[ \\t\\u00A0]+")
     private val SPACE_AROUND_NEWLINE = Regex(" *\\n *")
@@ -31,9 +33,14 @@ internal object HtmlText {
         // 没有标签也没有实体时,只做轻量 trim,避免无谓的正则开销
         if (raw.indexOf('<') < 0 && raw.indexOf('&') < 0) return raw.trim()
 
-        var text = BREAK.replace(raw, "\n")
-        text = TAG.replace(text, "")
-        text = ENTITY.replace(text) { decodeEntity(it.groupValues[1]) }
+        var text = SCRIPT_STYLE.replace(raw, "")
+        // 两轮「去标签 → 解实体」:雨课堂偶尔把 HTML **再转义一层**(`&lt;p&gt;`),
+        // 只做一轮的话解出来的 `<p>` 会留下来,依旧显示成标签。第二轮专门收拾这层。
+        repeat(2) {
+            text = BREAK.replace(text, "\n")
+            text = TAG.replace(text, "")
+            text = ENTITY.replace(text) { decodeEntity(it.groupValues[1]) }
+        }
         text = HORIZONTAL_WS.replace(text, " ")
         text = SPACE_AROUND_NEWLINE.replace(text, "\n")
         text = MANY_NEWLINES.replace(text, "\n\n")

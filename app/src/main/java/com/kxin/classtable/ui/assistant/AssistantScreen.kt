@@ -1,6 +1,5 @@
 package com.kxin.classtable.ui.assistant
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,9 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHostController
 import com.kxin.classtable.data.AiAction
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
@@ -46,13 +44,15 @@ import com.kxin.classtable.domain.Dates
 import java.time.LocalDate
 
 /**
- * AI 助手页:一句话建课 / 建日程,或者询问课表安排。
+ * AI 助手面板内容:一句话建课 / 建日程,或者询问课表安排。
  *
  * 模型返回的**动作先在聊天气泡里预览**,点「确认添加」才落库 —— 模型幻觉不会直接改到课表。
+ * 面板本身由 [AssistantOverlay] 从课表页顶部下拉呼出,不再是独立的底部导航页。
  */
 @Composable
-fun AssistantScreen(
-    nav: NavHostController,
+fun AssistantPanel(
+    onClose: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: AssistantViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -77,12 +77,11 @@ fun AssistantScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.paper)
             .imePadding(),
     ) {
         YohakuTopBar(
             title = "AI 助手",
-            onBack = null,
+            onBack = onClose,
             actions = {
                 Text(
                     text = "设置",
@@ -90,7 +89,7 @@ fun AssistantScreen(
                     color = colors.accent,
                     modifier = Modifier
                         .yohakuTouchTarget()
-                        .clickable { nav.navigate("ai_key") }
+                        .clickable(onClick = onOpenSettings)
                         .padding(horizontal = 8.dp),
                 )
             },

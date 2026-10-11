@@ -1,9 +1,8 @@
 package com.kxin.classtable.data.yuketang
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.kxin.classtable.data.Crash
+import com.kxin.classtable.data.SecurePrefs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,25 +11,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 雨课堂会话的加密持久化(EncryptedSharedPreferences),与云账号会话分开一个文件。
+ * 雨课堂会话的加密持久化([SecurePrefs]),与云账号会话分开一个文件。
  * 登录态约两周失效:失效后由 [YuketangClient] 判定并提示重新登录。
+ *
+ * 旧版 EncryptedSharedPreferences 的数据不迁移:换加密格式后读不出来,退化为未登录即可。
  */
 @Singleton
 class YuketangSessionStore @Inject constructor(
     @ApplicationContext context: Context,
 ) {
-    private val prefs = runCatching {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            "yuketang_session",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    }.getOrNull()
+    private val prefs = SecurePrefs(context, FILE)
+
+    init {
+        // 清掉旧的 EncryptedSharedPreferences 文件(内容已不可读)。
+        runCatching { context.deleteSharedPreferences(LEGACY_FILE) }
+    }
 
     private val state = MutableStateFlow(readFromPrefs())
 
@@ -44,49 +39,45 @@ class YuketangSessionStore @Inject constructor(
 
     /** 传 null 表示登出。 */
     fun write(session: YuketangSession?) {
-        val p = prefs ?: return
         runCatching {
-            p.edit().clear().apply()
+            prefs.clear()
             if (session != null) {
-                p.edit()
-                    .putString(KEY_SESSION_ID, session.sessionId)
-                    .putString(KEY_CSRF, session.csrfToken)
-                    .putString(KEY_UV_ID, session.uvId)
-                    .putString(KEY_UNIVERSITY_ID, session.universityId)
-                    .putString(KEY_XTBZ, session.xtbz)
-                    .putString(KEY_ORIGIN, session.origin)
-                    .putString(KEY_RAW_COOKIE, session.rawCookie)
-                    .apply()
+                prefs.putString(KEY_SESSION_ID, session.sessionId)
+                prefs.putString(KEY_CSRF, session.csrfToken)
+                prefs.putString(KEY_UV_ID, session.uvId)
+                prefs.putString(KEY_UNIVERSITY_ID, session.universityId)
+                prefs.putString(KEY_XTBZ, session.xtbz)
+                prefs.putString(KEY_ORIGIN, session.origin)
+                prefs.putString(KEY_RAW_COOKIE, session.rawCookie)
             }
         }.onFailure { Crash.recordException(it, "op" to "yuketang_session_write") }
         state.value = session
     }
 
-    private fun readFromPrefs(): YuketangSession? {
-        val p = prefs ?: return null
-        return runCatching {
-            val sessionId = p.getString(KEY_SESSION_ID, null) ?: return null
-            YuketangSession(
-                sessionId = sessionId,
-                csrfToken = p.getString(KEY_CSRF, null).orEmpty(),
-                uvId = p.getString(KEY_UV_ID, null).orEmpty(),
-                universityId = p.getString(KEY_UNIVERSITY_ID, null).orEmpty(),
-                xtbz = p.getString(KEY_XTBZ, null).orEmpty()
-                    .ifBlank { YuketangSession.DEFAULT_XTBZ },
-                origin = p.getString(KEY_ORIGIN, null).orEmpty()
-                    .ifBlank { YuketangSession.DEFAULT_ORIGIN },
-                rawCookie = p.getString(KEY_RAW_COOKIE, null).orEmpty(),
-            )
-        }.getOrElse { e ->
-            // 主密钥失效 / 密文损坏时 getString 会抛:清掉重来,退化为未登录。
-            // 这里在构造期被调用(→ 单例初始化),不捕获的话异常会从 Hilt 构造链冒出、应用起不来。
-            Crash.recordException(e, "op" to "yuketang_session_read")
-            runCatching { p.edit().clear().apply() }
-            null
-        }
+    private fun readFromPrefs(): YuketangSession? = runCatching {
+        val sessionId = prefs.getString(KEY_SESSION_ID) ?: return null
+        YuketangSession(
+            sessionId = sessionId,
+            csrfToken = prefs.getString(KEY_CSRF).orEmpty(),
+            uvId = prefs.getString(KEY_UV_ID).orEmpty(),
+            universityId = prefs.getString(KEY_UNIVERSITY_ID).orEmpty(),
+            xtbz = prefs.getString(KEY_XTBZ).orEmpty()
+                .ifBlank { YuketangSession.DEFAULT_XTBZ },
+            origin = prefs.getString(KEY_ORIGIN).orEmpty()
+                .ifBlank { YuketangSession.DEFAULT_ORIGIN },
+            rawCookie = prefs.getString(KEY_RAW_COOKIE).orEmpty(),
+        )
+    }.getOrElse { e ->
+        // 读取失败时清掉重来,退化为未登录。这里在构造期被调用(→ 单例初始化),
+        // 不捕获的话异常会从 Hilt 构造链冒出、应用起不来。
+        Crash.recordException(e, "op" to "yuketang_session_read")
+        runCatching { prefs.clear() }
+        null
     }
 
     private companion object {
+        const val FILE = "yuketang_session_secure"
+        const val LEGACY_FILE = "yuketang_session"
         const val KEY_SESSION_ID = "sessionid"
         const val KEY_CSRF = "csrftoken"
         const val KEY_UV_ID = "uv_id"

@@ -71,9 +71,9 @@ sealed interface DownloadState {
  */
 @Singleton
 class UpdateRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val proxyBase: String = BuildConfig.FIREBASE_PROXY_URL.trimEnd('/')
     private val versionUrl: String get() = "$proxyBase/version"

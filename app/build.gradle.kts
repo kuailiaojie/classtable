@@ -45,11 +45,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 80
-        versionName = "3.1.0"
-
-        // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
-        resourceConfigurations += listOf("zh", "zh-rCN", "en")
+        versionCode = 81
+        versionName = "3.2.0"
 
         // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
         buildConfigField(
@@ -122,6 +119,12 @@ android {
         }
     }
 
+    // UI 文案与资源只有中文/英文:去掉依赖库里的其它语言资源,减小安装包
+    // (AGP 9 起 `resourceConfigurations` 已废弃,改用 `androidResources.localeFilters`)
+    androidResources {
+        localeFilters += listOf("zh", "zh-rCN", "en")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -174,7 +177,6 @@ dependencies {
 
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.work.runtime.ktx)
 
     // 农历/节气:日历周条下的小字(纯 Java,无反射,可在 Android 直接使用)

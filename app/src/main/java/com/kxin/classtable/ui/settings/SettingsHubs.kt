@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -122,7 +122,7 @@ fun SettingsHubScreen(
             when (hub) {
                 SettingsHub.APPEARANCE -> AppearanceHub(viewModel)
                 SettingsHub.TIMETABLE -> TimetableHub(nav, viewModel)
-                SettingsHub.IMPORT -> ImportHub(nav, viewModel)
+                SettingsHub.IMPORT -> ImportHub(nav)
                 SettingsHub.REMINDER -> ReminderHub(nav, viewModel)
                 SettingsHub.ABOUT -> AboutHub(nav)
             }
@@ -254,17 +254,9 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun ImportHub(nav: NavHostController, viewModel: SettingsViewModel) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-
+private fun ImportHub(nav: NavHostController) {
     SettingsSection(title = "导入课表") {
         SettingRow("教务导入", "3 步导入") { nav.navigate("import") }
-        DividerLine()
-        SettingRow(
-            title = "AI 助手",
-            value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
-            onClick = { nav.navigate("ai_key") },
-        )
     }
 
     AdapterSyncSection()

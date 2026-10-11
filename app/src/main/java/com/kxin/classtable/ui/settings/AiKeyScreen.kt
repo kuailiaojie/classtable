@@ -21,7 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -66,8 +66,9 @@ class AiKeyViewModel @Inject constructor(
 }
 
 /**
- * AI 密钥页(从设置页「导入与识别 → AI 密钥」进入)。
- * 密钥只存本机、不参与云端设置同步;服务商 / 地址 / 模型随设置一起同步。
+ * AI 设置页(从设置首页「AI 设置」进入)。
+ * 图片识别与「AI 助手」对话共用这里的配置;密钥只存本机、不参与云端设置同步,
+ * 服务商 / 地址 / 模型随设置一起同步。
  */
 @Composable
 fun AiKeyScreen(
@@ -104,7 +105,7 @@ fun AiKeyScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "AI 助手", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "AI 设置", onBack = { nav.popBackStack() })
 
         Column(
             modifier = Modifier
@@ -113,7 +114,7 @@ fun AiKeyScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "用于拍照识别课表。密钥只存本机,不上传也不同步。",
+                text = "AI 图片识别与「AI 助手」对话共用这里的配置。密钥只存本机,不上传也不同步。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )

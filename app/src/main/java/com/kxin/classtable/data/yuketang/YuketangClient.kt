@@ -35,7 +35,7 @@ class YuketangNotFoundException(message: String) : YuketangException(404, messag
  */
 @Singleton
 class YuketangClient @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val sessionStore: YuketangSessionStore,
 ) {
     private val desktopUa: String by lazy { WebUserAgent.desktop(context) }

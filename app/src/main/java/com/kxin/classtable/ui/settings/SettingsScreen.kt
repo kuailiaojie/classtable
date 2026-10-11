@@ -11,7 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -46,7 +46,7 @@ class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val surveyPrompt: SurveyPrompt,
     yuketangRepository: YuketangRepository,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -100,8 +100,9 @@ class SettingsViewModel @Inject constructor(
 /**
  * 设置首页:只列分组入口,不铺具体设置项。
  *
- * 「常用」四项各是一组语义相近的设置中心(外观 / 课表 / 导入与识别 / 提醒),点进去才是原来那些
- * 设置项 ——「主题」「作息时间」「AI 密钥」这些选项各自落在**三级页**上,首页不会随功能增加而变长。
+ * 「常用」里「外观 / 课表 / 导入课表 / 提醒」各是一组语义相近的设置中心,点进去才是原来那些
+ * 设置项;「AI 设置」只有一个真页,直接跳过去(同「更多」里的做法)。「主题」「作息时间」这些
+ * 选项各自落在**三级页**上,首页不会随功能增加而变长。
  * 「更多」四项(雨课堂 / 桌面 / 账号与数据 / 关于)里,前三项各自只有一个真页,因此**去掉中转层、
  * 直接跳过去**;「关于」本身有检查更新 / 关于 / 问卷三项,保留为分组页。
  */
@@ -135,7 +136,13 @@ fun SettingsScreen(
             DividerLine()
             SettingRow("课表", "上课时间 / 周次 / 调休 / 显示") { nav.navigate(SettingsHub.TIMETABLE.route) }
             DividerLine()
-            SettingRow("导入课表", "教务导入 / 拍照识别") { nav.navigate(SettingsHub.IMPORT.route) }
+            SettingRow("导入课表", "教务导入 / 识别方案") { nav.navigate(SettingsHub.IMPORT.route) }
+            DividerLine()
+            SettingRow(
+                title = "AI 设置",
+                value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
+                onClick = { nav.navigate("ai_key") },
+            )
             DividerLine()
             SettingRow("提醒", reminderSummary(settings)) { nav.navigate(SettingsHub.REMINDER.route) }
         }

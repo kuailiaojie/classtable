@@ -40,7 +40,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -77,7 +77,7 @@ import com.kxin.classtable.ui.account.AccountScreen
 import com.kxin.classtable.ui.about.AboutScreen
 import com.kxin.classtable.ui.agenda.AgendaFormScreen
 import com.kxin.classtable.ui.agenda.AgendaScreen
-import com.kxin.classtable.ui.assistant.AssistantScreen
+import com.kxin.classtable.ui.assistant.AssistantOverlay
 import com.kxin.classtable.ui.courses.CourseDetailScreen
 import com.kxin.classtable.ui.courses.CoursesScreen
 import com.kxin.classtable.ui.form.CourseFormScreen
@@ -148,6 +148,8 @@ fun ClasstableRoot(
         }
 
         val nav = rememberNavController()
+        // AI 助手是从课表页顶部下拉呼出的覆盖层(不再是底部导航页);对话在本次会话内保留
+        var assistantOpen by rememberSaveable { mutableStateOf(false) }
         // 首次启动权限引导:未完成且存在未开启项 → 弹出(完成/跳过后只弹一次,设置页可重进)
         val context = LocalContext.current
         var onboardingDismissed by rememberSaveable { mutableStateOf(false) }
@@ -216,7 +218,7 @@ fun ClasstableRoot(
             val currentRoute = nav.currentBackStackEntryAsState().value?.destination?.route
             // 屏幕追踪:路由名即屏幕名
             LaunchedEffect(currentRoute) { currentRoute?.let { Analytics.screenView(it) } }
-            val showBottomNav = currentRoute in ROOT_TABS
+            val showBottomNav = currentRoute in ROOT_TABS && !assistantOpen
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -238,7 +240,7 @@ fun ClasstableRoot(
                     predictivePopEnterTransition = { navPopEnter() },
                     predictivePopExitTransition = { navPopExit() },
                 ) {
-                composable("week") { TimetableScreen(nav) }
+                composable("week") { TimetableScreen(nav, onOpenAssistant = { assistantOpen = true }) }
                 composable(
                     route = "course_form?courseId={courseId}",
                     arguments = listOf(
@@ -289,7 +291,6 @@ fun ClasstableRoot(
                     arguments = listOf(navArgument("courseId") { type = NavType.StringType }),
                 ) { entry -> CourseDetailScreen(nav, entry.arguments?.getString("courseId") ?: "") }
                 composable("settings") { SettingsScreen(nav) }
-                composable("assistant") { AssistantScreen(nav) }
                 composable(
                     route = "settings_hub/{hub}",
                     arguments = listOf(navArgument("hub") { type = NavType.StringType }),
@@ -322,6 +323,16 @@ fun ClasstableRoot(
                         // 四周都要留白才是「悬浮」:左右由栏宽自带(只包标签、居中),
                         // 这里补上下的浮动余量,投影才有地方落。
                         .padding(vertical = 8.dp),
+                )
+            }
+            // AI 助手覆盖层:从课表页顶部下拉呼出;打开时底部导航已隐藏,面板盖在最上层
+            if (assistantOpen) {
+                AssistantOverlay(
+                    onDismiss = { assistantOpen = false },
+                    onOpenSettings = {
+                        assistantOpen = false
+                        nav.navigate("ai_key")
+                    },
                 )
             }
             // 首次启动权限引导全屏覆盖层:介绍动画收场后才入场,完成后淡出露出主界面
@@ -434,7 +445,7 @@ fun ClasstableRoot(
 }
 
 /** 底部导航覆盖的根标签页(二级页不显示导航,占满整屏)。 */
-private val ROOT_TABS = setOf("week", "courses", "agenda", "assistant", "settings")
+private val ROOT_TABS = setOf("week", "courses", "agenda", "settings")
 
 /** 权限/ROM 状态快照,供首次引导判断是否需要展示。 */
 private data class PermissionSnapshot(

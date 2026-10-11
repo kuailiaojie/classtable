@@ -25,16 +25,6 @@ import kotlinx.coroutines.launch
  */
 class FcmMessagingService : FirebaseMessagingService() {
 
-    override fun onNewToken(token: String) {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        scope.launch {
-            val entry = EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
-            runCatching { entry.fcmTokens().upload(token) }
-            // 令牌刷新 = 系统唤醒了应用,顺带自愈闹钟(国产 ROM 清理后补回来)
-            runCatching { entry.reminderPlanner().rescheduleAll() }
-        }
-    }
-
     override fun onMessageReceived(message: RemoteMessage) {
         // 任何 FCM 消息到达(含营销推送)= 系统唤醒,顺带自愈闹钟
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {

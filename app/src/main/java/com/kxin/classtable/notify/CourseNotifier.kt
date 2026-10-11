@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.kxin.classtable.MainActivity
 import com.kxin.classtable.R
+import com.kxin.classtable.data.yuketang.HtmlText
 import com.kxin.classtable.domain.Schedule
 
 /**
@@ -52,9 +53,11 @@ object CourseNotifier {
             if (startText.isNotEmpty()) append(" · $startText 开始")
             if (location.isNotEmpty()) append("\n$location")
             if (teacher.isNotEmpty()) append(" · $teacher")
-            announcement?.takeIf { it.isNotBlank() }?.let {
+            // 公告标题来自缓存,正常已清洗;这里再洗一道,旧数据 / 边界情况也不会漏出标签
+            val announcementText = announcement?.let { HtmlText.toPlain(it) }?.takeIf { it.isNotBlank() }
+            if (announcementText != null) {
                 append("\n最新公告:")
-                append(it.take(ANNOUNCEMENT_MAX_CHARS))
+                append(announcementText.take(ANNOUNCEMENT_MAX_CHARS))
             }
         }
 

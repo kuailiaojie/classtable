@@ -29,13 +29,13 @@ import javax.inject.Singleton
 /** 课程仓库:Room 为本地真相,写操作后触发 Firestore 同步 + 小组件刷新 + 提醒重排。 */
 @Singleton
 class CourseRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val dao: CourseDao,
     private val deletedDao: DeletedCourseDao,
     private val sync: SyncRepository,
     private val reminderPlanner: ReminderPlanner,
     private val settingsRepository: SettingsRepository,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<Course>> =
         dao.observeAll()

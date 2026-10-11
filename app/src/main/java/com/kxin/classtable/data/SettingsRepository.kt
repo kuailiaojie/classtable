@@ -39,8 +39,8 @@ data class UsageStats(
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @ApplicationScope private val settingsScope: CoroutineScope,
+    @param:ApplicationContext private val context: Context,
+    @param:ApplicationScope private val settingsScope: CoroutineScope,
 ) {
     private val KEY_THEME = stringPreferencesKey("theme_mode")
     private val KEY_ACCENT = stringPreferencesKey("accent_hex")

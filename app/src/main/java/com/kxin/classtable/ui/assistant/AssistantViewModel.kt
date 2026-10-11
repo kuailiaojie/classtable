@@ -65,7 +65,7 @@ class AssistantViewModel @Inject constructor(
             if (settings.aiApiKey.isBlank()) {
                 _messages.value = _messages.value + AssistantMessage(
                     fromUser = false,
-                    text = "还没有配置 AI 密钥。去「设置 → 图片识别」填一个即可(密钥只存本机)。",
+                    text = "还没有配置 AI。去「设置 → AI 设置」填一个即可(密钥只存本机)。",
                     failed = true,
                 )
                 _busy.value = false

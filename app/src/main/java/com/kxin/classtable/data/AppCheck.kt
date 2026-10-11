@@ -5,7 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.google.android.gms.tasks.Task
-import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.tasks.TaskCompletionSource
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.AppCheckProvider
 import com.google.firebase.appcheck.AppCheckProviderFactory
@@ -17,6 +17,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /**
  * App Check 门面:给经反代的 Auth / Firestore 请求附上一枚 Attestation token,让「谁在调用」
@@ -77,17 +79,29 @@ private class ProxyAppCheckProviderFactory(private val context: Context) : AppCh
     override fun create(firebaseApp: FirebaseApp): AppCheckProvider = ProxyAppCheckProvider(context)
 }
 
+/** token 请求走单线程执行器:既避开公共线程池,也把阻塞网络挡在 SDK 的调用线程之外。 */
+private val APP_CHECK_EXECUTOR: Executor = Executors.newSingleThreadExecutor { r -> Thread(r, "appcheck-token") }
+
 private class ProxyAppCheckProvider(private val context: Context) : AppCheckProvider {
-    /** SDK 在后台线程调用;用 Tasks.call 把阻塞网络放到它自己的执行器上。 */
-    override fun getToken(): Task<AppCheckToken> = Tasks.call {
-        val request = JSONObject()
-            .put("signingSha256", signingSha256(context))
-            .put("package", context.packageName)
-        val resp = postJson("${BuildConfig.FIREBASE_PROXY_URL}/appcheck/token", request)
-        ProxyAppCheckToken(
-            resp.getString("token"),
-            resp.optLong("expireTimeMillis", System.currentTimeMillis() + 30 * 60 * 1000L),
-        )
+    /**
+     * SDK 在后台线程调用。`Tasks.call` 的两个重载都已废弃,改用 [TaskCompletionSource]:
+     * 在自家执行器上跑阻塞网络,完成 / 失败后再回填 Task。
+     */
+    override fun getToken(): Task<AppCheckToken> {
+        val source = TaskCompletionSource<AppCheckToken>()
+        APP_CHECK_EXECUTOR.execute {
+            runCatching {
+                val request = JSONObject()
+                    .put("signingSha256", signingSha256(context))
+                    .put("package", context.packageName)
+                val resp = postJson("${BuildConfig.FIREBASE_PROXY_URL}/appcheck/token", request)
+                ProxyAppCheckToken(
+                    resp.getString("token"),
+                    resp.optLong("expireTimeMillis", System.currentTimeMillis() + 30 * 60 * 1000L),
+                )
+            }.onSuccess(source::setResult).onFailure { source.setException(it as? Exception ?: RuntimeException(it)) }
+        }
+        return source.task
     }
 
     private fun postJson(url: String, body: JSONObject): JSONObject {

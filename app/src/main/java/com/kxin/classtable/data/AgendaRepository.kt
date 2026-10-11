@@ -27,12 +27,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class AgendaRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val dao: AgendaDao,
     private val deletedDao: DeletedAgendaDao,
     private val sync: SyncRepository,
     private val reminderPlanner: ReminderPlanner,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<AgendaEvent>> =
         dao.observeAll()

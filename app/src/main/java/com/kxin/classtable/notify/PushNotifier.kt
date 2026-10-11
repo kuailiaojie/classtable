@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.kxin.classtable.MainActivity
 import com.kxin.classtable.R
+import com.kxin.classtable.data.yuketang.HtmlText
 
 /**
  * 服务端推送类通知:课表动态(调课 / 停课 / 活动)、应用更新、雨课堂新公告。
@@ -24,11 +25,14 @@ object PushNotifier {
     fun showLiveUpdate(context: Context, title: String, body: String) {
         if (!NotifyChannels.canPost(context, NotifyChannels.LIVE)) return
         NotifyChannels.ensure(context)
+        // 服务端正文可能带 HTML(雨课堂这类内容尤其常见):通知不渲染 HTML,这里再洗一道
+        val safeTitle = HtmlText.toPlain(title)
+        val safeBody = HtmlText.toPlain(body)
         val notification = NotificationCompat.Builder(context, NotifyChannels.LIVE)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentTitle(safeTitle)
+            .setContentText(safeBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(safeBody))
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,
@@ -43,7 +47,7 @@ object PushNotifier {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
-        postNotification(context, title.hashCode(), notification)
+        postNotification(context, safeTitle.hashCode(), notification)
     }
 
     /** 后台检查到新版本:一条可点进「检查更新」页的通知。 */
@@ -59,7 +63,7 @@ object PushNotifier {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val body = notes.trim().ifBlank { "点此查看并下载" }
+        val body = HtmlText.toPlain(notes).trim().ifBlank { "点此查看并下载" }
         val notification = NotificationCompat.Builder(context, NotifyChannels.APP_UPDATE)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle("发现新版本 v$version")
@@ -91,11 +95,12 @@ object PushNotifier {
         )
         val subject = courseName.ifBlank { "雨课堂" }
         val heading = if (count > 1) "$subject 有 $count 条新公告" else "$subject 有新公告"
+        val safeTitle = HtmlText.toPlain(title)
         val notification = NotificationCompat.Builder(context, NotifyChannels.ANNOUNCEMENT)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(heading)
-            .setContentText(title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(title))
+            .setContentText(safeTitle)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(safeTitle))
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -23,7 +23,7 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val gateway: FirebaseGateway,
     private val sessionStore: SessionStore,
-    @ApplicationScope private val scope: CoroutineScope,
+    @param:ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _currentUser = MutableStateFlow<AuthSession?>(null)
     val currentUser: StateFlow<AuthSession?> = _currentUser.asStateFlow()

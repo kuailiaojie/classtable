@@ -1,11 +1,8 @@
 package com.kxin.classtable.ui.settings
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,22 +20,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -64,7 +53,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.roundToInt
 
 @HiltViewModel
 class ScheduleTimesViewModel @Inject constructor(
@@ -83,16 +71,14 @@ class ScheduleTimesViewModel @Inject constructor(
 }
 
 /**
- * 作息时间子页:把一天画成一条**时间线**。
+ * 作息时间子页:把一天列成一张**清单** —— 一行一节,课间夹在相邻两节之间。
  *
- * - 方块交替排布:「第 N 节」是一块浮起的卡片,两块之间是「课间」——课间不是独立数据,
- *   而是相邻两节之间的空隙,所以改一节的时长,课间和后面所有节自动跟着走,不会出现
- *   「时间重叠」这种需要靠保存前校验兜住的状态;
- * - 方块高度按分钟成比例([MINUTE_DP]),所以整条时间线一眼能看出哪节长、哪个课间久;
- * - **点按**方块选时间(改这一节的开始时刻),**拖右下角**调时长,各 1 分钟一档;
- * - 按「上午 / 下午 / 晚上」分段,段首标出起始时刻。
+ * 用清单而不是按分钟成比例的方块,是因为「一天上了什么」本来就是人按顺序读的东西:
+ * 一行一节「第 N 节 08:00–08:45 · 45 分钟」,时长用「－ / ＋」按 5 分钟一档调,
+ * 点任意时刻弹出选择器改到精确值。课间不是独立数据,而是两节之间的空隙,所以改一节时长,
+ * 后面的课间与其它节自动顺移 —— 不会出现「时间重叠」这种要靠校验兜住的状态。
  *
- * 「课程属于第几节」与「这一节具体几点」分离,因此改作息不会移动课程。
+ * 「课程属于第几节」与「这一节具体几点」分离,因此改作息不会移动已建课程。
  */
 @Composable
 fun ScheduleTimesScreen(
@@ -154,19 +140,14 @@ fun ScheduleTimesScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "点时间改那一刻;拖右下角改这一节长短。",
+                text = "点时间改那一刻,时长用「－ / ＋」;课间夹在两节之间,可改长短或插一节。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
             Text(
-                text = "点课间的「加一节」插课;课间长短用「－ / ＋」改。",
+                text = "改这里不会移动已建课程的时刻。",
                 style = YohakuType.label12,
-                color = colors.neutral7,
-            )
-            Text(
-                text = "改这张表不会移动已建课程的时刻(要改请编辑那门课)。",
-                style = YohakuType.label12,
-                color = colors.neutral7,
+                color = colors.neutral6,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
 
@@ -275,41 +256,21 @@ fun ScheduleTimesScreen(
                     section = currentSection
                     SectionHeader(name = currentSection, startMinute = span.start)
                 }
-                // 每块的两个时刻各自可点,含义和「拖」一致:改结束 = 改这块自己的时长,
-                // 改开始 = 改它前面那块(首块改的是整条时间线的锚点),后面的块顺移。
-                val editEnd: () -> Unit = {
-                    timeEdit = TimeEdit("结束时间", span.end) { tl, minute ->
-                        tl.withMinutes(span.index, minute - span.start)
-                    }
-                }
-                val editStart: () -> Unit = start@{
-                    if (!span.block.isBreak) {
-                        timeEdit = TimeEdit("第 ${span.classNumber} 节 · 开始时间", span.start) { tl, minute ->
-                            tl.withClassStart(span.classNumber, minute)
-                        }
-                        return@start
-                    }
-                    // 课间的开始 = 前一节的结束,改它等同于改前一节的下课时间
-                    val prev = spans.getOrNull(span.index - 1) ?: return@start
-                    timeEdit = TimeEdit("课间开始时间", prev.end) { tl, minute ->
-                        tl.withMinutes(prev.index, minute - prev.start)
-                    }
-                }
                 if (span.block.isBreak) {
-                    BreakBlock(
+                    BreakRow(
                         span = span,
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
-                        onEditStart = editStart,
-                        onEditEnd = editEnd,
+                        onEditStart = { timeEdit = breakStartEdit(spans, span) },
+                        onEditEnd = { timeEdit = endEdit(span) },
                         onAddClass = { timeline = timeline.plusClassAfter(span.index) },
                     )
                 } else {
-                    ClassBlock(
+                    ClassRow(
                         span = span,
                         canDelete = classCount > 1,
                         onResize = { timeline = timeline.withMinutes(span.index, it) },
-                        onEditStart = editStart,
-                        onEditEnd = editEnd,
+                        onEditStart = { timeEdit = classStartEdit(span) },
+                        onEditEnd = { timeEdit = endEdit(span) },
                         onDelete = { timeline = timeline.withoutClass(span.classNumber) },
                     )
                 }
@@ -338,6 +299,25 @@ fun ScheduleTimesScreen(
     }
 }
 
+// ---------------------------------------------------------------- 编辑意图
+
+/** 改这一节的开始时刻:首节动的是整条线的锚点,其余节改的是**它前面那段课间**。 */
+private fun classStartEdit(span: Span): TimeEdit =
+    TimeEdit("第 ${span.classNumber} 节 · 开始时间", span.start) { tl, minute ->
+        tl.withClassStart(span.classNumber, minute)
+    }
+
+/** 改课间的开始 = 改前一节的下课时间。 */
+private fun breakStartEdit(spans: List<Span>, span: Span): TimeEdit {
+    val prev = spans.getOrNull(span.index - 1)
+    return if (prev == null) TimeEdit("课间开始时间", span.start) { tl, _ -> tl }
+    else TimeEdit("课间开始时间", prev.end) { tl, minute -> tl.withMinutes(prev.index, minute - prev.start) }
+}
+
+/** 改结束 = 改这一块自己的时长,后面的块顺移。 */
+private fun endEdit(span: Span): TimeEdit =
+    TimeEdit("结束时间", span.end) { tl, minute -> tl.withMinutes(span.index, minute - span.start) }
+
 // ---------------------------------------------------------------- 时间线模型
 
 /** 时间线上的一块。时长决定它在时间线上的位置:整条线锚在第一节的开始时刻,改一块的时长,后面的块整体后移。 */
@@ -359,14 +339,14 @@ private data class Timeline(val anchor: Int, val blocks: List<TimeBlock>) {
         val start = spans().getOrNull(index)?.start ?: return this
         val limit = (DAY_END - start).coerceAtLeast(MIN_BLOCK_MINUTES)
         val capped = minutes.coerceIn(MIN_BLOCK_MINUTES, limit)
-        if (blocks[index].minutes == capped) return this
+        if (blocks.getOrNull(index)?.minutes == capped) return this
         return copy(blocks = blocks.toMutableList().also { it[index] = it[index].copy(minutes = capped) })
     }
 
     /**
      * 把第 [classNumber] 节的开始时刻改到 [newStart]。
      * 首节动的是整条线的锚点(全天平移);其余节改的是**它前面那段课间**的时长,
-     * 于是这一节自身的时长不变、后面的块整体后移 —— 与「拖动这一节往下」的直觉一致。
+     * 于是这一节自身的时长不变、后面的块整体后移 —— 与「把这一节往下挪」的直觉一致。
      */
     fun withClassStart(classNumber: Int, newStart: Int): Timeline {
         val spans = spans()
@@ -441,11 +421,8 @@ private const val DEFAULT_START = 8 * 60
 private const val DEFAULT_CLASS_MINUTES = 45
 private const val DEFAULT_BREAK_MINUTES = 10
 
-/** 方块高度 = 分钟数 × 每分高度(有下限,短课间才不会窄到看不清)。 */
-private val MINUTE_DP = 2.2.dp
-// 下限按「标题行 + 时间片行」的可读高度定,不只是为了不重叠
-private val MIN_CLASS_DP = 84.dp
-private val MIN_BREAK_DP = 44.dp
+/** 「－ / ＋」一档几分钟。要精确到分钟就用时间选择器点时刻。 */
+private const val STEP_MINUTES = 5
 
 private fun periodsToTimeline(periods: List<Schedule.Period>): Timeline {
     if (periods.isEmpty()) return Timeline(DEFAULT_START, listOf(TimeBlock(false, DEFAULT_CLASS_MINUTES)))
@@ -465,9 +442,7 @@ private fun sectionOf(minute: Int): String = when {
     else -> "晚上"
 }
 
-private fun blockHeight(minutes: Int, minHeight: Dp): Dp = (MINUTE_DP * minutes).coerceAtLeast(minHeight)
-
-// ---------------------------------------------------------------- 时间线 UI
+// ---------------------------------------------------------------- 清单 UI
 
 @Composable
 private fun SectionHeader(name: String, startMinute: Int) {
@@ -492,13 +467,13 @@ private fun SectionHeader(name: String, startMinute: Int) {
 }
 
 /**
- * 一节课:浮起卡片 + 左侧 accent 条。
+ * 一节课:一行卡片 —— 上行「第 N 节 / 删除」,下行「开始 – 结束 · ± 时长」。
  *
- * 两个时刻各自是**可点的时间片**,点哪个就改哪个;右下角还能直接拖。不给整张卡片绑点击 ——
- * 之前「点卡片 = 改开始时间」是这一页最不直观的地方:看得见的目标(时间)才该是可点的目标。
+ * 两个时刻各自是**可点的时间片**,点哪个改哪个;时长用「－ / ＋」按 5 分钟一档调。
+ * 不给整张卡片绑点击 —— 看得见的目标(时间、时长)才该是可点的目标。
  */
 @Composable
-private fun ClassBlock(
+private fun ClassRow(
     span: Span,
     canDelete: Boolean,
     onResize: (Int) -> Unit,
@@ -511,7 +486,6 @@ private fun ClassBlock(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(blockHeight(span.block.minutes, MIN_CLASS_DP))
             .clip(shape)
             .background(colors.raised)
             .border(1.dp, colors.line, shape),
@@ -526,11 +500,12 @@ private fun ClassBlock(
         )
         Column(
             modifier = Modifier
-                .align(Alignment.CenterStart)
                 .fillMaxWidth()
                 .padding(
                     start = YohakuDimens.accentBarWidth + 12.dp,
                     end = 12.dp,
+                    top = 10.dp,
+                    bottom = 10.dp,
                 ),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -540,14 +515,17 @@ private fun ClassBlock(
                     color = colors.neutral10,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    text = if (canDelete) "删除" else "",
-                    style = YohakuType.label12,
-                    color = colors.error,
-                    modifier = Modifier
-                        .clickable(enabled = canDelete, onClick = onDelete)
-                        .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
-                )
+                if (canDelete) {
+                    Text(
+                        text = "删除",
+                        style = YohakuType.label12,
+                        color = colors.error,
+                        modifier = Modifier
+                            .yohakuTouchTarget()
+                            .clickable(onClick = onDelete)
+                            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -568,31 +546,24 @@ private fun ClassBlock(
                     onClick = onEditEnd,
                 )
                 Spacer(modifier = Modifier.weight(1f))
+                StepButton(text = "－") { onResize(span.block.minutes - STEP_MINUTES) }
                 Text(
                     text = "${span.block.minutes} 分钟",
-                    style = YohakuType.title20,
-                    color = colors.neutral10,
-                    // 给右下角手柄让出位置,大字不会被角标压住
-                    modifier = Modifier.padding(end = 18.dp),
+                    style = YohakuType.copy13,
+                    color = colors.neutral9,
                 )
+                StepButton(text = "＋") { onResize(span.block.minutes + STEP_MINUTES) }
             }
         }
-        ResizeHandle(
-            minutes = span.block.minutes,
-            onSet = onResize,
-            modifier = Modifier.align(Alignment.BottomEnd),
-        )
     }
 }
 
 /**
  * 课间:相邻两节之间的空隙,不做成卡片(它是「之间」,不是一件东西)。
- *
- * 以前课间只能用右下角那个不显眼的手柄拖,难怪「没法改课间」;现在把长短做成
- * 一行明确的「－ / ＋」(1 分钟一档)。「加一节」则在这段课间处插进一节新课。
+ * 「加一节」在这段课间处插进一节新课;长短用「－ / ＋」按 5 分钟一档调。
  */
 @Composable
-private fun BreakBlock(
+private fun BreakRow(
     span: Span,
     onResize: (Int) -> Unit,
     onEditStart: () -> Unit,
@@ -600,134 +571,75 @@ private fun BreakBlock(
     onAddClass: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(blockHeight(span.block.minutes, MIN_BREAK_DP)),
+            .padding(
+                start = YohakuDimens.accentBarWidth + 12.dp,
+                end = 12.dp,
+                top = 4.dp,
+                bottom = 4.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Text(text = "课间", style = YohakuType.label12, color = colors.neutral6)
+        Spacer(modifier = Modifier.width(10.dp))
+        TimeChip(
+            value = Schedule.clockText(span.start),
+            isError = false,
+            compact = true,
+            onClick = onEditStart,
+        )
+        Text(
+            text = "–",
+            style = YohakuType.timeMono,
+            color = colors.neutral5,
+            modifier = Modifier.padding(horizontal = 6.dp),
+        )
+        TimeChip(
+            value = Schedule.clockText(span.end),
+            isError = false,
+            compact = true,
+            onClick = onEditEnd,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = "加一节",
+            style = YohakuType.label12,
+            color = colors.accent,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(start = YohakuDimens.accentBarWidth + 12.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "课间", style = YohakuType.label12, color = colors.neutral6)
-            Spacer(modifier = Modifier.width(10.dp))
-            TimeChip(
-                value = Schedule.clockText(span.start),
-                isError = false,
-                compact = true,
-                onClick = onEditStart,
-            )
-            Text(
-                text = "–",
-                style = YohakuType.timeMono,
-                color = colors.neutral5,
-                modifier = Modifier.padding(horizontal = 6.dp),
-            )
-            TimeChip(
-                value = Schedule.clockText(span.end),
-                isError = false,
-                compact = true,
-                onClick = onEditEnd,
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "加一节",
-                style = YohakuType.label12,
-                color = colors.accent,
-                modifier = Modifier
-                    .yohakuTouchTarget()
-                    .clickable(onClick = onAddClass)
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "－",
-                style = YohakuType.copy15,
-                color = colors.neutral6,
-                modifier = Modifier
-                    .yohakuTouchTarget(minWidth = 40.dp)
-                    .clickable { onResize(span.block.minutes - 1) }
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-            )
-            Text(
-                text = "${span.block.minutes} 分钟",
-                style = YohakuType.copy13,
-                color = colors.neutral6,
-            )
-            Text(
-                text = "＋",
-                style = YohakuType.copy15,
-                color = colors.neutral6,
-                modifier = Modifier
-                    .yohakuTouchTarget(minWidth = 40.dp)
-                    .clickable { onResize(span.block.minutes + 1) }
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-            )
-        }
+                .yohakuTouchTarget()
+                .clickable(onClick = onAddClass)
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        StepButton(text = "－") { onResize(span.block.minutes - STEP_MINUTES) }
+        Text(
+            text = "${span.block.minutes} 分钟",
+            style = YohakuType.copy13,
+            color = colors.neutral6,
+        )
+        StepButton(text = "＋") { onResize(span.block.minutes + STEP_MINUTES) }
     }
 }
 
-/**
- * 右下角拖拽手柄:向下拖 = 这块变长,1 分钟一档。
- *
- * 角标用 n-5 的细线而不是 accent:卡片左侧已经有一条 accent 条,再加一个 accent 手柄
- * 就变成「一处强调」变两处;它是可操作性的提示,不该抢视线。
- *
- * 位移→分钟的换算用与方块高度同一把尺子([MINUTE_DP]),所以拖的时候方块边缘基本跟着手指走。
- * 起点在按下时取快照(`base`),之后再按累计位移算目标值 —— 若改成「每次增量叠加到当前值」,
- * 位移量会被重复计入,越拖越飘。
- */
+/** 「－ / ＋」步进钮:统一触达范围与字形,避免每处各写一遍内边距。 */
 @Composable
-private fun ResizeHandle(
-    minutes: Int,
-    onSet: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun StepButton(text: String, onClick: () -> Unit) {
     val colors = LocalYohakuColors.current
-    val current by rememberUpdatedState(minutes)
-    val set by rememberUpdatedState(onSet)
-    val minutePx = with(LocalDensity.current) { MINUTE_DP.toPx() }
-    var base by remember { mutableIntStateOf(minutes) }
-    var traveled by remember { mutableFloatStateOf(0f) }
-
-    Box(
-        modifier = modifier
-            .size(48.dp)
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        base = current
-                        traveled = 0f
-                    },
-                ) { change, amount ->
-                    change.consume()
-                    traveled += amount.y
-                    set(base + (traveled / minutePx).roundToInt())
-                }
-            }
-            // 吃掉点按:手柄上的一下不该被理解成「点方块选时间」
-            .pointerInput(Unit) { detectTapGestures { } },
-        contentAlignment = Alignment.BottomEnd,
-    ) {
-        Canvas(
-            modifier = Modifier
-                .padding(12.dp)
-                .size(12.dp),
-        ) {
-            val stroke = 1.5.dp.toPx()
-            val w = size.width
-            val h = size.height
-            // 右下角的 L 形角标(两条细线,和整站的细线语言一致)
-            drawLine(colors.neutral5, Offset(w, 0f), Offset(w, h), strokeWidth = stroke)
-            drawLine(colors.neutral5, Offset(w, h), Offset(0f, h), strokeWidth = stroke)
-        }
-    }
+    Text(
+        text = text,
+        style = YohakuType.copy15,
+        color = colors.neutral6,
+        modifier = Modifier
+            .yohakuTouchTarget(minWidth = 40.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+    )
 }
 
 /**
- * 可点的时间片。编辑页里每个时刻都是一个,点它改那一刻;生成器里复用它做「上午开始」。
+ * 可点的时间片。清单里每个时刻都是一个,点它改那一刻;生成器里复用它做「上午开始」。
  * [compact] 给课间那种矮行用(竖向内边距收紧)。
  */
 @Composable

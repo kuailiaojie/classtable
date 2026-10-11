@@ -27,7 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -72,7 +72,7 @@ sealed interface AiUiState {
 
 @HiltViewModel
 class AiImportViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val courseRepository: CourseRepository,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
@@ -204,7 +204,7 @@ fun AiImportScreen(
 
             if (settings.aiApiKey.isBlank()) {
                 Text(
-                    text = "尚未配置图片识别。请到「设置 → 图片识别」配置,支持 Gemini 及任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等)。",
+                    text = "尚未配置 AI。请到「设置 → AI 设置」配置,支持 Gemini 及任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等)。",
                     style = YohakuType.copy13,
                     color = colors.error,
                 )

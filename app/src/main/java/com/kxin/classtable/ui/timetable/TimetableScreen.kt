@@ -8,6 +8,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,15 +20,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,10 +41,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -83,7 +96,7 @@ class TimetableViewModel @Inject constructor(
     courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
     private val weatherRepository: WeatherRepository,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     /**
      * 订阅全部课程而不是「今天星期几」那一批:调休可能让今天去上**别的星期几**的课
@@ -132,6 +145,7 @@ class TimetableViewModel @Inject constructor(
 @Composable
 fun TimetableScreen(
     nav: NavHostController,
+    onOpenAssistant: () -> Unit,
     viewModel: TimetableViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -243,6 +257,9 @@ fun TimetableScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
+        // 顶部下拉条:向下拖(或点)呼出 AI 助手 —— 助手不再是底部导航页
+        AssistantPullHandle(onOpen = onOpenAssistant)
+
         // 顶栏固定:切换的是内容,不是页头 —— 页头跟着转场一起滑反而显得整屏在晃。
         Row(
             modifier = Modifier
@@ -542,5 +559,68 @@ private fun InfoLine(label: String, value: String) {
             modifier = Modifier.width(44.dp),
         )
         Text(text = value, style = YohakuType.copy14, color = colors.neutral9)
+    }
+}
+
+/**
+ * 顶部下拉条:向下拖过阈值(或直接点击)呼出 AI 助手。
+ *
+ * 助手从底部导航收进这里后,必须有明确入口 —— 手势之外再给一条可点 / 可读屏的通路
+ * (TalkBack 会念「打开 AI 助手」),不然只有下拉手势就成了猜谜。
+ */
+@Composable
+private fun AssistantPullHandle(onOpen: () -> Unit) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    val threshold = with(LocalDensity.current) { 56.dp.toPx() }
+    var drag by remember { mutableFloatStateOf(0f) }
+    var armed by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 28.dp)
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { delta ->
+                    drag = (drag + delta).coerceAtLeast(0f)
+                    val nowArmed = drag >= threshold
+                    if (nowArmed != armed) {
+                        armed = nowArmed
+                        if (nowArmed) haptics.tick()
+                    }
+                },
+                onDragStopped = {
+                    if (armed) onOpen()
+                    drag = 0f
+                    armed = false
+                },
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onOpen,
+            )
+            .semantics {
+                contentDescription = "打开 AI 助手"
+                role = Role.Button
+            }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp, 4.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(if (armed) colors.accent else colors.line),
+        )
+        if (drag > 0f) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (armed) "松开打开助手" else "继续下拉打开助手",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+        }
     }
 }

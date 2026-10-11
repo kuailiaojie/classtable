@@ -27,7 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -425,6 +425,7 @@ private fun sizeText(bytes: Long): String =
  * 1. 应用已获准「安装未知应用」(没有就去设置页开,回来再点一次);
  * 2. 文件确实是能解析的 APK(校验在下载完成后已经做过,这里再兜一次文件被清理的情况)。
  */
+@Suppress("DEPRECATION") // ACTION_INSTALL_PACKAGE 已废弃,但没有等价替代:这是少数 ROM 不认 ACTION_VIEW 时的兜底
 private fun installApk(context: Context, apk: File): String? {
     if (!apk.exists()) return "安装包已不存在,请重新下载"
     if (context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0) == null) {

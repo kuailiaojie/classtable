@@ -17,7 +17,7 @@ import com.kxin.classtable.R
  */
 enum class AppIcon(
     val label: String,
-    @DrawableRes val drawableRes: Int,
+    @param:DrawableRes val drawableRes: Int,
     val alias: String,
 ) {
     LOOK_LEFT("向左看", R.drawable.app_icon_01, "com.kxin.classtable.IconAlias01"),

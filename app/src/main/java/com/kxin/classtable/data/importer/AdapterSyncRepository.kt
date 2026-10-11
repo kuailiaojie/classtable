@@ -33,7 +33,7 @@ data class AdapterSyncInfo(
  */
 @Singleton
 class AdapterSyncRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) {
     private val cacheRoot: File get() = File(context.filesDir, WarehouseIndex.CACHE_DIR)
     private val metaFile: File get() = File(cacheRoot, "meta.json")

@@ -20,7 +20,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AppIconViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())

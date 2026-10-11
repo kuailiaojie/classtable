@@ -81,7 +81,7 @@ fun AboutScreen(nav: NavHostController) {
                 text = "• 本地优先:课表数据存储于设备本地数据库,离线可用,不强制联网\n" +
                     "• 云同步可选:登录后同步至本人账号(Firebase Firestore),数据仅本人可见,可随时退出\n" +
                     "• 教务账号:仅在导入时用于本机 WebView 登录,凭证不离开设备\n" +
-                    "• 图片识别密钥:由用户自行配置,仅存于本机,仅用于课表图片识别\n" +
+                    "• AI 密钥:由用户自行配置,仅存于本机,用于课表图片识别与「AI 助手」对话\n" +
                     "• 崩溃报告:经 Firebase Crashlytics 匿名上报,仅用于改进稳定性",
                 style = YohakuType.copy14,
                 color = colors.neutral9,

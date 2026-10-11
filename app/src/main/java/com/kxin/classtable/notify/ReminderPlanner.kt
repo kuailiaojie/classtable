@@ -44,7 +44,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ReminderPlanner @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val dao: CourseDao,
     private val agendaDao: AgendaDao,
     private val settingsRepository: SettingsRepository,
