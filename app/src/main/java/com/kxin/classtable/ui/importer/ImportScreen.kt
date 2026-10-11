@@ -597,6 +597,7 @@ private fun StepSchool(
                         style = YohakuType.label12,
                         color = colors.neutral7,
                         modifier = Modifier
+                            .yohakuTouchTarget()
                             .clickable { scope.launch { listState.scrollToItem(letterIndex[letter] ?: 0) } }
                             .padding(horizontal = 8.dp, vertical = 2.dp),
                     )
@@ -768,6 +769,7 @@ private fun StepLogin(
                             style = YohakuType.copy13,
                             color = colors.accent,
                             modifier = Modifier
+                                .yohakuTouchTarget()
                                 .clickable { closePopup() }
                                 .padding(8.dp),
                         )
@@ -1169,6 +1171,7 @@ private fun StepConfirm(
                 style = YohakuType.copy13,
                 color = colors.neutral7,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(onClick = onSkip)
                     .padding(end = 24.dp),
             )
@@ -1254,6 +1257,7 @@ private fun IndexErrorPanel(onSync: () -> Unit, onRetry: () -> Unit) {
             style = YohakuType.copy13,
             color = colors.accent,
             modifier = Modifier
+                .yohakuTouchTarget()
                 .clickable(onClick = onRetry)
                 .padding(8.dp),
         )

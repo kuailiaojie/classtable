@@ -36,6 +36,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.LunarDate
 import java.time.LocalDate
 
@@ -100,7 +101,7 @@ internal fun CalendarStrip(
             Spacer(modifier = Modifier.weight(1f))
             // 「今天」:回到本周并选中今天
             Surface(
-                modifier = Modifier.clickable(onClick = onToday),
+                modifier = Modifier.yohakuTouchTarget().clickable(onClick = onToday),
                 shape = RoundedCornerShape(YohakuDimens.radiusChip),
                 color = colors.raised,
                 border = BorderStroke(1.dp, colors.line),

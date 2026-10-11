@@ -342,6 +342,7 @@ private fun FinishedHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .yohakuTouchTarget()
             .clickable(onClick = onToggle)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -45,6 +45,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMarkdown
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.UpdateCadence
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -365,6 +366,7 @@ fun UpdateScreen(
                         style = YohakuType.copy13,
                         color = colors.neutral7,
                         modifier = Modifier
+                            .yohakuTouchTarget()
                             .clickable { viewModel.cancelDownload() }
                             .padding(vertical = 8.dp, horizontal = 4.dp),
                     )

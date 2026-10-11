@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
@@ -106,7 +105,7 @@ fun SplashOverlay(onExitStart: () -> Unit = {}) {
                 )
                 Text(
                     text = "把每一天，留一点余白",
-                    fontSize = 13.sp,
+                    style = YohakuType.copy13,
                     color = colors.neutral6,
                     modifier = Modifier.graphicsLayer {
                         alpha = tagline.value

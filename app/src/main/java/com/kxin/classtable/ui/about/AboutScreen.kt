@@ -24,6 +24,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 
 /**
  * 关于页:应用简介、设计理念、数据与隐私、教务适配致谢、
@@ -124,9 +125,11 @@ fun AboutScreen(nav: NavHostController) {
                 style = YohakuType.copy14,
                 color = colors.neutral9,
                 textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    uriHandler.openUri("https://github.com/kuailiaojie/classtable")
-                },
+                modifier = Modifier
+                    .yohakuTouchTarget()
+                    .clickable {
+                        uriHandler.openUri("https://github.com/kuailiaojie/classtable")
+                    },
             )
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))

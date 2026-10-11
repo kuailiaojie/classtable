@@ -60,11 +60,8 @@ object Schedule {
     /** 序列化为 "480-530,610-660,..."。 */
     fun serializePeriods(periods: List<Period>): String = periods.joinToString(",") { "${it.start}-${it.end}" }
 
-    /** 大节行:每 2 个小节一行,末行可为单节;节数不限于 12 */
-    fun bigPeriods(periodCount: Int): List<Pair<Int, Int>> {
-        val count = periodCount.coerceAtLeast(1)
-        return (1..count step 2).map { it to minOf(it + 1, count) }
-    }
+    /** 当前本地时刻「自 0:00 起的分钟数」。 */
+    fun nowMinute(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
 
     /** 小节区间 → "08:00–08:50" 等宽时间串 */
     fun periodRange(periods: List<Period> = defaultPeriods, startPeriod: Int, endPeriod: Int): String {
@@ -132,21 +129,10 @@ object Schedule {
 
     /** 当前时刻所在小节序号(1..节数) */
     fun currentPeriodIndex(periods: List<Period> = defaultPeriods): Int {
-        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
+        val minutes = nowMinute()
         var idx = 0
         for ((i, period) in periods.withIndex()) {
             if (minutes >= period.start) idx = i + 1
-        }
-        return idx
-    }
-
-    /** 当前时刻所在大节序号(1..行数) */
-    fun currentBigPeriodIndex(periods: List<Period> = defaultPeriods): Int {
-        val minutes = LocalTime.now().hour * 60 + LocalTime.now().minute
-        var idx = 0
-        for ((i, big) in bigPeriods(periods.size).withIndex()) {
-            val start = periods.getOrNull(big.first - 1)?.start ?: 0
-            if (minutes >= start) idx = i + 1
         }
         return idx
     }
@@ -174,7 +160,7 @@ object Schedule {
 
     /** 当前时刻是否在该课程的时间区间内(自定义课按起止,普通课按节次)。 */
     fun isCourseOngoing(course: Course, periods: List<Period> = defaultPeriods): Boolean {
-        val now = LocalTime.now().hour * 60 + LocalTime.now().minute
+        val now = nowMinute()
         val s = course.customStartMinute ?: periods.getOrNull(course.startPeriod - 1)?.start ?: return false
         val e = course.customEndMinute ?: periods.getOrNull(course.endPeriod - 1)?.end ?: return false
         return now >= s && now < e

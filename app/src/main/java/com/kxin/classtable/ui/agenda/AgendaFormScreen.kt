@@ -49,6 +49,7 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
+import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaKind
@@ -256,7 +257,7 @@ private fun AgendaFormBody(
                 if (!allDay) {
                     PickerField(
                         label = "时间",
-                        value = clockText(startMinute),
+                        value = Schedule.clockText(startMinute),
                         modifier = Modifier.weight(1f),
                         onClick = { pickStartTime = true },
                     )
@@ -273,7 +274,7 @@ private fun AgendaFormBody(
                 if (!allDay) {
                     PickerField(
                         label = "时间",
-                        value = clockText(endMinute),
+                        value = Schedule.clockText(endMinute),
                         modifier = Modifier.weight(1f),
                         onClick = { pickEndTime = true },
                     )
@@ -436,16 +437,16 @@ private fun AgendaFormBody(
     if (pickStartTime) {
         YohakuTimePicker(
             title = "开始时间",
-            initial = clockText(startMinute),
-            onConfirm = { pickStartTime = false; ScheduleParse.toMinute(it)?.let { m -> startMinute = m } },
+            initial = Schedule.clockText(startMinute),
+            onConfirm = { pickStartTime = false; Schedule.parseClock(it)?.let { m -> startMinute = m } },
             onDismiss = { pickStartTime = false },
         )
     }
     if (pickEndTime) {
         YohakuTimePicker(
             title = "结束时间",
-            initial = clockText(endMinute),
-            onConfirm = { pickEndTime = false; ScheduleParse.toMinute(it)?.let { m -> endMinute = m } },
+            initial = Schedule.clockText(endMinute),
+            onConfirm = { pickEndTime = false; Schedule.parseClock(it)?.let { m -> endMinute = m } },
             onDismiss = { pickEndTime = false },
         )
     }
@@ -497,8 +498,6 @@ private fun PickerField(
     }
 }
 
-private fun clockText(minute: Int): String = "%02d:%02d".format(minute / 60, minute % 60)
-
 /** 日程提醒的提前量选项(与课程提醒同一套档位,便于理解)。 */
 private val REMIND_LEAD_OPTIONS = listOf(
     0 to "准点",
@@ -508,15 +507,3 @@ private val REMIND_LEAD_OPTIONS = listOf(
     30 to "30 分钟",
     60 to "1 小时",
 )
-
-/** "HH:MM" → 分钟;非法返回 null。 */
-private object ScheduleParse {
-    fun toMinute(text: String): Int? {
-        val parts = text.trim().split(":")
-        if (parts.size < 2) return null
-        val h = parts[0].trim().toIntOrNull() ?: return null
-        val m = parts[1].trim().toIntOrNull() ?: return null
-        if (h !in 0..23 || m !in 0..59) return null
-        return h * 60 + m
-    }
-}

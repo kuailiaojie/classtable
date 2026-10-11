@@ -247,6 +247,7 @@ fun ScheduleTimesScreen(
                         style = YohakuType.copy13,
                         color = colors.neutral7,
                         modifier = Modifier
+                            .yohakuTouchTarget()
                             .clickable { showGenerator = false }
                             .padding(8.dp),
                     )
@@ -258,6 +259,7 @@ fun ScheduleTimesScreen(
                     style = YohakuType.copy13,
                     color = colors.accent,
                     modifier = Modifier
+                        .yohakuTouchTarget()
                         .clickable { showGenerator = true }
                         .padding(vertical = 8.dp),
                 )

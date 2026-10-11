@@ -52,6 +52,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -258,7 +259,7 @@ fun YuketangLoginScreen(
                             text = "关闭",
                             style = YohakuType.copy13,
                             color = colors.accent,
-                            modifier = Modifier.clickable { closePopup() }.padding(8.dp),
+                            modifier = Modifier.yohakuTouchTarget().clickable { closePopup() }.padding(8.dp),
                         )
                     }
                 }
@@ -302,6 +303,7 @@ fun YuketangLoginScreen(
                 style = YohakuType.copy13,
                 color = if (canGoBack) colors.neutral7 else colors.neutral5,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(enabled = canGoBack) {
                         holder.active()?.goBack()
                     }
@@ -312,6 +314,7 @@ fun YuketangLoginScreen(
                 style = YohakuType.copy13,
                 color = if (canGoForward) colors.neutral7 else colors.neutral5,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable(enabled = canGoForward) {
                         holder.active()?.goForward()
                     }
@@ -322,6 +325,7 @@ fun YuketangLoginScreen(
                 style = YohakuType.copy13,
                 color = colors.neutral7,
                 modifier = Modifier
+                    .yohakuTouchTarget()
                     .clickable { holder.active()?.reload() }
                     .padding(vertical = 8.dp),
             )

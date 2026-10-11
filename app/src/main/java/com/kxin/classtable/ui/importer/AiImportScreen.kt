@@ -44,6 +44,7 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -213,6 +214,7 @@ fun AiImportScreen(
                     style = YohakuType.copy13,
                     color = colors.accent,
                     modifier = Modifier
+                        .yohakuTouchTarget()
                         .clickable { nav.navigate("settings") }
                         .padding(vertical = 4.dp),
                 )
@@ -246,6 +248,11 @@ fun AiImportScreen(
                     Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
                     Text(text = s.message, style = YohakuType.copy13, color = colors.error)
                 }
+                is AiUiState.Loading -> {
+                    // 识别期间给一行提示:此前只有一个「识别中…」的按钮文案,列表区一片空白
+                    Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+                    Text(text = "正在识别,请稍候…", style = YohakuType.copy13, color = colors.neutral7)
+                }
                 else -> {}
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
@@ -258,6 +265,15 @@ fun AiImportScreen(
                 horizontal = YohakuDimens.screenPadding,
             ),
         ) {
+            if (courses.isEmpty() && state is AiUiState.Idle) {
+                item {
+                    Text(
+                        text = "上传一张课表截图后会列出识别到的课程。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                }
+            }
             items(courses, key = { it.id }) { course ->
                 Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Text(

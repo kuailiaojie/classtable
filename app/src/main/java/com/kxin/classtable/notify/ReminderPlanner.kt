@@ -19,7 +19,6 @@ import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.NotifyMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
@@ -55,22 +54,23 @@ class ReminderPlanner @Inject constructor(
 
     /**
      * 重排全部提醒。幂等:签名没变且非强制时直接返回。
-     * 保持非 suspend(旧调用方遍布 App/仓库/接收器),内部 runBlocking 读一次配置与课程。
+     *
+     * suspend:内部要读一次配置与课程(DataStore + Room),以前用 `runBlocking` 包住整个方法,
+     * 会让调用线程一直阻塞到读完 —— 现在由调用方在其协程里直接挂起等待。所有调用点都在协程中
+     * (App / 仓库 / 接收器 / Worker),不再有谁需要同步返回。
      */
-    fun rescheduleAll(force: Boolean = false) {
-        runBlocking {
-            val settings = settingsRepository.settings.first()
-            val courses = dao.getAll().map { it.toDomain() }
-            val agenda = agendaDao.getAll().map { it.toDomain() }
-            val today = LocalDate.now()
-            val signature = signature(courses, agenda, settings, today)
-            val unchanged = !force && prefs.getString(KEY_SIGNATURE, null) == signature
-            if (unchanged) {
-                return@runBlocking
-            }
-            scheduleWindow(courses, agenda, settings, today)
-            prefs.edit().putString(KEY_SIGNATURE, signature).apply()
+    suspend fun rescheduleAll(force: Boolean = false) {
+        val settings = settingsRepository.settings.first()
+        val courses = dao.getAll().map { it.toDomain() }
+        val agenda = agendaDao.getAll().map { it.toDomain() }
+        val today = LocalDate.now()
+        val signature = signature(courses, agenda, settings, today)
+        val unchanged = !force && prefs.getString(KEY_SIGNATURE, null) == signature
+        if (unchanged) {
+            return
         }
+        scheduleWindow(courses, agenda, settings, today)
+        prefs.edit().putString(KEY_SIGNATURE, signature).apply()
     }
 
     /** 取消某课程已排的全部提醒(课程被删除时调用)。 */
@@ -548,8 +548,8 @@ class ReminderPlanner @Inject constructor(
         /** 全天日程默认提醒时刻:09:00(可在「设置 → 提醒 → 日程提醒」改)。 */
         private const val DEFAULT_AGENDA_ALLDAY_MINUTE = 9 * 60
 
-        /** 短时唤醒锁:接收器要在系统再次休眠前读完数据并发通知。 */
-        fun withShortWakeLock(context: Context, tag: String, block: () -> Unit) {
+        /** 短时唤醒锁:接收器要在系统再次休眠前读完数据并发通知。block 可挂起(会读库 / 重排)。 */
+        suspend fun withShortWakeLock(context: Context, tag: String, block: suspend () -> Unit) {
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val lock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "classtable:$tag")
             runCatching { lock?.acquire(5_000L) }
