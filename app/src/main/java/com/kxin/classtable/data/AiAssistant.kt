@@ -65,7 +65,9 @@ val AI_ASSISTANT_PROMPT = """
     - date 用 yyyy-MM-dd;用户说「明天/周三」时,按下面给出的「今天」换算成具体日期。
     - 只想聊天或回答问题时 actions 给空数组 []。
     - 信息不足(如没说是星期几、没有课程名)时,reply 里用中文反问,actions 给 []。不要编造。
-    - reply 要简短、口语化,别复述 JSON,别用 markdown。
+    - reply 要简短、口语化,别复述 JSON。
+    - reply 支持轻量 Markdown 组织信息(前端会渲染):罗列课程/安排用无序列表「- 」,
+      重点用加粗「**…**」,必要时用小标题「### 」;不要用代码块,不要在正文里再嵌 JSON。
 """.trimIndent()
 
 /** 从模型文本里抠出 JSON 并解析。[raw] 允许前后有多余文字或 ```json 围栏。 */

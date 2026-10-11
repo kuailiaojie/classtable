@@ -1,5 +1,7 @@
 package com.kxin.classtable.ui.assistant
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,19 +43,21 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuMarkdown
 import com.kxin.classtable.design.YohakuOutlineButton
-import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Dates
-import java.time.LocalDate
 
 /**
  * AI 助手面板内容:一句话建课 / 建日程,或者询问课表安排。
  *
  * 模型返回的**动作先在聊天气泡里预览**,点「确认添加」才落库 —— 模型幻觉不会直接改到课表。
- * 面板本身由 [AssistantOverlay] 从课表页顶部下拉呼出,不再是独立的底部导航页。
+ * 面板本身由 [AssistantOverlay] 从课表页顶部滑入(入口是课表页头的「✦ 助手」按钮)。
+ *
+ * 三条区分「谁在说话」的线索:用户是右对齐的 accent 实底气泡;助手是带「✦ 整理结果」标签的
+ * 无气泡正文(走 [YohakuMarkdown],列表 / 加粗都能落回纸面字阶);待落库动作另起一张确认卡。
  */
 @Composable
 fun AssistantPanel(
@@ -102,27 +112,31 @@ fun AssistantPanel(
                 horizontal = YohakuDimens.screenPadding,
                 vertical = YohakuDimens.gapTight,
             ),
-            verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapTight),
+            verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapCard),
         ) {
             if (messages.isEmpty()) {
                 item { EmptyHint() }
             }
             items(messages, key = { it.id }) { message ->
-                if (message.fromUser) UserBubble(message.text) else AssistantBubble(
-                    message = message,
-                    onConfirm = { viewModel.confirm(message.id) },
-                    onDismiss = { viewModel.dismiss(message.id) },
-                )
+                if (message.fromUser) {
+                    UserBubble(message.text)
+                } else {
+                    AssistantBubble(
+                        message = message,
+                        onConfirm = { viewModel.confirm(message.id) },
+                        onDismiss = { viewModel.dismiss(message.id) },
+                    )
+                }
             }
             if (busy) {
-                item { Text("思考中…", style = YohakuType.copy13, color = colors.neutral6) }
+                item { AssistantLabel(text = "正在整理…", color = colors.neutral6) }
             }
         }
 
         if (toast != null) {
             Text(
                 text = toast.orEmpty(),
-                style = YohakuType.copy13,
+                style = YohakuType.label12,
                 color = colors.accent,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -130,55 +144,43 @@ fun AssistantPanel(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = YohakuDimens.screenPadding,
-                    vertical = YohakuDimens.gapTight,
-                ),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            YohakuTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = "说一句话,如:周三下午加一门高数,1-16 周",
-                modifier = Modifier.weight(1f),
-                singleLine = false,
-                maxLines = 4,
-            )
-            Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
-            YohakuButton(
-                text = "发送",
-                onClick = {
-                    viewModel.send(input)
-                    input = ""
-                },
-                enabled = !busy && input.isNotBlank(),
-            )
-        }
+        Composer(
+            value = input,
+            onValueChange = { input = it },
+            canSend = !busy && input.isNotBlank(),
+            onSend = {
+                viewModel.send(input)
+                input = ""
+            },
+        )
     }
 }
 
+/** 用户消息:右对齐的 accent 实底气泡,宽度随内容,最多占 85%。 */
 @Composable
 private fun UserBubble(text: String) {
     val colors = LocalYohakuColors.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Surface(
-            shape = RoundedCornerShape(YohakuDimens.radiusCard),
-            color = colors.accent,
-            modifier = Modifier.fillMaxWidth(0.85f),
-        ) {
-            Text(
-                text = text,
-                style = YohakuType.copy15,
-                color = androidx.compose.ui.graphics.Color.White,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            )
+        Box(modifier = Modifier.fillMaxWidth(0.85f), contentAlignment = Alignment.CenterEnd) {
+            Surface(
+                shape = RoundedCornerShape(YohakuDimens.radiusSheet),
+                color = colors.accent,
+            ) {
+                Text(
+                    text = text,
+                    style = YohakuType.copy15,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }
 
+/**
+ * 助手消息:先一行身份标签(「✦ 整理结果」/「⚠ 出错了」)亮明这是 AI 说的,再是正文。
+ * 正文无气泡 —— 与用户气泡拉开层级,也更适合承载成段的列表 / 小标题。
+ */
 @Composable
 private fun AssistantBubble(
     message: AssistantMessage,
@@ -188,10 +190,20 @@ private fun AssistantBubble(
     val colors = LocalYohakuColors.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = message.text,
-            style = YohakuType.copy15,
-            color = if (message.failed) colors.error else colors.neutral9,
+            text = if (message.failed) "⚠ 出错了" else "✦ 整理结果",
+            style = YohakuType.label12,
+            color = if (message.failed) colors.error else colors.neutral7,
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        if (message.failed) {
+            Text(text = message.text, style = YohakuType.copy15, color = colors.error)
+        } else {
+            YohakuMarkdown(
+                text = message.text,
+                baseStyle = YohakuType.copy15,
+                baseColor = colors.neutral9,
+            )
+        }
         if (message.actions.isNotEmpty()) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
             YohakuCard(modifier = Modifier.fillMaxWidth()) {
@@ -222,6 +234,17 @@ private fun AssistantBubble(
     }
 }
 
+/** 等待态:沿用助手身份标签,下面一行提示,避免「裸文本飘在空里」。 */
+@Composable
+private fun AssistantLabel(text: String, color: Color) {
+    val colors = LocalYohakuColors.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "✦ 整理结果", style = YohakuType.label12, color = colors.neutral7)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = text, style = YohakuType.copy15, color = color)
+    }
+}
+
 @Composable
 private fun EmptyHint() {
     val colors = LocalYohakuColors.current
@@ -241,6 +264,71 @@ private fun EmptyHint() {
             style = YohakuType.label12,
             color = colors.neutral6,
         )
+    }
+}
+
+/**
+ * 输入区:一枚胶囊输入框 + 右侧圆形发送键 —— 聊天语境不该出现「下划线表单 + 旁边一个方块按钮」
+ * 那种填表长相。发送键在无内容 / 请求进行中置灰且不可点。
+ */
+@Composable
+private fun Composer(
+    value: String,
+    onValueChange: (String) -> Unit,
+    canSend: Boolean,
+    onSend: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = YohakuDimens.screenPadding, vertical = YohakuDimens.gapTight),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(percent = 50),
+            color = colors.raised,
+            border = BorderStroke(1.dp, colors.line),
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                textStyle = YohakuType.copy15.copy(color = colors.neutral9),
+                cursorBrush = SolidColor(colors.accent),
+                maxLines = 4,
+                decorationBox = { inner ->
+                    Box {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = "说一句话,如:周三下午加一门高数,1-16 周",
+                                style = YohakuType.copy15,
+                                color = colors.neutral5,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+        Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (canSend) colors.accent else colors.neutral3)
+                .clickable(enabled = canSend, onClick = onSend),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "↑",
+                style = YohakuType.title20,
+                color = if (canSend) Color.White else colors.neutral6,
+            )
+        }
     }
 }
 

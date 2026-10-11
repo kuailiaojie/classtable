@@ -148,7 +148,7 @@ fun ClasstableRoot(
         }
 
         val nav = rememberNavController()
-        // AI 助手是从课表页顶部下拉呼出的覆盖层(不再是底部导航页);对话在本次会话内保留
+        // AI 助手是从课表页头「✦ 助手」按钮打开的覆盖层(不再是底部导航页);对话在本次会话内保留
         var assistantOpen by rememberSaveable { mutableStateOf(false) }
         // 首次启动权限引导:未完成且存在未开启项 → 弹出(完成/跳过后只弹一次,设置页可重进)
         val context = LocalContext.current
@@ -325,7 +325,7 @@ fun ClasstableRoot(
                         .padding(vertical = 8.dp),
                 )
             }
-            // AI 助手覆盖层:从课表页顶部下拉呼出;打开时底部导航已隐藏,面板盖在最上层
+            // AI 助手覆盖层:课表页头「✦ 助手」打开;打开时底部导航已隐藏,面板盖在最上层
             if (assistantOpen) {
                 AssistantOverlay(
                     onDismiss = { assistantOpen = false },

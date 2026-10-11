@@ -35,12 +35,11 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 
 /**
- * AI 助手覆盖层:从课表页**顶部下拉**呼出,不是独立路由页(借鉴 SleepDown 的「今日助手」)。
+ * AI 助手覆盖层:从课表页头的「✦ 助手」按钮打开,不是独立路由页。
  *
- * 结构:压暗底层的遮罩 + 贴顶滑入的面板。面板占屏高 [PANEL_HEIGHT_FRACTION],底部圆角,
- * 与「下拉」的方向一致 —— 越往上拉越进来。
+ * 结构:压暗底层的遮罩 + 从顶部滑入的面板。面板占屏高 [PANEL_HEIGHT_FRACTION],底部圆角。
  *
- * 关闭有两条路:点遮罩 / 系统返回键 / 面板左上角返回箭头。三条都先跑退场动画,
+ * 关闭有三条路:点遮罩 / 系统返回键 / 面板左上角返回箭头。三条都先跑退场动画,
  * 动画结束才回调 [onDismiss] 让宿主卸载,避免面板"啪"地消失。
  */
 @Composable
@@ -106,7 +105,10 @@ fun AssistantOverlay(
                     bottomStart = YohakuDimens.radiusSheet,
                     bottomEnd = YohakuDimens.radiusSheet,
                 ),
-                color = colors.paper,
+                // 浮起面 + 投影:面板要读成「浮在课表之上的一层」,而不是盖上去的一张白纸
+                // (与悬浮底部导航同一套浮起语言:更亮的表面 + 一道投影,不用硬边框)。
+                color = colors.raised,
+                shadowElevation = YohakuDimens.navElevation,
             ) {
                 AssistantPanel(
                     onClose = { close() },
