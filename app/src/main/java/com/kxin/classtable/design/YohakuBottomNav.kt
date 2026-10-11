@@ -83,6 +83,8 @@ fun YohakuBottomNav(
 @Composable
 private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalYohakuColors.current
+    // 切页签给一下轻触感 —— 这是全应用最常用的控件,此前一处触感都没有
+    val haptics = rememberYohakuHaptics()
     val labelColor by animateColorAsState(
         targetValue = if (selected) colors.accent else colors.neutral7,
         animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
@@ -108,13 +110,18 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
-                onClick = onClick,
+                onClick = {
+                    // 已经在这一页就不再给触感(点了没变化还震一下是骗人)
+                    if (!selected) haptics.tick()
+                    onClick()
+                },
             )
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .padding(vertical = 7.dp),
+            // 竖向留到 9dp:让整项高度够到 44dp 的触达下限
+            .padding(vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(

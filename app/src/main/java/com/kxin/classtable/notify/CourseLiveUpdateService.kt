@@ -8,6 +8,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
@@ -20,7 +21,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
@@ -76,26 +76,33 @@ class CourseLiveUpdateService : Service() {
         // onScreenIdentity 是空的,那次会正常上屏
         val identity = payload.notificationIdentityAt(now)
         if (onScreenIdentity != identity) {
-            startForegroundNotification(payload, now)
             onScreenIdentity = identity
+            // 上屏放到协程里:取「最新公告」要读 DataStore + Room,不能在 onStartCommand 的主线程阻塞
+            scope.launch { startForegroundNotification(payload, now) }
         }
         startRefreshLoop(planner, payload)
         return START_STICKY
     }
 
-    private fun startForegroundNotification(payload: LiveUpdate, now: Long) {
+    private suspend fun startForegroundNotification(payload: LiveUpdate, now: Long) {
         val notification = Notifier.buildLiveUpdate(
             context = this,
             payload = payload,
             now = now,
             // 首次上屏时取一次;后续由刷新循环更新(公告可能在课前那几分钟里刚发出来)
-            announcement = runBlocking { latestAnnouncementTitle(payload.courseId) },
+            announcement = latestAnnouncementTitle(payload.courseId),
         )
         val attached = runCatching {
             Notifier.postLiveUpdate(this, notification) { id, value -> attachForeground(id, value) }
         }
         if (attached.isFailure) {
+            // 挂前台失败:通知可能已经上屏但没有服务兜着,必须一并收掉,否则留下一条用户划不掉的常驻通知
             Log.w(TAG, "startForeground 失败: ${attached.exceptionOrNull()?.javaClass?.simpleName}")
+            Crash.recordException(
+                attached.exceptionOrNull() ?: IllegalStateException("startForeground failed"),
+                "op" to "live_update_start_foreground",
+            )
+            Notifier.cancelLiveUpdate(this)
             stopSelf()
         }
     }

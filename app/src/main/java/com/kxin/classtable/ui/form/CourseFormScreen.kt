@@ -43,12 +43,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.CoursePalette
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuConfirmDialog
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuTextField
@@ -79,6 +82,9 @@ class CourseFormViewModel @Inject constructor(
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
@@ -92,17 +98,29 @@ class CourseFormViewModel @Inject constructor(
 
     fun save(course: Course) {
         viewModelScope.launch {
-            // 本地失败也不阻断返回:避免保存/删除后页面卡住
+            // 只在真正写成功后才返回上一层:写失败仍停留在表单,数据不丢,并说明原因。
             runCatching { courseRepository.save(course) }
-            _saved.value = true
+                .onSuccess { _saved.value = true }
+                .onFailure {
+                    Crash.recordException(it, "op" to "course_save")
+                    _error.value = "保存失败,请重试"
+                }
         }
     }
 
     fun delete(id: String) {
         viewModelScope.launch {
             runCatching { courseRepository.delete(id) }
-            _saved.value = true
+                .onSuccess { _saved.value = true }
+                .onFailure {
+                    Crash.recordException(it, "op" to "course_delete")
+                    _error.value = "删除失败,请重试"
+                }
         }
+    }
+
+    fun clearError() {
+        _error.value = null
     }
 }
 
@@ -119,6 +137,7 @@ fun CourseFormScreen(
 ) {
     val colors = LocalYohakuColors.current
     val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val editing = viewModel.editing
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
@@ -219,8 +238,7 @@ fun CourseFormScreen(
     val weekValid = weekTypeIdx != 3 || weekSpec.weeks.isNotEmpty()
 
     /** 颜色:留空 = 自动配色;填了就必须是 #RRGGBB / #RRGGBBAA。 */
-    val colorValid = colorHex.isBlank() ||
-        Regex("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$").matches(colorHex.trim())
+    val colorValid = colorHex.isBlank() || ColorHexRegex.matches(colorHex.trim())
 
     // 保存条件收齐:课名、周次、自定义时间、颜色。此前按钮只按周次启用,而 submit() 还拦了
     // 课名与时间 —— 于是点了没反应,用户看不出为什么。现在禁用即说明原因。
@@ -323,6 +341,19 @@ fun CourseFormScreen(
     val weekNames = listOf("一", "二", "三", "四", "五", "六", "日")
     val weekTypeNames = listOf("每周", "单周", "双周", "自定义")
 
+    // 保存/删除失败时留在表单并说明原因,而不是静默返回、让用户误以为已生效
+    error?.let { message ->
+        YohakuDialog(
+            onDismissRequest = { viewModel.clearError() },
+            title = "操作未完成",
+            actions = {
+                YohakuDialogAction(text = "知道了", accent = true, onClick = { viewModel.clearError() })
+            },
+        ) {
+            Text(text = message, style = YohakuType.copy14, color = colors.neutral9)
+        }
+    }
+
     // 删除不可逆:补一层确认,别让行尾一个小字决定一门课的去留
     var confirmDelete by remember { mutableStateOf(false) }
     val haptics = rememberYohakuHaptics()
@@ -349,6 +380,15 @@ fun CourseFormScreen(
             onBack = { nav.popBackStack() },
         )
 
+        if (courseId != null && editing == null) {
+            // 编辑态:等目标课程从本地库出来再建表单,避免先闪一帧空表单再跳变
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "载入中…", style = YohakuType.copy14, color = colors.neutral6)
+            }
+        } else {
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -503,15 +543,15 @@ fun CourseFormScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(top = 10.dp),
             ) {
-                CoursePalette.PRESETS.forEach { (label, hex) ->
-                    val selected = colorHex.equals(hex, ignoreCase = true)
+                CoursePaletteColors.forEach { preset ->
+                    val selected = colorHex.equals(preset.hex, ignoreCase = true)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         // 选中态用一圈描边表达 —— 与「外观 → 强调色」色板同一套(此前这里只让文字变色,
                         // 同一个「选中了哪一格」在应用里有两套画法)。
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier
                                 .yohakuTouchTarget()
-                                .clickable { colorHex = hex },
+                                .clickable { colorHex = preset.hex },
                             contentAlignment = Alignment.Center,
                         ) {
                             androidx.compose.foundation.layout.Box(
@@ -526,11 +566,11 @@ fun CourseFormScreen(
                                     )
                                     .padding(4.dp)
                                     .clip(CircleShape)
-                                    .background(Color(android.graphics.Color.parseColor(hex))),
+                                    .background(preset.color),
                             )
                         }
                         Text(
-                            text = label,
+                            text = preset.label,
                             style = YohakuType.label12,
                             color = if (selected) colors.neutral10 else colors.neutral7,
                         )
@@ -684,6 +724,7 @@ fun CourseFormScreen(
                 enabled = canSave,
             )
         }
+        }
     }
 }
 
@@ -700,3 +741,13 @@ private fun FieldLabel(text: String) {
  * 宁可放宽也不把数字裁掉(那种情况下宽度差只影响放大后的排版)。
  */
 private val WeekChipMinWidth = 44.dp
+
+/** 颜色校验正则:提为常量,避免每敲一键都重新编译一次。 */
+private val ColorHexRegex = Regex("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+/** 预设色板(标签 / 色值 / 预解析的 Color):提前算好,避免每次重组都对 20 个色值 parseColor。 */
+private val CoursePaletteColors: List<PresetColor> = CoursePalette.PRESETS.map { (label, hex) ->
+    PresetColor(label, hex, Color(android.graphics.Color.parseColor(hex)))
+}
+
+private data class PresetColor(val label: String, val hex: String, val color: Color)

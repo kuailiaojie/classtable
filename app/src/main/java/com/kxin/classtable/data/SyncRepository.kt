@@ -192,16 +192,37 @@ class SyncRepository @Inject constructor(
         Result.success(Unit)
     }
 
-    /** 拉集合全部文档,返回 [{id, fields}]。pageSize=300 覆盖课程量级,无需翻页。 */
+    /**
+     * 拉取集合全部文档,返回 [{id, fields}]。
+     *
+     * Firestore REST 单次响应有 pageSize 上限,必须按 `nextPageToken` 翻页 —— 否则课程/日程
+     * 超过一页时只拿到前缀,新设备上会出现「课表不完整」,而后续的本地清理又据此删掉多余行。
+     */
     private suspend fun pullDocuments(colPath: String, token: String): List<JSONObject> {
-        val resp = gateway.firestore("$colPath?pageSize=300", "GET", null, token)
-        val docs = resp.optJSONArray("documents") ?: return emptyList()
-        val out = ArrayList<JSONObject>(docs.length())
-        for (i in 0 until docs.length()) {
-            val doc = docs.optJSONObject(i) ?: continue
-            val fields = doc.optJSONObject("fields") ?: continue
-            out.add(JSONObject().put("id", doc.optString("name").substringAfterLast('/')).put("fields", fields))
-        }
+        val out = ArrayList<JSONObject>()
+        var pageToken: String? = null
+        do {
+            val sep = if (colPath.contains('?')) '&' else '?'
+            val url = buildString {
+                append(colPath)
+                append(sep)
+                append("pageSize=300")
+                if (!pageToken.isNullOrBlank()) {
+                    append("&pageToken=")
+                    append(java.net.URLEncoder.encode(pageToken, "UTF-8"))
+                }
+            }
+            val resp = gateway.firestore(url, "GET", null, token)
+            val docs = resp.optJSONArray("documents")
+            if (docs != null) {
+                for (i in 0 until docs.length()) {
+                    val doc = docs.optJSONObject(i) ?: continue
+                    val fields = doc.optJSONObject("fields") ?: continue
+                    out.add(JSONObject().put("id", doc.optString("name").substringAfterLast('/')).put("fields", fields))
+                }
+            }
+            pageToken = resp.optString("nextPageToken").ifBlank { null }
+        } while (pageToken != null)
         return out
     }
 

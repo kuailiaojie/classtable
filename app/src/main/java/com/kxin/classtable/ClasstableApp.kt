@@ -84,43 +84,49 @@ class ClasstableApp : Application() {
         // Remote Config 后台拉一次;失败/大陆取不到就用代码默认值,不影响任何功能
         scope.launch { RemoteConfig.fetch() }
 
-        // 通知渠道在启动时就建齐:FCM 的系统兜底展示(通知型消息)也才找得到「课表动态」,
-        // 不会退回 SDK 自建的 Miscellaneous;顺带让老用户看到改名后的渠道文案。
-        Notifier.ensureChannels(this)
+        // 通知渠道与三组定时任务都放到后台线程:建渠道是系统 IPC,WorkManager 首次调用会初始化
+        // 自己的 SQLite 库并各写一次 enqueue —— 放在 onCreate 主线程会直接计入冷启动耗时,
+        // 而首帧之前完全不需要它们(渠道只要在任何通知真正上屏前建好即可)。
+        scope.launch {
+            // 通知渠道在启动时就建齐:FCM 的系统兜底展示(通知型消息)也才找得到「课表动态」,
+            // 不会退回 SDK 自建的 Miscellaneous;顺带让老用户看到改名后的渠道文案。
+            Notifier.ensureChannels(this@ClasstableApp)
 
-        // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "reminder_self_heal",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<ReminderSelfHealWorker>(12, java.util.concurrent.TimeUnit.HOURS).build(),
-        )
+            val workManager = WorkManager.getInstance(this@ClasstableApp)
+            // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。
+            workManager.enqueueUniquePeriodicWork(
+                "reminder_self_heal",
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<ReminderSelfHealWorker>(12, java.util.concurrent.TimeUnit.HOURS).build(),
+            )
 
-        // 自动检查更新:每天一次(仅在联网时跑);开关与节流在 UpdateRepository 里判断。
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "update_check",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<UpdateCheckWorker>(24, java.util.concurrent.TimeUnit.HOURS)
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
-                )
-                .build(),
-        )
+            // 自动检查更新:每天一次(仅在联网时跑);开关与节流在 UpdateRepository 里判断。
+            workManager.enqueueUniquePeriodicWork(
+                "update_check",
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<UpdateCheckWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .build(),
+            )
 
-        // 雨课堂公告:每小时拉一次(仅在联网时跑);开关与登录态在 Worker 里判断,
-        // 拉取只为把公告缓存刷新到本机,有新公告时才另发通知。与课程提醒互不相干。
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "announcement_check",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<AnnouncementCheckWorker>(1, java.util.concurrent.TimeUnit.HOURS)
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
-                )
-                .build(),
-        )
+            // 雨课堂公告:每小时拉一次(仅在联网时跑);开关与登录态在 Worker 里判断,
+            // 拉取只为把公告缓存刷新到本机,有新公告时才另发通知。与课程提醒互不相干。
+            workManager.enqueueUniquePeriodicWork(
+                "announcement_check",
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<AnnouncementCheckWorker>(1, java.util.concurrent.TimeUnit.HOURS)
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    )
+                    .build(),
+            )
+        }
 
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌
         scope.launch {

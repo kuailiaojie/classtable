@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,7 +36,9 @@ class AgendaRepository @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun observeAll(): Flow<List<AgendaEvent>> =
-        dao.observeAll().map { list -> list.map { it.toDomain() } }
+        dao.observeAll()
+            .map { list -> list.map { it.toDomain() } }
+            .flowOn(Dispatchers.Default)
 
     suspend fun get(id: String): AgendaEvent? = dao.getById(id)?.toDomain()
 

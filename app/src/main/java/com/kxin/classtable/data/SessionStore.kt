@@ -30,30 +30,40 @@ class SessionStore @Inject constructor(
 
     fun read(): AuthSession? {
         val p = prefs ?: return null
-        val uid = p.getString(KEY_UID, null) ?: return null
-        val idToken = p.getString(KEY_ID_TOKEN, null) ?: return null
-        val refreshToken = p.getString(KEY_REFRESH_TOKEN, null) ?: return null
-        return AuthSession(
-            uid = uid,
-            email = p.getString(KEY_EMAIL, null),
-            idToken = idToken,
-            refreshToken = refreshToken,
-            expiresAt = p.getLong(KEY_EXPIRES_AT, 0L),
-        )
+        return runCatching {
+            val uid = p.getString(KEY_UID, null) ?: return null
+            val idToken = p.getString(KEY_ID_TOKEN, null) ?: return null
+            val refreshToken = p.getString(KEY_REFRESH_TOKEN, null) ?: return null
+            AuthSession(
+                uid = uid,
+                email = p.getString(KEY_EMAIL, null),
+                idToken = idToken,
+                refreshToken = refreshToken,
+                expiresAt = p.getLong(KEY_EXPIRES_AT, 0L),
+            )
+        }.getOrElse { e ->
+            // 主密钥失效 / 密文损坏(ROM 升级、Keystore 重置、Auto Backup 还原)时 getString 会抛。
+            // 旧实现不捕获,于是每次启动都在这里崩、用户永远进不去;现在清掉重来、退化为未登录。
+            Crash.recordException(e, "op" to "session_read")
+            runCatching { p.edit().clear().apply() }
+            null
+        }
     }
 
     fun write(session: AuthSession?) {
         val p = prefs ?: return
-        p.edit().clear().apply()
-        if (session != null) {
-            p.edit()
-                .putString(KEY_UID, session.uid)
-                .putString(KEY_EMAIL, session.email)
-                .putString(KEY_ID_TOKEN, session.idToken)
-                .putString(KEY_REFRESH_TOKEN, session.refreshToken)
-                .putLong(KEY_EXPIRES_AT, session.expiresAt)
-                .apply()
-        }
+        runCatching {
+            p.edit().clear().apply()
+            if (session != null) {
+                p.edit()
+                    .putString(KEY_UID, session.uid)
+                    .putString(KEY_EMAIL, session.email)
+                    .putString(KEY_ID_TOKEN, session.idToken)
+                    .putString(KEY_REFRESH_TOKEN, session.refreshToken)
+                    .putLong(KEY_EXPIRES_AT, session.expiresAt)
+                    .apply()
+            }
+        }.onFailure { Crash.recordException(it, "op" to "session_write") }
     }
 
     private companion object {

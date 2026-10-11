@@ -1,5 +1,9 @@
 package com.kxin.classtable.ui.importer
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -22,7 +26,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -46,12 +49,17 @@ import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import javax.inject.Inject
 
 sealed interface AiUiState {
@@ -63,6 +71,7 @@ sealed interface AiUiState {
 
 @HiltViewModel
 class AiImportViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val courseRepository: CourseRepository,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
@@ -78,17 +87,29 @@ class AiImportViewModel @Inject constructor(
     private val _imported = MutableStateFlow(false)
     val imported: StateFlow<Boolean> = _imported.asStateFlow()
 
-    fun analyze(settings: AppSettings, imageBase64: String, mimeType: String) {
+    /**
+     * 读取所选图片 → 下采样重编码 → 交给 AI 识别。
+     *
+     * 读文件与 Base64 编码都放在 IO 线程:一张相机原图有几十 MB,在主线程读会卡顿甚至 ANR;
+     * 下采样后通常只剩几百 KB,既省流量也避免 OOM。
+     */
+    fun analyze(settings: AppSettings, uri: Uri) {
         viewModelScope.launch {
             _state.value = AiUiState.Loading
+            val encoded = withContext(Dispatchers.IO) { runCatching { encodeImageForUpload(context, uri) } }
+            val image = encoded.getOrElse { e ->
+                _state.value = AiUiState.Error(e.message ?: "图片读取失败")
+                Crash.recordException(e, "op" to "ai_image_read")
+                return@launch
+            }
             val outcome = Perf.trace("ai_recognize_duration") {
                 AiClient.extractSchedule(
                     provider = settings.provider(),
                     apiKey = settings.aiApiKey,
                     baseUrl = settings.aiBaseUrl,
                     model = settings.aiModel,
-                    imageBase64 = imageBase64,
-                    mimeType = mimeType,
+                    imageBase64 = image.base64,
+                    mimeType = image.mime,
                     weekCount = settings.semesterWeekCount,
                 )
             }
@@ -115,6 +136,39 @@ class AiImportViewModel @Inject constructor(
     }
 }
 
+private const val MAX_IMAGE_DIM = 1600
+private const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
+
+private data class EncodedImage(val base64: String, val mime: String)
+
+/** 读取图片并缩到最长边 ≤ [MAX_IMAGE_DIM] 再编码为 JPEG,返回 Base64 与 MIME。 */
+private fun encodeImageForUpload(context: Context, uri: Uri): EncodedImage {
+    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IOException("无法读取所选图片")
+    if (bytes.size > MAX_IMAGE_BYTES) throw IOException("图片过大,请选择 20MB 以内的图片")
+
+    // 先只读尺寸、算出采样率,避免把整张原图解码进内存。
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val longest = maxOf(bounds.outWidth, bounds.outHeight)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0 || longest <= 0) {
+        // 无法解析尺寸(如部分 HEIC):退回原始字节,交给服务端判断
+        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        return EncodedImage(Base64.encodeToString(bytes, Base64.NO_WRAP), mime)
+    }
+    var sample = 1
+    while (longest / sample > MAX_IMAGE_DIM) sample *= 2
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        ?: throw IOException("图片无法解码,请换一张图片")
+    return try {
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        EncodedImage(Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP), "image/jpeg")
+    } finally {
+        bitmap.recycle()
+    }
+}
+
 /** AI 图片导入:拍摄/选择课表图片 → 配置的 AI 供应商识别(Gemini / OpenAI 兼容)→ 预览 → 导入。 */
 @Composable
 fun AiImportScreen(
@@ -122,7 +176,6 @@ fun AiImportScreen(
     viewModel: AiImportViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
-    val context = LocalContext.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val result by viewModel.result.collectAsStateWithLifecycle()
@@ -134,15 +187,7 @@ fun AiImportScreen(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri != null && settings.aiApiKey.isNotBlank()) {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-            if (bytes != null) {
-                viewModel.analyze(
-                    settings,
-                    Base64.encodeToString(bytes, Base64.NO_WRAP),
-                    mime,
-                )
-            }
+            viewModel.analyze(settings, uri)
         }
     }
 

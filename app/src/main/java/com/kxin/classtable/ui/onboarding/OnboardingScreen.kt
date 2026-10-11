@@ -122,13 +122,6 @@ fun OnboardingScreen(
             }
         }
     }
-    val header = entrance[0].value
-    val desc = entrance[1].value
-    val notifRow = entrance[2].value
-    val alarmRow = entrance[3].value
-    val batteryRow = entrance[4].value
-    val autoStartRow = entrance[5].value
-    val bottomBlock = entrance[6].value
 
     Column(
         modifier = Modifier
@@ -143,14 +136,14 @@ fun OnboardingScreen(
                 text = "开启提醒\n不错过每节课",
                 style = YohakuType.title24,
                 color = colors.neutral10,
-                modifier = Modifier.entrance(header),
+                modifier = Modifier.entrance { entrance[0].value },
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "课程提醒依赖系统闹钟与通知权限。国产 ROM 会默认限制后台,请逐项开启(约 1 分钟)。这些也可稍后在「设置 → 提醒权限」重新打开。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
-                modifier = Modifier.entrance(desc),
+                modifier = Modifier.entrance { entrance[1].value },
             )
             Spacer(modifier = Modifier.height(14.dp))
         }
@@ -165,7 +158,7 @@ fun OnboardingScreen(
             ok = notifOk,
             hint = "显示课程提醒通知",
             onClick = { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
-            modifier = Modifier.entrance(notifRow),
+            modifier = Modifier.entrance { entrance[2].value },
         )
         Box(modifier = Modifier
             .fillMaxWidth()
@@ -177,7 +170,7 @@ fun OnboardingScreen(
             ok = alarmOk,
             hint = "准时触发提醒(Android 12+)",
             onClick = { RomHelper.exactAlarmSettingsIntent(context)?.let { context.startActivity(it) } },
-            modifier = Modifier.entrance(alarmRow),
+            modifier = Modifier.entrance { entrance[3].value },
         )
         Box(modifier = Modifier
             .fillMaxWidth()
@@ -189,7 +182,7 @@ fun OnboardingScreen(
             ok = batteryOk,
             hint = "防止系统清理闹钟",
             onClick = { context.startActivity(RomHelper.batteryOptimizationIntent(context)) },
-            modifier = Modifier.entrance(batteryRow),
+            modifier = Modifier.entrance { entrance[4].value },
         )
         if (needsAutoStart) {
             Box(modifier = Modifier
@@ -207,7 +200,7 @@ fun OnboardingScreen(
                         context.startActivity(RomHelper.appDetailsIntent(context))
                     }
                 },
-                modifier = Modifier.entrance(autoStartRow),
+                modifier = Modifier.entrance { entrance[5].value },
             )
         }
 
@@ -216,7 +209,7 @@ fun OnboardingScreen(
         Column(
             modifier = Modifier
                 .padding(horizontal = YohakuDimens.screenPadding)
-                .entrance(bottomBlock),
+                .entrance { entrance[6].value },
         ) {
             Text(
                 text = "已开启 $doneCount / $totalCount",
@@ -267,8 +260,14 @@ fun OnboardingScreen(
 /** 入场编排的步数:标题、说明,通知 / 精确闹钟 / 电池白名单 / 自启动四行,再加底部按钮块。 */
 private const val ENTRANCE_STEPS = 7
 
-/** 把入场进度落到合成层:淡入 + 上移,不触发布局。 */
-private fun Modifier.entrance(progress: Float): Modifier = graphicsLayer {
-    alpha = progress
-    translationY = (1f - progress) * 18f
+/**
+ * 把入场进度落到合成层:淡入 + 上移,不触发布局。
+ *
+ * progress 以 lambda 传入,读取发生在合成层(lambda)而不是组合阶段 —— 否则每一步动画都会
+ * 让整个引导页重组(七步 stagger 期间就是每秒 60 次整屏重组)。
+ */
+private fun Modifier.entrance(progress: () -> Float): Modifier = graphicsLayer {
+    val p = progress()
+    alpha = p
+    translationY = (1f - p) * 18f
 }

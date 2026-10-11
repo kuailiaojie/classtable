@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
+import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
@@ -61,6 +63,21 @@ fun AccountScreen(
     var mode by rememberSaveable { mutableIntStateOf(0) } // 0 = 登录, 1 = 注册
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    // 退出登录不可逆(需重登):与雨课堂一致,补一层确认
+    var confirmSignOut by remember { mutableStateOf(false) }
+    if (confirmSignOut) {
+        YohakuConfirmDialog(
+            title = "退出登录",
+            message = "退出后将停止云同步,本机数据仍保留;重新登录可继续同步。",
+            confirmText = "退出",
+            destructive = false,
+            onDismiss = { confirmSignOut = false },
+            onConfirm = {
+                confirmSignOut = false
+                viewModel.signOut()
+            },
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -94,7 +111,7 @@ fun AccountScreen(
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
                 YohakuButton(
                     text = "退出登录",
-                    onClick = { viewModel.signOut() },
+                    onClick = { confirmSignOut = true },
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 )

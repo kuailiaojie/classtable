@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,11 +39,17 @@ class CourseRepository @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun observeAll(): Flow<List<Course>> =
-        dao.observeAll().map { list -> list.map { it.toDomain() } }
+        dao.observeAll()
+            .map { list -> list.map { it.toDomain() } }
+            // Room 查询本身在 IO,但行映射默认发生在收集者线程(Main.immediate)。
+            // 这里显式挪到 Default,避免大量课程时映射卡主线程。
+            .flowOn(Dispatchers.Default)
 
     /** 星期 day(1=周一)当天有课的课程流。 */
     fun observeByWeekday(weekday: Int): Flow<List<Course>> =
-        dao.observeByWeekday(1 shl (weekday - 1)).map { list -> list.map { it.toDomain() } }
+        dao.observeByWeekday(1 shl (weekday - 1))
+            .map { list -> list.map { it.toDomain() } }
+            .flowOn(Dispatchers.Default)
 
     suspend fun get(id: String): Course? = dao.getById(id)?.toDomain()
 

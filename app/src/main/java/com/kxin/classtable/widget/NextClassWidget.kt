@@ -32,10 +32,11 @@ class NextClassWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = WidgetPrefsStore.read(context)
         val skin = skinOf(context, prefs)
-        val periods = WidgetData.periods(context)
-        val rest = WidgetData.todayIsRest(context)
-        val course = if (rest) null else WidgetData.nextCourse(context)
-        provideContent { NextClassContent(course, periods, prefs, skin, rest) }
+        val snap = WidgetData.snapshot(context)
+        val today = java.time.LocalDate.now()
+        val rest = snap.isRestOn(today)
+        val course = if (rest) null else snap.nextCourse(today)
+        provideContent { NextClassContent(course, snap.periods, prefs, skin, rest) }
     }
 }
 

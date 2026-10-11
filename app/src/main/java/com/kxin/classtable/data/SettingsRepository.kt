@@ -16,9 +16,15 @@ import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.model.UpdateCadence
 import com.kxin.classtable.icon.AppIcon
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +40,9 @@ data class UsageStats(
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    /** 共享设置流用的应用级作用域(单例,活到进程结束)。 */
+    private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private val KEY_THEME = stringPreferencesKey("theme_mode")
     private val KEY_ACCENT = stringPreferencesKey("accent_hex")
     private val KEY_WEEK = intPreferencesKey("current_week")
@@ -83,49 +92,57 @@ class SettingsRepository @Inject constructor(
     /** 上课自动免打扰开关。 */
     private val KEY_CLASS_DND = booleanPreferencesKey("class_dnd_enabled")
 
-    val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p ->
-        AppSettings(
-            themeMode = runCatching { ThemeMode.valueOf(p[KEY_THEME] ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
-            accentHex = p[KEY_ACCENT] ?: "#C56473",
-            currentWeek = p[KEY_WEEK] ?: 1,
-            // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
-            // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。
-            periodTimes = (p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS).let {
-                if (it == Schedule.LEGACY_DEFAULT_PERIODS) Schedule.DEFAULT_PERIODS else it
-            },
-            semesterStartDay = p[KEY_SEMESTER_START] ?: 0L,
-            semesterWeekCount = p[KEY_SEMESTER_WEEKS] ?: 20,
-            aiProvider = p[KEY_AI_PROVIDER] ?: AiProvider.GEMINI.name,
-            aiApiKey = p[KEY_AI_KEY] ?: p[KEY_GEMINI] ?: "",
-            aiBaseUrl = p[KEY_AI_BASE_URL] ?: "",
-            aiModel = p[KEY_AI_MODEL] ?: "",
-            notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
-            notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
-            notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.LIVE.name,
-            tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: true,
-            tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
-            agendaReminderEnabled = p[KEY_AGENDA_REMIND_ENABLED] ?: true,
-            agendaAllDayRemindTime = p[KEY_AGENDA_ALLDAY_TIME] ?: "09:00",
-            autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
-            includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
-            updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
-            lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
-            dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
-            onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
-            introSeenVersion = p[KEY_INTRO_SEEN_VERSION] ?: "",
-            yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
-            yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
-            yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
-            yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
-            yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
-            yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
-            scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
-            appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
-            iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
-            iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
-            classDndEnabled = p[KEY_CLASS_DND] ?: true,
-        )
-    }
+    /**
+     * 全局设置流。约十个 ViewModel/服务各自消费它,所以这里做两件事:
+     * - `distinctUntilChanged`:40 多个键的映射结果一样时不再向下游发(避免无谓重组);
+     * - `shareIn`:全应用共享同一份上游,只映射一次,而不是每个订阅者各跑一遍 40 键映射。
+     */
+    val settings: Flow<AppSettings> = context.settingsDataStore.data
+        .map { p ->
+            AppSettings(
+                themeMode = runCatching { ThemeMode.valueOf(p[KEY_THEME] ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
+                accentHex = p[KEY_ACCENT] ?: "#C56473",
+                currentWeek = p[KEY_WEEK] ?: 1,
+                // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
+                // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。
+                periodTimes = (p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS).let {
+                    if (it == Schedule.LEGACY_DEFAULT_PERIODS) Schedule.DEFAULT_PERIODS else it
+                },
+                semesterStartDay = p[KEY_SEMESTER_START] ?: 0L,
+                semesterWeekCount = p[KEY_SEMESTER_WEEKS] ?: 20,
+                aiProvider = p[KEY_AI_PROVIDER] ?: AiProvider.GEMINI.name,
+                aiApiKey = p[KEY_AI_KEY] ?: p[KEY_GEMINI] ?: "",
+                aiBaseUrl = p[KEY_AI_BASE_URL] ?: "",
+                aiModel = p[KEY_AI_MODEL] ?: "",
+                notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
+                notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
+                notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.LIVE.name,
+                tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: true,
+                tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
+                agendaReminderEnabled = p[KEY_AGENDA_REMIND_ENABLED] ?: true,
+                agendaAllDayRemindTime = p[KEY_AGENDA_ALLDAY_TIME] ?: "09:00",
+                autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
+                includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
+                updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
+                lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
+                dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
+                onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
+                introSeenVersion = p[KEY_INTRO_SEEN_VERSION] ?: "",
+                yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
+                yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
+                yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
+                yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
+                yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
+                yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
+                scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
+                appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
+                iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
+                iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
+                classDndEnabled = p[KEY_CLASS_DND] ?: true,
+            )
+        }
+        .distinctUntilChanged()
+        .shareIn(settingsScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     /** 当前完整设置(同步推远端用)。 */
     suspend fun currentSettings(): AppSettings = settings.first()

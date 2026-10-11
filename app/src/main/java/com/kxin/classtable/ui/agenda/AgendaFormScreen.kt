@@ -38,6 +38,8 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDatePicker
+import com.kxin.classtable.design.YohakuDialog
+import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuSwitch
@@ -74,6 +76,8 @@ fun AgendaFormScreen(
 ) {
     val colors = LocalYohakuColors.current
     val events by viewModel.events.collectAsStateWithLifecycle()
+    val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val editing = remember(eventId, events) {
         eventId?.let { id -> events.firstOrNull { it.id == id } }
     }
@@ -84,6 +88,20 @@ fun AgendaFormScreen(
     }
     // 归属由条目自己的分类(编辑态)或进入时的默认分类(新建态)推断
     val kind = (editing?.category ?: defaultCategory ?: AgendaCategory.TODO).kind
+
+    // 保存/删除成功后才返回:失败留在表单并弹窗说明,而不是静默返回
+    androidx.compose.runtime.LaunchedEffect(saved) { if (saved) nav.popBackStack() }
+    error?.let { message ->
+        YohakuDialog(
+            onDismissRequest = { viewModel.clearError() },
+            title = "操作未完成",
+            actions = {
+                YohakuDialogAction(text = "知道了", accent = true, onClick = { viewModel.clearError() })
+            },
+        ) {
+            Text(text = message, style = YohakuType.copy14, color = colors.neutral9)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -110,14 +128,8 @@ fun AgendaFormScreen(
                 kind = kind,
                 defaultDate = defaultDate,
                 defaultCategory = defaultCategory,
-                onSave = {
-                    viewModel.save(it)
-                    nav.popBackStack()
-                },
-                onDelete = {
-                    viewModel.delete(it)
-                    nav.popBackStack()
-                },
+                onSave = { viewModel.save(it) },
+                onDelete = { viewModel.delete(it) },
             )
         }
     }

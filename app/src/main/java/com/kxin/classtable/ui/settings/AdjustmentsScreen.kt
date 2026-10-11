@@ -38,6 +38,7 @@ import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuOutlineButton
+import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
@@ -602,10 +603,7 @@ private fun ReviewRow(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             )
         }
-        YohakuChip(
-            text = if (selected) "已选" else "忽略",
-            selected = selected,
-            onClick = onToggle,
-        )
+        // 二值(已选 / 忽略)一律用开关 —— 与全应用「布尔控件统一」一致,chip 只留给选项
+        YohakuSwitch(checked = selected, onCheckedChange = { onToggle() })
     }
 }

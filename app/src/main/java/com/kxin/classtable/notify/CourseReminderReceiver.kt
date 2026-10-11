@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.kxin.classtable.data.Analytics
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
@@ -42,6 +43,9 @@ class CourseReminderReceiver : BroadcastReceiver() {
                             handleAgendaReminder(appContext, intent)
                     }
                 }
+            } catch (e: Exception) {
+                // 闹钟触发的异常绝不能逃到默认处理器(会带着整个进程崩,且闹钟静默失败)
+                Crash.recordException(e, "op" to "reminder_receiver", "action" to action)
             } finally {
                 pendingResult.finish()
             }

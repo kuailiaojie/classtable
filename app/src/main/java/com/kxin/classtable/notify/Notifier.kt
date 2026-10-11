@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.kxin.classtable.MainActivity
 import com.kxin.classtable.R
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.domain.Schedule
 
 /**
@@ -573,6 +574,10 @@ object Notifier {
     /** 统一收口:权限被回收时 notify 会抛 SecurityException,不能让它冒到调用方。 */
     private fun post(context: Context, id: Int, notification: Notification) {
         runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
-            .onFailure { Log.w(TAG, "通知发送失败: ${it.javaClass.simpleName}") }
+            .onFailure {
+                // 通知发不出去是「提醒不弹」类反馈的头号原因,记进 Crashlytics 便于回查
+                Log.w(TAG, "通知发送失败: ${it.javaClass.simpleName}")
+                Crash.recordException(it, "op" to "notify_post", "id" to id)
+            }
     }
 }

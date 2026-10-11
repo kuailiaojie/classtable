@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ 的备份 / 换机传输规则。
+  排除:下载的安装包(可达数十 MB,Auto Backup 会撞 25MB 配额而静默失效)、
+  适配器缓存(可用时从云端/内置重建)、以及两个加密会话(密文还原到新设备后
+  主密钥不在,解不开只会退化成空会话)。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="updates" />
+        <exclude domain="file" path="warehouse" />
+        <exclude domain="sharedpref" path="auth_session.xml" />
+        <exclude domain="sharedpref" path="yuketang_session.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="updates" />
+        <exclude domain="file" path="warehouse" />
+        <exclude domain="sharedpref" path="auth_session.xml" />
+        <exclude domain="sharedpref" path="yuketang_session.xml" />
+    </device-transfer>
+</data-extraction-rules>

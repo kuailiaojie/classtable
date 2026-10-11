@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.appwidget.updateAll
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.settingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -85,10 +86,14 @@ object WidgetPrefsStore {
 
     /** 选项改完刷新全部小组件(不刷新就得等系统下一次 updatePeriod)。 */
     suspend fun refreshWidgets(context: Context) {
-        runCatching { NextClassWidget().updateAll(context) }
-        runCatching { TodayWidget().updateAll(context) }
-        runCatching { TomorrowWidget().updateAll(context) }
-        runCatching { AgendaWidget().updateAll(context) }
+        listOf(
+            runCatching { NextClassWidget().updateAll(context) },
+            runCatching { TodayWidget().updateAll(context) },
+            runCatching { TomorrowWidget().updateAll(context) },
+            runCatching { AgendaWidget().updateAll(context) },
+        ).forEach { result ->
+            result.onFailure { Crash.recordException(it, "op" to "widget_refresh") }
+        }
     }
 }
 

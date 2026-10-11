@@ -139,4 +139,20 @@ class WebViewHolder {
 
     /** 适配脚本与弹窗应作用于用户此刻看到的页面(有弹窗时就是弹窗)。 */
     val active: WebView get() = popup ?: webView
+
+    /**
+     * 离开导入页时销毁持有的 WebView(含弹窗)。
+     *
+     * 此前只收掉了弹窗,主 WebView 一直持有 Activity context(转屏 / 退出导入都会漏),
+     * 而且销毁后桥仍指着一个死页面,后续调用只会静默超时。
+     */
+    fun destroy() {
+        popup?.let { p ->
+            (p.parent as? android.view.ViewGroup)?.removeView(p)
+            runCatching { p.destroy() }
+        }
+        popup = null
+        if (::webView.isInitialized) runCatching { webView.destroy() }
+        adapterKey = null
+    }
 }

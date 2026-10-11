@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    教务导入需要访问学校教务系统的 http 明文入口(正方/强智/青果等老系统大多无 https),
-    Android 9+ 默认禁止明文流量会导致 WebView 白屏,这里放行。
-    仅用于导入页访问教务域名;如需收紧可在此按 domain 白名单细化。
+    教务导入必须访问学校教务系统的 http 明文入口(正方/强智/青果等老系统大多无 https),
+    Android 9+ 默认禁止明文流量会导致 WebView 白屏,因此 base 放行明文。
+    但应用自身访问的后端一律走 https —— 下面按域收紧,禁止这些域名回落到明文,
+    避免任何情况下明文请求打到自有服务(反代 / 天气 / Google 服务)。
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">netlify.app</domain>
+        <domain includeSubdomains="true">uapis.cn</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <domain includeSubdomains="true">firebaseio.com</domain>
+    </domain-config>
 </network-security-config>

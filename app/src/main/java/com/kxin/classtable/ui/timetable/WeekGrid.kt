@@ -27,7 +27,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.data.BlockCorner
 import com.kxin.classtable.data.GridDensity
@@ -158,15 +158,18 @@ internal fun WeekGrid(
         val gridHeight = rowH * rowCount
         val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
         val gutter = YohakuDimens.gridGutterWidth
-        // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课
-        val lanesPerDay = (1..7).map { d ->
-            val teaching = teachingDays.getOrNull(d - 1)
-            val dayCourses = if (teaching == null) {
-                emptyList()
-            } else {
-                courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
+        // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课。
+        // 只随数据变化重算 —— 否则「现在」线的每帧动画、每次重组都会把 7 天的排序与车道打包重跑一遍。
+        val lanesPerDay = remember(courses, periods, teachingDays) {
+            (1..7).map { d ->
+                val teaching = teachingDays.getOrNull(d - 1)
+                val dayCourses = if (teaching == null) {
+                    emptyList()
+                } else {
+                    courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
+                }
+                layoutDay(dayCourses, periods)
             }
-            layoutDay(dayCourses, periods)
         }
 
         Box(
@@ -250,25 +253,31 @@ internal fun WeekGrid(
                 // 必须带标签 —— 光一条横线没人知道那是什么,之前就被当成「莫名多出来的小横条」。
                 val targetRow = Schedule.fractionalRow(nowMinute, periods)
                 if (showNowLine && today in 1..7 && targetRow != null) {
-                    val row by animateFloatAsState(
+                    val row = animateFloatAsState(
                         targetValue = targetRow,
                         animationSpec = YohakuMotion.gentleSpring(),
                         label = "nowLine",
                     )
                     val lineX = YohakuDimens.gridPadding + gutter + colW * (today - 1)
-                    val lineY = rowH * row
+                    // 位置在布局阶段读取(offset lambda),不读进组合 ——
+                    // 否则每帧动画都会让整个网格(含全部课程块)重组一次。
                     Box(
                         modifier = Modifier
-                            .offset(x = lineX, y = lineY)
+                            .offset {
+                                IntOffset(lineX.roundToPx(), (rowH * row.value).roundToPx())
+                            }
                             .width(colW)
                             .height(1.5.dp)
                             .background(colors.accent),
                     )
                     // 「现在」标签贴在线旁:线靠顶时改放到下方,免得被顶到 y=0 压住线本身
-                    val labelY = if (lineY >= 12.dp) lineY - 12.dp else lineY + 2.dp
                     Box(
                         modifier = Modifier
-                            .offset(x = lineX, y = labelY)
+                            .offset {
+                                val lineY = rowH * row.value
+                                val labelY = if (lineY >= 12.dp) lineY - 12.dp else lineY + 2.dp
+                                IntOffset(lineX.roundToPx(), labelY.roundToPx())
+                            }
                             .background(colors.paper)
                             .padding(horizontal = 3.dp),
                     ) {

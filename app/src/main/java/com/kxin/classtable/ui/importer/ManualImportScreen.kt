@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -39,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.importer.XlsxParser
 import com.kxin.classtable.design.LocalYohakuColors
@@ -51,21 +51,49 @@ import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.nio.charset.Charset
 import java.util.UUID
 import javax.inject.Inject
 
+/** 一次文件导入的解析结果:文件名、解析出的课程、以及失败原因(成功为 null)。 */
+data class FileImportResult(val name: String, val courses: List<Course>, val error: String?)
+
 @HiltViewModel
 class ManualImportViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val courseRepository: CourseRepository,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     private val _imported = MutableStateFlow(false)
     val imported: StateFlow<Boolean> = _imported.asStateFlow()
+
+    private val _fileResult = MutableStateFlow<FileImportResult?>(null)
+    val fileResult: StateFlow<FileImportResult?> = _fileResult.asStateFlow()
+
+    /**
+     * 读取并解析所选文件(Excel / CSV / TSV)。
+     *
+     * 读文件与解析都在 IO 线程:云盘 / 一次性授权的 URI 会阻塞,大 xlsx 还会耗时很久,
+     * 放在 ActivityResult 回调(主线程)里会卡顿甚至 ANR,读取失败更会直接把应用带崩。
+     */
+    fun loadFile(uri: Uri) {
+        viewModelScope.launch {
+            _fileResult.value = withContext(Dispatchers.IO) {
+                runCatching { parseFile(context, uri) }
+                    .getOrElse { e ->
+                        Crash.recordException(e, "op" to "manual_import_file")
+                        FileImportResult(displayNameOrNull(context, uri), emptyList(), "无法读取所选文件")
+                    }
+            }
+        }
+    }
 
     fun importAll(courses: List<Course>, periodSpec: String?) {
         viewModelScope.launch {
@@ -78,6 +106,37 @@ class ManualImportViewModel @Inject constructor(
     }
 }
 
+private const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
+private const val MAX_IMPORT_ROWS = 5000
+
+/** 解析所选文件为课程列表;读取失败抛异常,由调用方统一兜底。 */
+private fun parseFile(context: Context, uri: Uri): FileImportResult {
+    val name = queryDisplayName(context, uri)
+    if (name.endsWith(".xls", ignoreCase = true) && !name.endsWith(".xlsx", ignoreCase = true)) {
+        return FileImportResult(name, emptyList(), "暂不支持旧版 .xls 格式,请在 Excel 中另存为 .xlsx 或 CSV 后再导入")
+    }
+    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: return FileImportResult(name, emptyList(), "无法读取所选文件")
+    if (bytes.size > MAX_IMPORT_BYTES) {
+        return FileImportResult(name, emptyList(), "文件过大,请选择 25MB 以内的表格")
+    }
+    val rows = when {
+        name.endsWith(".xlsx", ignoreCase = true) -> XlsxParser.parse(bytes)
+        else -> decodeText(bytes).lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .let { lines ->
+                val sep = if (lines.any { it.contains('\t') }) '\t' else ','
+                lines.map { line -> line.split(sep).map { it.trim() } }
+            }
+    }
+    val courses = rowsToCourses(rows.take(MAX_IMPORT_ROWS))
+    return FileImportResult(name, courses, if (courses.isEmpty()) "文件中没有解析到课程,请检查列序" else null)
+}
+
+private fun displayNameOrNull(context: Context, uri: Uri): String =
+    runCatching { queryDisplayName(context, uri) }.getOrDefault("file")
+
 /**
  * 手动表格导入:粘贴表格数据(CSV/TSV),或直接从 Excel(xlsx)/CSV/TSV 文件导入。
  * 列序:课程名称,教师,地点,星期(1-7或一~日),开始节,结束节,周次。
@@ -88,45 +147,21 @@ fun ManualImportScreen(
     viewModel: ManualImportViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
-    val context = LocalContext.current
     val imported by viewModel.imported.collectAsStateWithLifecycle()
+    val fileResult by viewModel.fileResult.collectAsStateWithLifecycle()
     var text by rememberSaveable { mutableStateOf("") }
     val parsed = remember(text) { parseTable(text) }
-    var fileCourses by remember { mutableStateOf<List<Course>>(emptyList()) }
-    var fileName by remember { mutableStateOf<String?>(null) }
-    var fileError by remember { mutableStateOf<String?>(null) }
+    val fileCourses = fileResult?.courses ?: emptyList()
+    val fileName = fileResult?.name
+    val fileError = fileResult?.error
     var scheduleText by rememberSaveable { mutableStateOf("") }
     val parsedSchedule = remember(scheduleText) { parseScheduleLines(scheduleText) }
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) {
-            val name = queryDisplayName(context, uri)
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes == null) {
-                fileError = "无法读取所选文件"
-            } else if (name.endsWith(".xls", ignoreCase = true) && !name.endsWith(".xlsx", ignoreCase = true)) {
-                fileError = "暂不支持旧版 .xls 格式,请在 Excel 中另存为 .xlsx 或 CSV 后再导入"
-                fileCourses = emptyList()
-                fileName = name
-            } else {
-                val rows = when {
-                    name.endsWith(".xlsx", ignoreCase = true) -> XlsxParser.parse(bytes)
-                    else -> decodeText(bytes).lines()
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .let { lines ->
-                            val sep = if (lines.any { it.contains('\t') }) '\t' else ','
-                            lines.map { line -> line.split(sep).map { it.trim() } }
-                        }
-                }
-                val courses = rowsToCourses(rows)
-                fileCourses = courses
-                fileName = name
-                fileError = if (courses.isEmpty()) "文件中没有解析到课程,请检查列序" else null
-            }
-        }
+        // 读取与解析交给 ViewModel(IO 线程 + 兜底),回调本身只做转发
+        if (uri != null) viewModel.loadFile(uri)
     }
 
     val allCourses = fileCourses + parsed.courses

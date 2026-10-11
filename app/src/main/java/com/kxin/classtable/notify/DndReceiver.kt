@@ -3,6 +3,7 @@ package com.kxin.classtable.notify
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.domain.Adjustments
@@ -39,6 +40,8 @@ class DndReceiver : BroadcastReceiver() {
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Crash.recordException(e, "op" to "dnd_receiver", "action" to action)
             } finally {
                 pendingResult.finish()
             }

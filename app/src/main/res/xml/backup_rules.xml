@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 及以下的 Auto Backup 内容规则(与 data_extraction_rules.xml 对齐)。
+  排除安装包、适配器缓存与加密会话文件。
+-->
+<full-backup-content>
+    <exclude domain="file" path="updates" />
+    <exclude domain="file" path="warehouse" />
+    <exclude domain="sharedpref" path="auth_session.xml" />
+    <exclude domain="sharedpref" path="yuketang_session.xml" />
+</full-backup-content>

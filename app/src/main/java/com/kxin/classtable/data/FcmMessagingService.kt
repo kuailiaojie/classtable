@@ -15,7 +15,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
  * FCM 推送服务:
@@ -93,17 +92,28 @@ class FcmMessagingService : FirebaseMessagingService() {
             ?: (data["startTime"]?.let { Schedule.parseClock(it) })
             ?: -1
         val courseId = data["courseId"].orEmpty()
-        Notifier.showCourseReminder(
-            context = this,
-            notificationId = Notifier.reminderId("$courseId:${java.time.LocalDate.now().toEpochDay()}"),
-            courseId = courseId,
-            courseName = courseName,
-            startMinute = startMinute,
-            location = data["location"].orEmpty(),
-            teacher = data["teacher"].orEmpty(),
-            leadMinutes = data["leadMinutes"]?.toIntOrNull() ?: 0,
-            announcement = latestAnnouncement(courseId),
-        )
+        val notificationId = Notifier.reminderId("$courseId:${java.time.LocalDate.now().toEpochDay()}")
+        val location = data["location"].orEmpty()
+        val teacher = data["teacher"].orEmpty()
+        val leadMinutes = data["leadMinutes"]?.toIntOrNull() ?: 0
+        // 取最新公告要读 DataStore + Room,放到协程里做 —— onMessageReceived 跑在主线程,
+        // 在这里 runBlocking 会卡住主线程(推送到达时正是系统最敏感的时刻)。
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            val announcement = latestAnnouncement(courseId)
+            runCatching {
+                Notifier.showCourseReminder(
+                    context = this@FcmMessagingService,
+                    notificationId = notificationId,
+                    courseId = courseId,
+                    courseName = courseName,
+                    startMinute = startMinute,
+                    location = location,
+                    teacher = teacher,
+                    leadMinutes = leadMinutes,
+                    announcement = announcement,
+                )
+            }.onFailure { Crash.recordException(it, "op" to "fcm_course_reminder") }
+        }
         return true
     }
 
@@ -113,18 +123,14 @@ class FcmMessagingService : FirebaseMessagingService() {
      * 服务端推送与本地闹钟的通知 id 相同、互相覆盖,所以这条增强通道也要带上公告 ——
      * 否则「谁后到谁赢」会让刚附上的公告时有时无。雨课堂自己的「上课提醒」同样被筛掉。
      */
-    private fun latestAnnouncement(courseId: String): String? {
+    private suspend fun latestAnnouncement(courseId: String): String? {
         if (courseId.isBlank()) return null
-        // runBlocking 的 lambda 接收者是 CoroutineScope,所以要先把 Service 自己存下来当 Context 用
-        val context: android.content.Context = this
         return runCatching {
-            val settings = runBlocking { SettingsRepository(context).settings.first() }
+            val settings = SettingsRepository(this).settings.first()
             if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
                 return@runCatching null
             }
-            runBlocking {
-                YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(context), courseId)
-            }
+            YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(this), courseId)
         }.getOrNull()
     }
 

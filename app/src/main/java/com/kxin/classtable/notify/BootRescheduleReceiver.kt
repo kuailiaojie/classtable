@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.local.AppDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,8 @@ class BootRescheduleReceiver : BroadcastReceiver() {
                         SettingsRepository(appContext),
                     ).rescheduleAll(force = true)
                 }
+            } catch (e: Exception) {
+                Crash.recordException(e, "op" to "boot_receiver", "action" to action)
             } finally {
                 pendingResult.finish()
             }

@@ -41,6 +41,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -151,11 +152,18 @@ fun ClasstableRoot(
         // 远程开关(默认 true)可兜底关掉开屏;Remote Config 缓存值在下次启动生效
         val splashEnabled = remember { RemoteConfig.getBoolean("splash_enabled") }
         var splashExiting by remember { mutableStateOf(!splashEnabled) }
+        // 权限/ROM 状态快照:读这些是跨进程 binder 调用(通知管理器 / 闹钟 / 电源),不该在
+        // 每次重组时做。用 remember 快照 + 回到前台刷新 —— 用户常刚从系统设置里改完回来。
+        var permSnapshot by remember { mutableStateOf(readPermissionSnapshot(context)) }
+        LifecycleResumeEffect(Unit) {
+            permSnapshot = readPermissionSnapshot(context)
+            onPauseOrDispose { }
+        }
         val needsOnboarding = !settings.onboardingDone && !onboardingDismissed && (
-            !RomHelper.notificationsEnabled(context) ||
-                !RomHelper.exactAlarmGranted(context) ||
-                !RomHelper.ignoreBatteryOptimizations(context) ||
-                RomHelper.detect() != RomType.STOCK
+            !permSnapshot.notifications ||
+                !permSnapshot.exactAlarm ||
+                !permSnapshot.batteryUnrestricted ||
+                permSnapshot.rom != RomType.STOCK
         )
         // 首次启动介绍:按版本门控 —— 新用户(未记录)与升级到本主版本的老用户首次打开都会看到,
         // 同一主版本内不再重复(见 SettingsRepository.introSeenVersion)。顺序为「先介绍、再要权限」。
@@ -423,6 +431,21 @@ fun ClasstableRoot(
 
 /** 底部导航覆盖的根标签页(二级页不显示导航,占满整屏)。 */
 private val ROOT_TABS = setOf("week", "courses", "agenda", "settings")
+
+/** 权限/ROM 状态快照,供首次引导判断是否需要展示。 */
+private data class PermissionSnapshot(
+    val notifications: Boolean,
+    val exactAlarm: Boolean,
+    val batteryUnrestricted: Boolean,
+    val rom: RomType,
+)
+
+private fun readPermissionSnapshot(context: Context): PermissionSnapshot = PermissionSnapshot(
+    notifications = RomHelper.notificationsEnabled(context),
+    exactAlarm = RomHelper.exactAlarmGranted(context),
+    batteryUnrestricted = RomHelper.ignoreBatteryOptimizations(context),
+    rom = RomHelper.detect(),
+)
 
 /** 主版本号不同(或从未播过)即需要播放介绍:新用户与跨主版本升级的老用户都会命中。 */
 private fun introRequired(seenVersion: String): Boolean =

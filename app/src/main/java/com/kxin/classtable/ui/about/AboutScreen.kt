@@ -120,7 +120,7 @@ fun AboutScreen(nav: NavHostController) {
             Spacer(modifier = Modifier.height(6.dp))
             val uriHandler = LocalUriHandler.current
             Text(
-                text = "GitHub 仓库:github.com/kuailiaojie/classtable",
+                text = "GitHub 仓库:github.com/kuailiaojie/classtable ↗",
                 style = YohakuType.copy14,
                 color = colors.neutral9,
                 textDecoration = TextDecoration.Underline,

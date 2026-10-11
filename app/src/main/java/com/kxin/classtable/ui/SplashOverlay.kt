@@ -96,7 +96,7 @@ fun SplashOverlay(onExitStart: () -> Unit = {}) {
                     modifier = Modifier.size(132.dp),
                 )
                 Text(
-                    text = "课表",
+                    text = "余课",
                     style = YohakuType.title24,
                     color = colors.neutral10,
                     modifier = Modifier.graphicsLayer {

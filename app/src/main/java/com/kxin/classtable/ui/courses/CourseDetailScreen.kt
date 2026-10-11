@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.yuketang.YuketangAnnouncement
 import com.kxin.classtable.data.yuketang.YuketangRepository
@@ -80,7 +81,10 @@ class CourseDetailViewModel @Inject constructor(
     fun isYuketangLoggedIn(): Boolean = yuketangRepository.isLoggedIn()
 
     fun delete(id: String) {
-        viewModelScope.launch { runCatching { courseRepository.delete(id) } }
+        viewModelScope.launch {
+            runCatching { courseRepository.delete(id) }
+                .onFailure { Crash.recordException(it, "op" to "course_delete") }
+        }
     }
 }
 

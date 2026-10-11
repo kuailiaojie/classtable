@@ -42,7 +42,7 @@ class AgendaWidget : GlanceAppWidget() {
         val prefs = WidgetPrefsStore.read(context)
         val skin = skinOf(context, prefs)
         // 多取一条用来判断「还有几条没显示」
-        val events = WidgetData.upcomingAgenda(context, prefs.maxRows + 1)
+        val events = WidgetData.snapshot(context).upcomingAgenda(prefs.maxRows + 1)
         provideContent { AgendaContent(events, prefs, skin) }
     }
 }

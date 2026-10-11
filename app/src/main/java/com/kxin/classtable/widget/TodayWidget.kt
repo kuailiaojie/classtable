@@ -27,11 +27,19 @@ class TodayWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = WidgetPrefsStore.read(context)
         val skin = skinOf(context, prefs)
-        val periods = WidgetData.periods(context)
-        val courses = WidgetData.todayCourses(context)
-        val currentId = WidgetData.currentCourseToday(context)?.id
-        val header = WidgetData.header(context, java.time.LocalDate.now())
-        provideContent { TodayContent(courses, periods, prefs, skin, currentId, header) }
+        // 一次快照读齐设置 / 课程 / 日程,再派生本组件要的几项
+        val snap = WidgetData.snapshot(context)
+        val today = java.time.LocalDate.now()
+        provideContent {
+            TodayContent(
+                courses = snap.coursesOn(today),
+                periods = snap.periods,
+                prefs = prefs,
+                skin = skin,
+                currentId = snap.currentCourseId(today),
+                header = snap.header(today),
+            )
+        }
     }
 }
 

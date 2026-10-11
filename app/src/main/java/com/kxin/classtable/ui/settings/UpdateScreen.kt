@@ -262,7 +262,7 @@ fun UpdateScreen(
             if (info != null && info.releaseUrl.isNotBlank()) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
                 Text(
-                    text = "查看发布页",
+                    text = "查看发布页 ↗",
                     style = YohakuType.copy13,
                     color = colors.accent,
                     modifier = Modifier

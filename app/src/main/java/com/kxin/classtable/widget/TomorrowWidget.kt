@@ -25,10 +25,11 @@ class TomorrowWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = WidgetPrefsStore.read(context)
         val skin = skinOf(context, prefs)
-        val periods = WidgetData.periods(context)
-        val courses = WidgetData.tomorrowCourses(context)
-        val header = WidgetData.header(context, LocalDate.now().plusDays(1))
-        provideContent { TomorrowContent(courses, periods, prefs, skin, header) }
+        val snap = WidgetData.snapshot(context)
+        val tomorrow = LocalDate.now().plusDays(1)
+        provideContent {
+            TomorrowContent(snap.coursesOn(tomorrow), snap.periods, prefs, skin, snap.header(tomorrow))
+        }
     }
 }
 

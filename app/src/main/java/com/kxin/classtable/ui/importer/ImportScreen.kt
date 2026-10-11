@@ -71,6 +71,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.importer.AdapterEntry
 import com.kxin.classtable.data.importer.SchoolEntry
 import com.kxin.classtable.data.importer.WarehouseIndex
@@ -89,7 +90,9 @@ import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
 import com.kxin.classtable.ui.navigateToTab
 import com.kxin.classtable.ui.settings.SettingsHub
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URL
 import java.time.LocalDate
 import java.util.Locale
@@ -110,12 +113,22 @@ fun ImportScreen(
 
     // 索引加载:缓存优先(设置页「适配器同步」的产物),回退内置 assets。
     // 两者皆失败时不再静默返回空列表,而是给出可操作的错误面板。
+    // 读取与解析(index.json / adapters.json)放到 IO 线程:在 remember 里同步做会在进入导入页时卡主线程。
     var indexReload by remember { mutableIntStateOf(0) }
-    val schoolsResult = remember(indexReload) { WarehouseIndex.loadSchools(context) }
-    val adaptersResult = remember(indexReload) { WarehouseIndex.loadAdapters(context) }
-    val schools = schoolsResult.getOrDefault(emptyList())
-    val adapters = adaptersResult.getOrDefault(emptyList())
-    val indexError = schoolsResult.isFailure || adaptersResult.isFailure || schools.isEmpty()
+    var schools by remember { mutableStateOf<List<SchoolEntry>>(emptyList()) }
+    var adapters by remember { mutableStateOf<List<AdapterEntry>>(emptyList()) }
+    var indexError by remember { mutableStateOf(false) }
+    var indexLoading by remember { mutableStateOf(true) }
+    LaunchedEffect(indexReload) {
+        indexLoading = true
+        val (schoolsResult, adaptersResult) = withContext(Dispatchers.IO) {
+            WarehouseIndex.loadSchools(context) to WarehouseIndex.loadAdapters(context)
+        }
+        schools = schoolsResult.getOrDefault(emptyList())
+        adapters = adaptersResult.getOrDefault(emptyList())
+        indexError = schoolsResult.isFailure || adaptersResult.isFailure || schools.isEmpty()
+        indexLoading = false
+    }
     val visibleSchools = remember(schools) {
         schools.filter { it.folder !in WarehouseIndex.SELF_CHECK_FOLDERS }
     }
@@ -154,6 +167,15 @@ fun ImportScreen(
             onCourseConfigJson = { viewModel.onCourseConfig(it) },
             onDone = { viewModel.onDone() },
         )
+    }
+
+    // 离开导入页(或组件销毁)时销毁 WebView 并解绑桥:此前只清弹窗,主 WebView 会一直
+    // 持有 Activity context 直到进程结束,且销毁后桥仍指着死页面。
+    DisposableEffect(Unit) {
+        onDispose {
+            bridge.bindWebView(null)
+            holder.destroy()
+        }
     }
 
     LaunchedEffect(done) {
@@ -361,7 +383,15 @@ fun ImportScreen(
                 modifier = Modifier.padding(start = 10.dp),
             )
         }
-        if (indexError) {
+        if (indexLoading) {
+            // 索引在后台加载:给一行轻提示,而不是留白(留白看起来像页面坏了)
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = "载入中…", style = YohakuType.copy14, color = colors.neutral6)
+            }
+        } else if (indexError) {
             IndexErrorPanel(
                 onSync = { nav.navigate(SettingsHub.IMPORT.route) },
                 onRetry = { indexReload++ },
@@ -454,23 +484,36 @@ private fun StepSchool(
     onSelect: (SchoolEntry) -> Unit,
 ) {
     val colors = LocalYohakuColors.current
-    val filtered = schools.filter {
-        query.isBlank() || it.name.contains(query) || it.id.contains(query.uppercase())
-    }
-    val groups = filtered
-        .sortedBy { it.initial.ifBlank { "Z#" } }
-        .groupBy { school ->
-            val c = school.initial.firstOrNull()?.uppercaseChar()
-            if (c != null && c in 'A'..'Z') c else '#'
-        }
-    val letters = groups.keys.sorted()
-    val flat = letters.flatMap { letter ->
-        buildList {
-            add(letter to null)
-            groups[letter]!!.forEach { add(letter to it) }
+    // 搜索是逐键触发的重活:全部派生值按 (schools, query) 缓存,只在输入变化时重算一次,
+    // 而不是每次重组都重跑 filter / sort / groupBy。
+    val filtered = remember(schools, query) {
+        schools.filter {
+            query.isBlank() || it.name.contains(query) || it.id.contains(query.uppercase())
         }
     }
-    val letterIndex = letters.associateWith { letter -> flat.indexOfFirst { it.first == letter } }
+    val groups = remember(filtered) {
+        filtered
+            .sortedBy { it.initial.ifBlank { "Z#" } }
+            .groupBy { school ->
+                val c = school.initial.firstOrNull()?.uppercaseChar()
+                if (c != null && c in 'A'..'Z') c else '#'
+            }
+    }
+    val letters = remember(groups) { groups.keys.sorted() }
+    val flat = remember(groups, letters) {
+        letters.flatMap { letter ->
+            buildList {
+                add(letter to null)
+                groups[letter]!!.forEach { add(letter to it) }
+            }
+        }
+    }
+    // 每个字母首次出现的下标:单次遍历算出(此前对每个字母各扫一遍 flat,是 O(L×N))
+    val letterIndex = remember(flat) {
+        val map = HashMap<Char, Int>()
+        flat.forEachIndexed { index, (letter, _) -> map.putIfAbsent(letter, index) }
+        map
+    }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -682,6 +725,8 @@ private fun StepLogin(
                                     popup = null
                                     // 清掉适配器标记:强制下面重新建一个 WebView
                                     holder.adapterKey = null
+                                    // 桥不能继续指向已销毁的页面,否则后续桥调用只会静默超时
+                                    bridge.bindWebView(null)
                                     webViewGeneration++
                                 },
                             )
@@ -834,9 +879,9 @@ private fun configureImportWebView(
         ViewGroup.LayoutParams.MATCH_PARENT,
     )
     webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-    // 诊断期开关:允许用 adb + CDP 在真机上直接跑适配脚本核对桥的行为(不需要登录教务)。
-    // 只在导入页存活期间开放,定位到问题后随下一版移除。
-    WebView.setWebContentsDebuggingEnabled(true)
+    // 仅调试包开放远程调试:这是用户输入教务账号密码的页面,release 里必须关掉,
+    // 否则任何连着 USB 的电脑都能通过 Chrome DevTools 读到页面与控制台。
+    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
     webView.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true

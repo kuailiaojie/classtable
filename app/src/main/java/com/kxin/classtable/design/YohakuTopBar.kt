@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -75,6 +77,8 @@ private fun BackButton(onClick: () -> Unit) {
         modifier = Modifier
             .defaultMinSize(minWidth = 40.dp, minHeight = 44.dp)
             .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+            // 字形「‹」读屏只会念出符号;补一个可读的动作名
+            .semantics { contentDescription = "返回" }
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
