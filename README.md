@@ -11,6 +11,8 @@
 ![license](https://img.shields.io/badge/license-MIT-5E9F7E)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-C56473)
 
+**下载**：[官网](https://classtable.kspace.eu.org) · [GitHub Releases](https://github.com/kuailiaojie/classtable/releases)（近几年的手机选 `app-arm64-v8a-release.apk`，拿不准选 `app-universal-release.apk`）
+
 > 给国内大学生用的 Android 课程表。
 >
 > 打开就是一整周——横看七天、竖看节次,不用翻页;四种方式把课表弄进来,课前提醒准点又不吵,
