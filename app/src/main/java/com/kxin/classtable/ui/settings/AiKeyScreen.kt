@@ -103,7 +103,7 @@ fun AiKeyScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "AI 密钥", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "图片识别", onBack = { nav.popBackStack() })
 
         Column(
             modifier = Modifier
@@ -112,7 +112,7 @@ fun AiKeyScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "用于 AI 图片识别课表。密钥只存本机,不上传也不参与云端设置同步。",
+                text = "用于拍照识别课表。密钥只存本机,不上传也不同步。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )

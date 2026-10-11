@@ -276,7 +276,7 @@ fun RainClassroomScreen(
         SettingsSection(title = "公告") {
             SettingSwitchRow(
                 title = "雨课堂公告",
-                subtitle = "总开关。关闭后不发通知、课前提醒里也不带公告,后台不再拉取。",
+                subtitle = "总开关;关掉后不再拉取,也不在提醒里带公告。",
                 checked = settings.yuketangEnabled,
                 onCheckedChange = { enabled ->
                     viewModel.setOptions(
@@ -289,8 +289,8 @@ fun RainClassroomScreen(
             )
             DividerLine()
             SettingSwitchRow(
-                title = "课前提醒包含最新公告",
-                subtitle = "每节课开始前的提醒里附上该课程最新一条公告的标题(读本机缓存,不联网)。",
+                title = "提醒里带最新公告",
+                subtitle = "课前提醒里附上该课最新公告的标题(读本机缓存)。",
                 checked = settings.yuketangIncludeInReminder,
                 onCheckedChange = { enabled ->
                     viewModel.setOptions(
@@ -304,7 +304,7 @@ fun RainClassroomScreen(
             DividerLine()
             SettingSwitchRow(
                 title = "后台自动拉取",
-                subtitle = "每小时检查一次(仅联网时),把公告同步到本机,供课程详情与课前提醒使用。",
+                subtitle = "每小时检查一次(仅联网时),把公告存到本机。",
                 checked = settings.yuketangBackgroundFetch,
                 onCheckedChange = { enabled ->
                     viewModel.setOptions(
@@ -318,7 +318,7 @@ fun RainClassroomScreen(
             DividerLine()
             SettingSwitchRow(
                 title = "新公告提醒",
-                subtitle = "发现新公告时发一条通知(独立渠道,不覆盖课程提醒)。",
+                subtitle = "有新公告时单独发一条通知,不覆盖课程提醒。",
                 checked = settings.yuketangNotifyNew,
                 onCheckedChange = { enabled ->
                     viewModel.setOptions(

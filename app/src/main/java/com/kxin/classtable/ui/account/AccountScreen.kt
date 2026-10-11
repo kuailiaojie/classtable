@@ -80,7 +80,7 @@ fun AccountScreen(
                 )
                 Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
                 Text(
-                    text = "课程与配置(作息/学期/提醒等)将同步到 Firestore(仅本人可见)。",
+                    text = "课程与设置会同步到云端,仅你自己可见。",
                     style = YohakuType.label12,
                     color = colors.neutral7,
                 )

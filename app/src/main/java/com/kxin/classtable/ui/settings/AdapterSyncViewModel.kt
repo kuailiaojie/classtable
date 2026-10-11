@@ -35,7 +35,7 @@ class AdapterSyncViewModel @Inject constructor(
         repository.sync()
             .onSuccess {
                 _info.value = it
-                _message.value = "同步完成:${it.schoolCount} 所学校 / ${it.adapterCount} 个适配器"
+                _message.value = "同步完成:${it.schoolCount} 所学校 / ${it.adapterCount} 个识别方案"
             }
             .onFailure { _message.value = "同步失败:${it.message ?: "未知错误"}" }
         _busy.value = false
@@ -47,7 +47,7 @@ class AdapterSyncViewModel @Inject constructor(
         repository.clear()
             .onSuccess {
                 _info.value = it
-                _message.value = "已恢复内置适配器"
+                _message.value = "已恢复内置方案"
             }
             .onFailure { _message.value = "操作失败:${it.message ?: "未知错误"}" }
         _busy.value = false

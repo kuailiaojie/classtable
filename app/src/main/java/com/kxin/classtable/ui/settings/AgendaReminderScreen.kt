@@ -108,20 +108,20 @@ fun AgendaReminderScreen(
             SettingsSection(title = "日程提醒") {
                 SettingSwitchRow(
                     title = "日程提醒",
-                    subtitle = "开启后,在日程开始前提醒你。每条日程可在它自己的编辑页单独开关、并选提前多久。",
+                    subtitle = "日程开始前提醒你;每条日程可单独设置。",
                     checked = enabled,
                     onCheckedChange = { enabled = it },
                 )
                 if (enabled) {
                     DividerLine()
                     SettingBlock(
-                        title = "全天日程提醒时刻",
-                        subtitle = "「全天」日程没有具体时间,统一在这一天的这个时刻提醒。",
+                        title = "全天提醒时间",
+                        subtitle = "「全天」日程没有具体时间,统一在这一天提醒。",
                     ) {
                         YohakuTextField(
                             value = allDayTime,
                             onValueChange = { allDayTime = it },
-                            label = "时刻",
+                            label = "时间",
                             placeholder = "09:00",
                             isError = !timeValid,
                         )

@@ -103,8 +103,13 @@ class CourseReminderReceiver : BroadcastReceiver() {
         // 当天的时间分段随闹钟一起带来(排程时按调休后的教学日算好);缺了就跳过
         val payload = intent.toLiveUpdate() ?: return
         val endAt = payload.endAtMillis() ?: return
-        // 已经下课就别再打扰(闹钟投递顺序不保证,相变闹钟可能晚到)
-        if (endAt <= now) return
+        // 已经下课 —— 这是排在下课时刻的那个相位边界闹钟(闹钟投递顺序不保证,相变闹钟可能晚到)。
+        // 标准提醒直接跳过,不再打扰;实时活动则要靠这一拍把常驻通知收掉 —— 服务内部的 delay 在
+        // 息屏 / Doze 时不按墙上时间推进,下课那一拍只能由这个闹钟补齐,否则通知会一直留在通知栏。
+        if (endAt <= now) {
+            if (live) stopLiveUpdateFor(context, planner, payload)
+            return
+        }
 
         val settings = runBlocking { SettingsRepository(context).settings.first() }
         val periods = Schedule.parsePeriods(settings.periodTimes)
@@ -138,6 +143,18 @@ class CourseReminderReceiver : BroadcastReceiver() {
             )
         }
         Analytics.log("course_reminder_shown", "course_id" to courseId)
+    }
+
+    /**
+     * 下课收尾:收掉正在展示的实时活动。只在「当前展示的确实是这节课」时才动手 ——
+     * 两门课时间重叠时,先下课那门的边界闹钟不能把另一门正在上的常驻通知误收掉。
+     */
+    private fun stopLiveUpdateFor(context: Context, planner: ReminderPlanner, payload: LiveUpdate) {
+        val current = planner.restoreLive() ?: return
+        if (current.muteKey != payload.muteKey) return
+        planner.clearLive()
+        Notifier.cancelLiveUpdate(context)
+        context.stopService(Intent(context, CourseLiveUpdateService::class.java))
     }
 
     /**

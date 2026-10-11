@@ -71,11 +71,11 @@ fun PermissionsScreen(
             .background(colors.paper)
             .verticalScroll(rememberScrollState()),
     ) {
-        YohakuTopBar(title = "提醒可靠性", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "提醒权限", onBack = { nav.popBackStack() })
 
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Text(
-                text = "课程提醒依赖系统闹钟与通知权限。国产 ROM 默认限制后台,请逐项开启,防止提醒被系统清理:",
+                text = "课程提醒依赖系统闹钟与通知权限。国产手机会限制后台,请逐项开启:",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
@@ -115,7 +115,7 @@ fun PermissionsScreen(
             .background(colors.neutral3))
         if (capsuleSupported) {
             PermissionRow(
-                title = "实时活动胶囊",
+                title = "状态栏胶囊",
                 ok = capsuleOk,
                 hint = "让提醒出现在状态栏胶囊 / 灵动岛",
                 onClick = {

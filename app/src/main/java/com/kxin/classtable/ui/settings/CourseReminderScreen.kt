@@ -137,12 +137,12 @@ fun CourseReminderScreen(
             SettingsSection(title = "课前提醒") {
                 SettingSwitchRow(
                     title = "课程提醒",
-                    subtitle = "在每节课开始前发送通知;内容在触发那一刻才算(剩余分钟 / 开始时间 / 地点)。",
+                    subtitle = "每节课开始前提醒你;内容在那一刻才生成。",
                     checked = enabled,
                     onCheckedChange = { enabled = it },
                 )
                 DividerLine()
-                SettingBlock(title = "提前多少分钟提醒") {
+                SettingBlock(title = "提前多久") {
                     val leadOptions = listOf(
                         0 to "准点",
                         5 to "5 分钟",
@@ -165,7 +165,7 @@ fun CourseReminderScreen(
                     }
                 }
                 DividerLine()
-                SettingBlock(title = "提醒形态") {
+                SettingBlock(title = "提醒方式") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         YohakuChip(
                             text = "标准提醒",
@@ -173,15 +173,15 @@ fun CourseReminderScreen(
                             onClick = { mode = NotifyMode.STANDARD.name },
                         )
                         YohakuChip(
-                            text = "实时活动",
+                            text = "倒计时通知",
                             selected = mode == NotifyMode.LIVE.name,
                             onClick = { mode = NotifyMode.LIVE.name },
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "实时活动:从提前量那一刻起常驻一条通知,由系统倒计时显示「还有多久上课 / 下课」" +
-                            "直到下课,通知上可直接取消本节课提醒(重试与重启都不会再打扰)。",
+                        text = "倒计时通知:从提前量那一刻起常驻一条通知,系统倒计时到下课;" +
+                            "通知上可直接取消本节提醒。",
                         style = YohakuType.label12,
                         color = colors.neutral6,
                     )
@@ -191,17 +191,17 @@ fun CourseReminderScreen(
             SettingsSection(title = "明日课程预告") {
                 SettingSwitchRow(
                     title = "明日课程预告",
-                    subtitle = "前一天提醒「明天有 N 门课 · 第一节几点、在哪」。",
+                    subtitle = "前一晚提醒明天有几门课、第一节几点在哪。",
                     checked = tomorrowEnabled,
                     onCheckedChange = { tomorrowEnabled = it },
                 )
                 if (tomorrowEnabled) {
                     DividerLine()
-                    SettingBlock(title = "提醒时刻") {
+                    SettingBlock(title = "提醒时间") {
                         YohakuTextField(
                             value = tomorrowTime,
                             onValueChange = { tomorrowTime = it },
-                            label = "时刻",
+                            label = "时间",
                             placeholder = "21:30",
                             isError = !timeValid,
                         )
@@ -228,7 +228,7 @@ fun CourseReminderScreen(
         ) {
             // 预览是并列的次要动作,不做实底;整屏的 accent 实底只留给「保存」
             YohakuOutlineButton(
-                text = "预览实时活动",
+                text = "预览倒计时通知",
                 onClick = { previewLiveUpdate(context) },
                 modifier = Modifier.weight(1f),
             )

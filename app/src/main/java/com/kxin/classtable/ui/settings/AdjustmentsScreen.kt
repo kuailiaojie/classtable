@@ -241,12 +241,12 @@ fun AdjustmentsScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "停课 = 当天不上课;补课 = 当天按「原课程日期」那一天的课表上课。",
+                text = "停课 = 当天不上;补课 = 按「原课程日期」那天的课表上。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
             Text(
-                text = "课程本身不会被移动:调休只是改变「这一天取哪天的课」,随时可以撤销。",
+                text = "课程不会被搬动:只改这一天取哪天的课,可随时撤销。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )

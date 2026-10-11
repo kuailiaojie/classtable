@@ -81,6 +81,10 @@ class SettingsViewModel @Inject constructor(
     fun completeOnboarding() =
         viewModelScope.launch { settingsRepository.setOnboardingDone() }
 
+    /** 「首次启动介绍」已看完:记下当前版本号,同一主版本内不再重复播放。 */
+    fun completeIntro() =
+        viewModelScope.launch { settingsRepository.setIntroSeenVersion(BuildConfig.VERSION_NAME) }
+
     /**
      * 「每次打开」节奏的图标轮播:本进程第一次真正进入界面时换下一张。
      * 后台节奏(每小时 / 每天)由 [com.kxin.classtable.icon.AppIconRotationWorker] 负责。
@@ -129,9 +133,9 @@ fun SettingsScreen(
         SettingsSection(title = "常用") {
             SettingRow("外观", themeLabel) { nav.navigate(SettingsHub.APPEARANCE.route) }
             DividerLine()
-            SettingRow("课表", "作息 / 周次 / 调休 / 显示") { nav.navigate(SettingsHub.TIMETABLE.route) }
+            SettingRow("课表", "上课时间 / 周次 / 调休 / 显示") { nav.navigate(SettingsHub.TIMETABLE.route) }
             DividerLine()
-            SettingRow("导入与识别", "教务 / AI / 适配器") { nav.navigate(SettingsHub.IMPORT.route) }
+            SettingRow("导入课表", "教务导入 / 拍照识别") { nav.navigate(SettingsHub.IMPORT.route) }
             DividerLine()
             SettingRow("提醒", reminderSummary(settings)) { nav.navigate(SettingsHub.REMINDER.route) }
         }
@@ -144,7 +148,7 @@ fun SettingsScreen(
             DividerLine()
             SettingRow("桌面", "今日 / 明日 / 下节课 / 日程") { nav.navigate("widget_settings") }
             DividerLine()
-            SettingRow("账号与数据", userEmail ?: "未登录") { nav.navigate("account") }
+            SettingRow("账号", userEmail ?: "未登录") { nav.navigate("account") }
             DividerLine()
             SettingRow("关于", "v${BuildConfig.VERSION_NAME}") { nav.navigate(SettingsHub.ABOUT.route) }
         }

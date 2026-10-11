@@ -122,7 +122,7 @@ fun SemesterScreen(
     val hint = if (startDay > 0L) {
         "按此设置,当前为第 ${Schedule.currentWeek(startDay, weekCountValue.coerceAtLeast(1))} 周"
     } else {
-        "设置开学日期后,周视图的「今天」与单双周将自动校准"
+        "设置开学日期后,「今天」与单双周会自动校准。"
     }
 
     Column(

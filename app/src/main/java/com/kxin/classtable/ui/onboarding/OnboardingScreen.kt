@@ -147,7 +147,7 @@ fun OnboardingScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "课程提醒依赖系统闹钟与通知权限。国产 ROM 会默认限制后台,请逐项开启(约 1 分钟)。这些也可稍后在「设置 → 提醒可靠性」重新打开。",
+                text = "课程提醒依赖系统闹钟与通知权限。国产 ROM 会默认限制后台,请逐项开启(约 1 分钟)。这些也可稍后在「设置 → 提醒权限」重新打开。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
                 modifier = Modifier.entrance(desc),

@@ -495,7 +495,7 @@ private fun dayDate(semesterStartDay: Long, week: Int, weekday: Int, todayWeekda
 private fun AddDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val colors = LocalYohakuColors.current
     val options = listOf(
-        Triple("教务导入", "3 步导入,选学校适配器", "import"),
+        Triple("教务导入", "3 步导入,选学校识别方案", "import"),
         Triple("手动添加", "自己填一门课", "course_form"),
         Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
         Triple("AI 图片导入", "截图自动识别课表", "import_ai"),

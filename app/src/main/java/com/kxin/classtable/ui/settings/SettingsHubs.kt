@@ -75,7 +75,7 @@ import java.util.Locale
 enum class SettingsHub(val title: String) {
     APPEARANCE("外观"),
     TIMETABLE("课表"),
-    IMPORT("导入与识别"),
+    IMPORT("导入课表"),
     REMINDER("提醒"),
     ABOUT("关于"),
     ;
@@ -91,8 +91,8 @@ enum class SettingsHub(val title: String) {
 /** 设置行摘要:当前提醒形态(设置首页与「提醒」分组共用)。 */
 internal fun reminderSummary(settings: AppSettings): String = when {
     !settings.notificationsEnabled -> "已关闭"
-    settings.notifyMode == NotifyMode.LIVE.name && settings.notifyLeadMinutes <= 0 -> "准点 · 实时活动"
-    settings.notifyMode == NotifyMode.LIVE.name -> "课前 ${settings.notifyLeadMinutes} 分钟 · 实时活动"
+    settings.notifyMode == NotifyMode.LIVE.name && settings.notifyLeadMinutes <= 0 -> "准点 · 倒计时通知"
+    settings.notifyMode == NotifyMode.LIVE.name -> "课前 ${settings.notifyLeadMinutes} 分钟 · 倒计时通知"
     settings.notifyLeadMinutes <= 0 -> "准点提醒"
     else -> "课前 ${settings.notifyLeadMinutes} 分钟"
 }
@@ -157,7 +157,7 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
             }
         }
         DividerLine()
-        SettingBlock(title = "强调色") {
+        SettingBlock(title = "主色") {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -199,12 +199,12 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
         DividerLine()
         SettingSwitchRow(
             title = "图标轮播",
-            subtitle = "开启后自动在 9 张图之间轮换;关闭时保持你选中的那一张。",
+            subtitle = "自动轮换这 9 张图标;关掉就固定用你选的那张。",
             checked = settings.iconCarouselEnabled,
             onCheckedChange = { on -> iconViewModel.setCarousel(on, cadence) },
         )
         DividerLine()
-        SettingBlock(title = "轮换节奏") {
+        SettingBlock(title = "换图频率") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconCadence.entries.forEach { option ->
                     YohakuChip(
@@ -218,8 +218,8 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
     }
 
     Text(
-        text = "桌面图标由系统缓存:切换后一般几秒内更新,个别第三方桌面要久一点 —— " +
-            "若一直不变,把图标从桌面移除再重新添加即可。",
+        text = "换图标后由系统缓存,一般几秒内更新;若一直不变," +
+            "把图标从桌面移除再重新添加即可。",
         style = YohakuType.label12,
         color = colors.neutral6,
         modifier = Modifier.padding(horizontal = 24.dp),
@@ -241,7 +241,7 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
     }
 
     SettingsSection(title = "课表") {
-        SettingRow("作息时间", firstPeriodText) { nav.navigate("schedule_times") }
+        SettingRow("上课时间", firstPeriodText) { nav.navigate("schedule_times") }
         DividerLine()
         SettingRow("学期周次", "当前第 $realWeek 周") { nav.navigate("semester") }
         DividerLine()
@@ -249,7 +249,7 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
             nav.navigate("adjustments")
         }
         DividerLine()
-        SettingRow("课表显示", "课程块内容 / 样式 / 配色") { nav.navigate("timetable_display") }
+        SettingRow("课表显示", "课程块的样子与配色") { nav.navigate("timetable_display") }
     }
 }
 
@@ -257,11 +257,11 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
 private fun ImportHub(nav: NavHostController, viewModel: SettingsViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    SettingsSection(title = "导入与识别") {
+    SettingsSection(title = "导入课表") {
         SettingRow("教务导入", "3 步导入") { nav.navigate("import") }
         DividerLine()
         SettingRow(
-            title = "AI 密钥",
+            title = "图片识别",
             value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
             onClick = { nav.navigate("ai_key") },
         )
@@ -289,14 +289,14 @@ private fun AdapterSyncSection() {
 
     val synced = info?.source == AdapterSource.SYNCED
     val sourceLine = buildString {
-        append(if (synced) "已同步(云端)" else "内置")
-        append(" · ${info?.schoolCount ?: 0} 所学校 / ${info?.adapterCount ?: 0} 个适配器")
+        append(if (synced) "已更新(云端)" else "内置")
+        append(" · ${info?.schoolCount ?: 0} 所学校 / ${info?.adapterCount ?: 0} 个识别方案")
     }
 
-    SettingsSection(title = "适配器同步") {
+    SettingsSection(title = "识别方案同步") {
         SettingBlock(
-            title = "学校与适配脚本",
-            subtitle = "不定期从云端获取最新的学校索引与适配脚本;同步后导入页优先使用云端数据,失败或未同步时自动回退内置数据。",
+            title = "学校与识别脚本",
+            subtitle = "不定期更新学校名单与识别脚本;同步后导入更准,失败时自动用内置的。",
         ) {
             Text(text = sourceLine, style = YohakuType.copy13, color = colors.neutral9)
             val syncedAt = info?.syncedAt ?: 0L
@@ -320,7 +320,7 @@ private fun AdapterSyncSection() {
             if (synced) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "恢复内置适配器",
+                    text = "恢复内置方案",
                     style = YohakuType.copy13,
                     color = colors.error,
                     modifier = Modifier
@@ -344,7 +344,7 @@ private fun ReminderHub(nav: NavHostController, viewModel: SettingsViewModel) {
             onClick = { nav.navigate("agenda_reminder") },
         )
         DividerLine()
-        SettingRow("提醒可靠性", "通知 / 闹钟 / 自启动") { nav.navigate("permissions") }
+        SettingRow("提醒权限", "通知 · 闹钟 · 后台运行") { nav.navigate("permissions") }
     }
 
     ClassDndSection(settings)
@@ -373,10 +373,10 @@ private fun ClassDndSection(settings: AppSettings) {
         onPauseOrDispose { }
     }
 
-    SettingsSection(title = "上课免打扰") {
+    SettingsSection(title = "免打扰") {
         SettingSwitchRow(
             title = "自动免打扰",
-            subtitle = "每节课开始时把手机切进免打扰(完全静音),下课时退回原来的状态;连着上的课算作一段,中途不退出。",
+            subtitle = "每节课开始自动静音,下课恢复原样;连着上的课算一段。",
             checked = enabled,
             onCheckedChange = {
                 enabled = it
@@ -387,7 +387,7 @@ private fun ClassDndSection(settings: AppSettings) {
             DividerLine()
             SettingBlock(
                 title = "勿扰访问权限",
-                subtitle = "系统要求先授权,应用才能切换免打扰;开启开关后还需要在这里授权一次。",
+                subtitle = "系统要求先授权,应用才能切换免打扰;需在这里授权一次。",
             ) {
                 YohakuOutlineButton(
                     text = "去系统设置授权",

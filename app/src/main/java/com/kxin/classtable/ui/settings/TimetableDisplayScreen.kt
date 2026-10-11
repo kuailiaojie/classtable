@@ -156,7 +156,7 @@ fun TimetableDisplayScreen(
             }
 
             SettingsSection(title = "行高密度") {
-                SettingBlock(title = "一屏放下多少节", subtitle = "紧凑档在小屏可能需要上下滚动。") {
+                SettingBlock(title = "一屏放下多少节", subtitle = "紧凑档在小屏可能要上下滚动。") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         YohakuChip(
                             text = "宽松",
@@ -211,11 +211,10 @@ fun TimetableDisplayScreen(
                 }
             }
 
-            SettingsSection(title = "配色方案") {
+            SettingsSection(title = "颜色方案") {
                 SettingBlock(
                     title = "自动配色",
-                    subtitle = "新建 / 导入课程时给它定一个色相并钉在课程上,不同课程不会分到同一个颜色;" +
-                        "色相数就是能排下的课程数。",
+                    subtitle = "新建 / 导入时给每门课定一个颜色,互不重复。",
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CourseColorScheme.entries.forEach { scheme ->
@@ -250,7 +249,7 @@ fun TimetableDisplayScreen(
                 DividerLine()
                 SettingBlock(
                     title = "重新配色",
-                    subtitle = "按上面的方案把全部课程的色相重排一遍。自己指定过颜色的课程保持不动。",
+                    subtitle = "按上面的方案给全部课程重排颜色;手动指定过的保持不变。",
                 ) {
                     YohakuOutlineButton(
                         text = "重新配色全部课程",
@@ -290,7 +289,7 @@ fun TimetableDisplayScreen(
                 DividerLine()
                 SettingSwitchRow(
                     title = "铺课程淡彩底",
-                    subtitle = "关掉就是纯文字块,课程颜色只落在左侧色标上。",
+                    subtitle = "关掉就是纯文字块,颜色只落在左侧色条上。",
                     checked = prefs.showTint,
                     onCheckedChange = { on -> viewModel.update { it.copy(showTint = on) } },
                 )
@@ -317,8 +316,8 @@ fun TimetableDisplayScreen(
                 },
             ) {
                 Text(
-                    text = "会按「${prefs.colorScheme.label}」给所有课程重新分配色相," +
-                        "课表里的颜色可能和你习惯的不一样 —— 之前就分到同一个颜色的课,到这一步才会分开。",
+                    text = "会按「${prefs.colorScheme.label}」给所有课程重新分配颜色," +
+                        "课表颜色可能与以往不同。",
                     style = YohakuType.copy14,
                     color = LocalYohakuColors.current.neutral9,
                 )

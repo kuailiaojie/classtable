@@ -59,6 +59,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
     private val KEY_DISMISSED_VERSION = stringPreferencesKey("dismissed_version")
     private val KEY_ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+    /** 上次播放「首次启动介绍」时的版本号;仅本机,不同步。 */
+    private val KEY_INTRO_SEEN_VERSION = stringPreferencesKey("intro_seen_version")
     /** 已进过 ROM「应用启动管理」页:引导标记,仅本机;荣耀无公开 API 可查真实自启动状态,访问过即视为已配置。 */
     private val KEY_AUTO_START_VISITED = booleanPreferencesKey("autostart_visited")
     /** 本机设置最后变更时间戳:配置同步(users/{uid}/settings)LWW 判断依据;0 = 从未改过。 */
@@ -110,6 +112,7 @@ class SettingsRepository @Inject constructor(
             lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
             dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
             onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
+            introSeenVersion = p[KEY_INTRO_SEEN_VERSION] ?: "",
             yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
             yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
             yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
@@ -225,6 +228,11 @@ class SettingsRepository @Inject constructor(
     /** 首次启动权限引导完成/跳过标记:仅本机,不同步。 */
     suspend fun setOnboardingDone() {
         context.settingsDataStore.edit { it[KEY_ONBOARDING_DONE] = true }
+    }
+
+    /** 记录已播放过「首次启动介绍」的版本号:仅本机,不同步。 */
+    suspend fun setIntroSeenVersion(version: String) {
+        context.settingsDataStore.edit { it[KEY_INTRO_SEEN_VERSION] = version }
     }
 
     /**

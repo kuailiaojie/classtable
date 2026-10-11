@@ -158,7 +158,7 @@ fun AiImportScreen(
 
             if (settings.aiApiKey.isBlank()) {
                 Text(
-                    text = "尚未配置 AI 密钥。请到「设置 → AI 密钥」配置,支持 Gemini 及任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等)。",
+                    text = "尚未配置图片识别。请到「设置 → 图片识别」配置,支持 Gemini 及任意 OpenAI 兼容服务(DeepSeek、通义千问、Kimi、智谱 GLM 等)。",
                     style = YohakuType.copy13,
                     color = colors.error,
                 )

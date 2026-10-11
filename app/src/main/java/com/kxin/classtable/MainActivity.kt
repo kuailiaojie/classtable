@@ -67,6 +67,7 @@ import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.notify.Notifier
 import com.kxin.classtable.ui.navigateToTab
+import com.kxin.classtable.ui.onboarding.IntroScreen
 import com.kxin.classtable.ui.onboarding.OnboardingScreen
 import com.kxin.classtable.ui.permissions.PermissionsScreen
 import com.kxin.classtable.ui.account.AccountScreen
@@ -156,6 +157,10 @@ fun ClasstableRoot(
                 !RomHelper.ignoreBatteryOptimizations(context) ||
                 RomHelper.detect() != RomType.STOCK
         )
+        // 首次启动介绍:按版本门控 —— 新用户(未记录)与升级到本主版本的老用户首次打开都会看到,
+        // 同一主版本内不再重复(见 SettingsRepository.introSeenVersion)。顺序为「先介绍、再要权限」。
+        var introDismissed by rememberSaveable { mutableStateOf(false) }
+        val needsIntro = !introDismissed && introRequired(settings.introSeenVersion)
         // 通知点击 → 直达课程详情 / 检查更新页(仅处理进程首次带参启动,避免重组合重复导航)
         var handledDeepLink by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) {
@@ -307,9 +312,9 @@ fun ClasstableRoot(
                         .padding(vertical = 8.dp),
                 )
             }
-            // 首次启动权限引导全屏覆盖层:开屏退场后入场,完成后淡出露出主界面
+            // 首次启动权限引导全屏覆盖层:介绍动画收场后才入场,完成后淡出露出主界面
             AnimatedVisibility(
-                visible = needsOnboarding && splashExiting,
+                visible = needsOnboarding && splashExiting && !needsIntro,
                 enter = fadeScaleIn(),
                 exit = fadeScaleOut(),
             ) {
@@ -317,6 +322,19 @@ fun ClasstableRoot(
                     onDismiss = {
                         onboardingDismissed = true
                         settingsViewModel.completeOnboarding()
+                    },
+                )
+            }
+            // 首次启动介绍覆盖层:开屏退场后先于权限引导入场(先介绍、再要权限)
+            AnimatedVisibility(
+                visible = needsIntro && splashExiting,
+                enter = fadeScaleIn(),
+                exit = fadeScaleOut(),
+            ) {
+                IntroScreen(
+                    onFinish = {
+                        introDismissed = true
+                        settingsViewModel.completeIntro()
                     },
                 )
             }
@@ -329,7 +347,8 @@ fun ClasstableRoot(
                     updateViewModel.autoCheck()
                 }
             }
-            (updateState as? UpdateState.Available)?.let { available ->
+            // 介绍播放时不抢镜:等它收场再弹更新提示
+            (updateState as? UpdateState.Available)?.takeIf { !needsIntro }?.let { available ->
                 YohakuDialog(
                     onDismissRequest = { updateViewModel.dismiss() },
                     title = "发现新版本 v${available.info.latestVersion}",
@@ -369,7 +388,7 @@ fun ClasstableRoot(
 
             // 用户问卷邀请:够资格才弹,且一次只弹一个 —— 权限引导、更新提示在时先让位
             val updateDialogShowing = updateState is UpdateState.Available
-            if (surveyInvite && !needsOnboarding && !updateDialogShowing) {
+            if (surveyInvite && !needsOnboarding && !needsIntro && !updateDialogShowing) {
                 val uriHandler = LocalUriHandler.current
                 YohakuDialog(
                     onDismissRequest = { settingsViewModel.completeSurvey() },
@@ -404,6 +423,12 @@ fun ClasstableRoot(
 
 /** 底部导航覆盖的根标签页(二级页不显示导航,占满整屏)。 */
 private val ROOT_TABS = setOf("week", "courses", "agenda", "settings")
+
+/** 主版本号不同(或从未播过)即需要播放介绍:新用户与跨主版本升级的老用户都会命中。 */
+private fun introRequired(seenVersion: String): Boolean =
+    versionMajor(seenVersion) != versionMajor(BuildConfig.VERSION_NAME)
+
+private fun versionMajor(version: String): Int? = version.substringBefore('.').toIntOrNull()
 
 private fun isRootTab(route: String?): Boolean = route in ROOT_TABS
 

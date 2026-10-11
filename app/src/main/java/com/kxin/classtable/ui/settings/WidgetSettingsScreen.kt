@@ -139,7 +139,7 @@ fun WidgetSettingsScreen(
                     }
                 }
                 DividerLine()
-                SettingBlock(title = "列表最多显示") {
+                SettingBlock(title = "最多显示几条") {
                     // 五个片在一行会挤爆窄屏(320dp),减到四个
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(2, 4, 6, 8).forEach { n ->

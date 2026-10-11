@@ -289,14 +289,14 @@ fun UpdateScreen(
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "在后台按下面的频率检查一次,仅在联网时进行;发现新版本发一条通知。" +
-                    "只提示,不自动下载安装。",
+                text = "在后台按下面的间隔检查一次,仅在联网时进行;发现新版发一条通知," +
+                    "只提示不自动下载。",
                 style = YohakuType.label12,
                 color = colors.neutral6,
             )
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-            Text(text = "检查频率", style = YohakuType.copy13, color = colors.neutral9)
+            Text(text = "检查间隔", style = YohakuType.copy13, color = colors.neutral9)
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 UpdateCadence.entries.forEach { cadence ->
@@ -310,9 +310,9 @@ fun UpdateScreen(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = if (settings.autoCheckUpdate) {
-                    "当前:${settings.updateCadence().label}最多检查一次;手动「检查更新」不受它影响。"
+                    "当前:${settings.updateCadence().label}最多检查一次;手动检查不受影响。"
                 } else {
-                    "自动检查已关闭,这个频率暂时不生效;手动「检查更新」不受它影响。"
+                    "自动检查已关闭;手动检查不受影响。"
                 },
                 style = YohakuType.label12,
                 color = colors.neutral6,
@@ -321,7 +321,7 @@ fun UpdateScreen(
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "接收预发行版",
+                    text = "接收测试版",
                     style = YohakuType.copy13,
                     color = colors.neutral9,
                     modifier = Modifier.weight(1f),
@@ -333,11 +333,11 @@ fun UpdateScreen(
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "预发行版(RC)是正式版之前的试用版:新功能来得早,偶尔也会有点小毛病。" +
+                text = "测试版(RC)是正式版前的试用版:功能来得早,偶尔有点小毛病。" +
                     if (settings.includePrerelease) {
-                        "已打开 —— 正式版与 RC 都会提示。"
+                        "已打开 —— 正式版与测试版都会提示。"
                     } else {
-                        "当前只提示正式版;打开上面的开关就会连它一起提示。"
+                        "当前只提示正式版;打开上面的开关会连测试版一起提示。"
                     },
                 style = YohakuType.label12,
                 color = colors.neutral6,

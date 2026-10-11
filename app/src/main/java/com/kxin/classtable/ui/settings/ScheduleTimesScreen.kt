@@ -145,7 +145,7 @@ fun ScheduleTimesScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        YohakuTopBar(title = "作息时间", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "上课时间", onBack = { nav.popBackStack() })
 
         Column(
             modifier = Modifier
@@ -154,24 +154,24 @@ fun ScheduleTimesScreen(
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
             Text(
-                text = "点任意一个时间,改的就是那一刻;拖方块右下角可以拉长 / 缩短这一节。",
+                text = "点时间改那一刻;拖右下角改这一节长短。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
             Text(
-                text = "每一节都能单独删;想在哪两节之间插一节,点那段课间的「加一节」;课间的长短用「－ / ＋」直接改。",
+                text = "点课间的「加一节」插课;课间长短用「－ / ＋」改。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
             Text(
-                text = "课程的时刻在导入 / 新建时已按当时的作息固定,改这张表不会再移动它们(要改请编辑那门课)。",
+                text = "改这张表不会移动已建课程的时刻(要改请编辑那门课)。",
                 style = YohakuType.label12,
                 color = colors.neutral7,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
 
             if (showGenerator) {
-                Text(text = "自动生成时间线", style = YohakuType.label12, color = colors.neutral7)
+                Text(text = "自动生成", style = YohakuType.label12, color = colors.neutral7)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // 与右侧「节数」输入框同构:标签 + 控件,两列才对得齐
@@ -254,7 +254,7 @@ fun ScheduleTimesScreen(
                 Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
             } else {
                 Text(
-                    text = "＋ 自动生成时间线",
+                    text = "＋ 自动生成",
                     style = YohakuType.copy13,
                     color = colors.accent,
                     modifier = Modifier
