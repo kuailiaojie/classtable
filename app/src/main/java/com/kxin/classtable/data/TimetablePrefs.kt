@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.CourseColorScheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -60,13 +61,10 @@ object TimetablePrefsStore {
             showPeriod = p[KEY_PERIOD] ?: false,
             showLocation = p[KEY_LOCATION] ?: true,
             showTeacher = p[KEY_TEACHER] ?: false,
-            density = runCatching { GridDensity.valueOf(p[KEY_DENSITY] ?: "STANDARD") }
-                .getOrDefault(GridDensity.STANDARD),
+            density = enumOrDefault(p[KEY_DENSITY], GridDensity.STANDARD),
             nameLines = (p[KEY_NAME_LINES] ?: 2).coerceIn(1, 2),
-            nameSize = runCatching { NameSize.valueOf(p[KEY_NAME_SIZE] ?: "MEDIUM") }
-                .getOrDefault(NameSize.MEDIUM),
-            corner = runCatching { BlockCorner.valueOf(p[KEY_CORNER] ?: "MEDIUM") }
-                .getOrDefault(BlockCorner.MEDIUM),
+            nameSize = enumOrDefault(p[KEY_NAME_SIZE], NameSize.MEDIUM),
+            corner = enumOrDefault(p[KEY_CORNER], BlockCorner.MEDIUM),
             showTint = p[KEY_TINT] ?: true,
             colorScheme = CourseColorScheme.of(p[KEY_COLOR_SCHEME]),
         )

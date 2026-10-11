@@ -1,6 +1,7 @@
 package com.kxin.classtable.design
 
 import androidx.compose.ui.graphics.Color
+import com.kxin.classtable.domain.Defaults
 
 /**
  * Yohaku 三档中性 + 一抹 accent。
@@ -73,7 +74,7 @@ val YohakuDarkColors = YohakuColors(
 
 /** 设置页可选的 6 个和色 accent(克制,不开放自由取色)。 */
 val AccentOptions = listOf(
-    "梅" to "#C56473",
+    "梅" to Defaults.ACCENT_HEX,
     "縹" to "#3D6896",
     "若竹" to "#5E9F7E",
     "朽葉" to "#A87A3D",

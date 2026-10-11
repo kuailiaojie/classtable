@@ -31,6 +31,7 @@ import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.Course
@@ -91,11 +92,11 @@ internal fun DayList(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        val weekName = "一二三四五六日"[date.dayOfWeek.value - 1]
+        val weekName = Dates.weekdayChar(date.dayOfWeek.value)
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${date.monthValue}月${date.dayOfMonth}日",
+                    text = Dates.monthDay(date),
                     style = YohakuType.title20,
                     color = colors.neutral10,
                 )
@@ -114,7 +115,7 @@ internal fun DayList(
             )
             val status = when {
                 plan.rest -> "调休 · 停课"
-                plan.makeup -> "调休 · 补 ${plan.effectiveDate.monthValue}/${plan.effectiveDate.dayOfMonth} 的课"
+                plan.makeup -> "调休 · 补 ${Dates.slash(plan.effectiveDate)} 的课"
                 ongoing != null -> "正在上课:${ongoing.first.name} · 还有 ${ongoing.third - nowMinute} 分钟下课"
                 next != null -> "距 ${next.first.name} 上课还有 ${next.second - nowMinute} 分钟"
                 isToday -> "今天没有更多课了"

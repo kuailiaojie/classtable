@@ -6,6 +6,7 @@ import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.CourseEntity
 import com.kxin.classtable.data.local.DeletedCourseDao
 import com.kxin.classtable.data.local.DeletedCourseEntity
+import com.kxin.classtable.di.ApplicationScope
 import com.kxin.classtable.domain.CourseHuePlanner
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.Course
@@ -17,7 +18,6 @@ import com.kxin.classtable.widget.TomorrowWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -35,9 +35,8 @@ class CourseRepository @Inject constructor(
     private val sync: SyncRepository,
     private val reminderPlanner: ReminderPlanner,
     private val settingsRepository: SettingsRepository,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     fun observeAll(): Flow<List<Course>> =
         dao.observeAll()
             .map { list -> list.map { it.toDomain() } }

@@ -261,10 +261,7 @@ object Schedule {
     }
 
     /** "9月23日 周三" */
-    fun todayDateText(): String {
-        val d = LocalDate.now()
-        return "${d.monthValue}月${d.dayOfMonth}日 周${"一二三四五六日"[d.dayOfWeek.value - 1]}"
-    }
+    fun todayDateText(): String = Dates.monthDayWeek(LocalDate.now())
 
     private fun fmt(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
 }

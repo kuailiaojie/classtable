@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.appwidget.updateAll
 import com.kxin.classtable.data.Crash
 import com.kxin.classtable.data.settingsDataStore
+import com.kxin.classtable.domain.Defaults
+import com.kxin.classtable.domain.enumOrDefault
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -42,7 +44,7 @@ data class WidgetPrefs(
     val surface: WidgetSurface = WidgetSurface.PAPER,
     /** 今日课表最多显示几门。 */
     val maxRows: Int = 4,
-    val accentHex: String = "#C56473",
+    val accentHex: String = Defaults.ACCENT_HEX,
 )
 
 object WidgetPrefsStore {
@@ -63,10 +65,9 @@ object WidgetPrefsStore {
             showTeacher = p[KEY_TEACHER] ?: false,
             showPeriod = p[KEY_PERIOD] ?: false,
             compact = p[KEY_COMPACT] ?: false,
-            surface = runCatching { WidgetSurface.valueOf(p[KEY_SURFACE] ?: "PAPER") }
-                .getOrDefault(WidgetSurface.PAPER),
+            surface = enumOrDefault(p[KEY_SURFACE], WidgetSurface.PAPER),
             maxRows = (p[KEY_MAX_ROWS] ?: 4).coerceIn(1, 8),
-            accentHex = p[KEY_ACCENT] ?: "#C56473",
+            accentHex = p[KEY_ACCENT] ?: Defaults.ACCENT_HEX,
         )
     }
 

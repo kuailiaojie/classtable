@@ -9,9 +9,8 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.kxin.classtable.data.Crash
-import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +30,7 @@ import kotlinx.coroutines.withContext
  * 1/3/5 分钟」那种没有新状态的重发;课中也不挂进度条 —— 进度条不会自己动,推进它就得每分钟
  * 重发一次。秒级倒计时交给系统的 `when` + Chronometer 自己走,所以两次相变之间**零重发**,
  * 只在相位切换时换槽上屏 —— 都是同一条通知(同一身份 → 同一槽位)、同一个服务实例,不重起前台服务、
- * 也不另发一条(通知本身 `setOnlyAlertOnce`,见 [Notifier.buildLiveUpdate])。
+ * 也不另发一条(通知本身 `setOnlyAlertOnce`,见 [LiveUpdateNotifier.buildLiveUpdate])。
  *
  * - **平台 Notification.Builder + 提升请求**:状态栏胶囊只提升符合
  *   Android 16 Live Updates 规范的通知,细节见 [CapsuleCompat]。
@@ -61,12 +60,12 @@ class CourseLiveUpdateService : Service() {
         val usable = payload != null &&
             !payload.shouldStop(now) &&
             !planner.isMuted(payload.muteKey, now) &&
-            Notifier.canPost(this, Notifier.CHANNEL_COURSE_LIVE)
+            NotifyChannels.canPost(this, NotifyChannels.COURSE_LIVE)
         if (!usable) {
             Log.i(TAG, "跳过实时活动:无 payload / 已下课 / 已静音 / 无通知权限")
             planner.clearLive()
             stopForegroundNow()
-            Notifier.cancelLiveUpdate(this)
+            LiveUpdateNotifier.cancelLiveUpdate(this)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -85,7 +84,7 @@ class CourseLiveUpdateService : Service() {
     }
 
     private suspend fun startForegroundNotification(payload: LiveUpdate, now: Long) {
-        val notification = Notifier.buildLiveUpdate(
+        val notification = LiveUpdateNotifier.buildLiveUpdate(
             context = this,
             payload = payload,
             now = now,
@@ -93,7 +92,7 @@ class CourseLiveUpdateService : Service() {
             announcement = latestAnnouncementTitle(payload.courseId),
         )
         val attached = runCatching {
-            Notifier.postLiveUpdate(this, notification) { id, value -> attachForeground(id, value) }
+            LiveUpdateNotifier.postLiveUpdate(this, notification) { id, value -> attachForeground(id, value) }
         }
         if (attached.isFailure) {
             // 挂前台失败:通知可能已经上屏但没有服务兜着,必须一并收掉,否则留下一条用户划不掉的常驻通知
@@ -102,7 +101,7 @@ class CourseLiveUpdateService : Service() {
                 attached.exceptionOrNull() ?: IllegalStateException("startForeground failed"),
                 "op" to "live_update_start_foreground",
             )
-            Notifier.cancelLiveUpdate(this)
+            LiveUpdateNotifier.cancelLiveUpdate(this)
             stopSelf()
         }
     }
@@ -120,7 +119,7 @@ class CourseLiveUpdateService : Service() {
      * 睡到「下一次需要重画」的那一刻再醒 —— 也就是下一个相位边界。
      *
      * 每次唤醒都先判断该不该继续(下课 / 静音 / 权限被关),再原地更新同一条通知的一部分:
-     * 同一个身份 → 同一个槽位,只有跨相位才会换槽(见 [Notifier.postLiveUpdate])。
+     * 同一个身份 → 同一个槽位,只有跨相位才会换槽(见 [LiveUpdateNotifier.postLiveUpdate])。
      * 其余时间静默等待,不产生任何更新。
      */
     private fun startRefreshLoop(planner: ReminderPlanner, payload: LiveUpdate) {
@@ -132,18 +131,18 @@ class CourseLiveUpdateService : Service() {
                 val now = System.currentTimeMillis()
                 if (payload.shouldStop(now)) break
                 if (planner.isMuted(payload.muteKey, now)) break
-                if (!Notifier.canPost(this@CourseLiveUpdateService, Notifier.CHANNEL_COURSE_LIVE)) break
+                if (!NotifyChannels.canPost(this@CourseLiveUpdateService, NotifyChannels.COURSE_LIVE)) break
 
                 if (!firstFrame) {
                     val renderedAt = System.currentTimeMillis()
-                    val notification = Notifier.buildLiveUpdate(
+                    val notification = LiveUpdateNotifier.buildLiveUpdate(
                         context = this@CourseLiveUpdateService,
                         payload = payload,
                         now = renderedAt,
                         announcement = latestAnnouncementTitle(payload.courseId),
                     )
                     val posted = runCatching {
-                        Notifier.postLiveUpdate(this@CourseLiveUpdateService, notification) { id, value ->
+                        LiveUpdateNotifier.postLiveUpdate(this@CourseLiveUpdateService, notification) { id, value ->
                             attachForeground(id, value)
                         }
                     }.isSuccess
@@ -165,7 +164,7 @@ class CourseLiveUpdateService : Service() {
         onScreenIdentity = null
         planner().clearLive()
         stopForegroundNow()
-        Notifier.cancelLiveUpdate(this)
+        LiveUpdateNotifier.cancelLiveUpdate(this)
         stopSelf()
     }
 
@@ -175,12 +174,9 @@ class CourseLiveUpdateService : Service() {
         }
     }
 
-    private fun planner(): ReminderPlanner = ReminderPlanner(
-        applicationContext,
-        AppDatabase.get(applicationContext).courseDao(),
-        AppDatabase.get(applicationContext).agendaDao(),
-        SettingsRepository(applicationContext),
-    )
+    private fun planner(): ReminderPlanner =
+        EntryPointAccessors.fromApplication(applicationContext, NotifyEntryPoint::class.java)
+            .reminderPlanner()
 
     /**
      * 该课程最新一条公告标题(雨课堂)。只读本地缓存,不联网 —— 实时活动按相变时刻醒来刷新,
@@ -189,11 +185,12 @@ class CourseLiveUpdateService : Service() {
      */
     private suspend fun latestAnnouncementTitle(courseId: String): String? = withContext(Dispatchers.IO) {
         runCatching {
-            val settings = SettingsRepository(applicationContext).settings.first()
+            val entry = EntryPointAccessors.fromApplication(applicationContext, NotifyEntryPoint::class.java)
+            val settings = entry.settingsRepository().settings.first()
             if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
                 return@runCatching null
             }
-            YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(applicationContext), courseId)
+            YuketangNoticeFilter.latestTitleForCourse(entry.database(), courseId)
         }.getOrNull()
     }
 

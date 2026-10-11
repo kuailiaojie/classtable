@@ -1,6 +1,7 @@
 package com.kxin.classtable.data
 
 import com.kxin.classtable.domain.WeekSpec
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 import org.json.JSONObject
@@ -38,7 +39,7 @@ data class RemoteCourse(
         weekday = weekday,
         startPeriod = startPeriod,
         endPeriod = endPeriod,
-        weekType = runCatching { WeekType.valueOf(weekType) }.getOrDefault(WeekType.EVERY_WEEK),
+        weekType = enumOrDefault(weekType, WeekType.EVERY_WEEK),
         weekStart = weekStart,
         weekEnd = weekEnd,
         weeks = WeekSpec.decode(weeks),

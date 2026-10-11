@@ -11,7 +11,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.notify.NotifyChannels
 import com.kxin.classtable.notify.ReminderSelfHealWorker
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.AgendaRepository
@@ -26,13 +26,12 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
 import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
+import com.kxin.classtable.di.ApplicationScope
 import com.kxin.classtable.icon.AppIcon
 import com.kxin.classtable.icon.applyAppIcon
 import com.kxin.classtable.notify.ReminderPlanner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -64,7 +63,10 @@ class ClasstableApp : Application() {
     @Inject
     lateinit var fcmTokens: FcmTokens
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 应用级协程作用域,由 Hilt 提供(与各仓库共用同一个,活到进程结束)。 */
+    @Inject
+    @ApplicationScope
+    lateinit var scope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()
@@ -90,7 +92,7 @@ class ClasstableApp : Application() {
         scope.launch {
             // 通知渠道在启动时就建齐:FCM 的系统兜底展示(通知型消息)也才找得到「课表动态」,
             // 不会退回 SDK 自建的 Miscellaneous;顺带让老用户看到改名后的渠道文案。
-            Notifier.ensureChannels(this@ClasstableApp)
+            NotifyChannels.ensure(this@ClasstableApp)
 
             val workManager = WorkManager.getInstance(this@ClasstableApp)
             // 提醒自愈:每 12 小时重排全部闹钟(国产 ROM 可能清掉精确闹钟,靠它补回来)。

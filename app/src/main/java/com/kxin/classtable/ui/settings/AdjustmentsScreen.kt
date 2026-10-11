@@ -45,6 +45,7 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.HolidayClient
 import com.kxin.classtable.domain.HolidayPlan
 import com.kxin.classtable.domain.Schedule
@@ -564,13 +565,10 @@ private fun DraftRow(label: String, value: String, onClick: () -> Unit) {
 }
 
 /** "9/11 周五" */
-private fun dateLabel(epochDay: Long): String {
-    val d = LocalDate.ofEpochDay(epochDay)
-    return "${d.monthValue}/${d.dayOfMonth} 周${"一二三四五六日"[d.dayOfWeek.value - 1]}"
-}
+private fun dateLabel(epochDay: Long): String = Dates.slashWeek(LocalDate.ofEpochDay(epochDay))
 
 /** "10/1"(区间描述里用,省掉星期) */
-private fun shortDate(date: LocalDate): String = "${date.monthValue}/${date.dayOfMonth}"
+private fun shortDate(date: LocalDate): String = Dates.slash(date)
 
 /** 预览里的一行:描述 + 一个「已选 / 忽略」的开关片。 */
 @Composable

@@ -34,6 +34,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -96,7 +97,7 @@ fun AiKeyScreen(
     }
     LaunchedEffect(saved) { if (saved) nav.popBackStack() }
 
-    val selected = runCatching { AiProvider.valueOf(provider) }.getOrDefault(AiProvider.GEMINI)
+    val selected = enumOrDefault(provider, AiProvider.GEMINI)
 
     Column(
         modifier = Modifier

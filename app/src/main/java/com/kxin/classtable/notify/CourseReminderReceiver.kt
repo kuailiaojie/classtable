@@ -5,16 +5,14 @@ import android.content.Context
 import android.content.Intent
 import com.kxin.classtable.data.Analytics
 import com.kxin.classtable.data.Crash
-import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
  * 提醒闹钟接收器,处理三类事件:
@@ -29,18 +27,19 @@ class CourseReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
         val appContext = context.applicationContext
+        val entry = EntryPointAccessors.fromApplication(appContext, NotifyEntryPoint::class.java)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 ReminderPlanner.withShortWakeLock(appContext, "reminder") {
                     when (action) {
                         ReminderPlanner.ACTION_REFRESH ->
-                            planner(appContext).rescheduleAll(force = true)
+                            entry.reminderPlanner().rescheduleAll(force = true)
 
-                        ReminderPlanner.ACTION_REMIND -> handleReminder(appContext, intent)
+                        ReminderPlanner.ACTION_REMIND -> handleReminder(appContext, intent, entry)
 
                         ReminderPlanner.ACTION_AGENDA_REMIND ->
-                            handleAgendaReminder(appContext, intent)
+                            handleAgendaReminder(appContext, intent, entry)
                     }
                 }
             } catch (e: Exception) {
@@ -52,27 +51,18 @@ class CourseReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun planner(context: Context): ReminderPlanner = ReminderPlanner(
-        context,
-        AppDatabase.get(context).courseDao(),
-        AppDatabase.get(context).agendaDao(),
-        SettingsRepository(context),
-    )
-
     /**
      * 日程提醒:触发时重新读一遍条目(而不是排程时的快照),改过标题 / 地点就显示当下的;
      * 已删除或已结束的条目直接跳过。
      */
-    private fun handleAgendaReminder(context: Context, intent: Intent) {
+    private suspend fun handleAgendaReminder(context: Context, intent: Intent, entry: NotifyEntryPoint) {
         val eventId = intent.getStringExtra(ReminderPlanner.EXTRA_AGENDA_ID) ?: return
-        val event = runBlocking {
-            AppDatabase.get(context).agendaDao().getById(eventId)?.toDomain()
-        } ?: return
+        val event = entry.database().agendaDao().getById(eventId)?.toDomain() ?: return
         if (event.isPast()) return
 
-        Notifier.showAgendaReminder(
+        AgendaNotifier.showAgendaReminder(
             context = context,
-            notificationId = Notifier.agendaReminderId(event.id),
+            notificationId = AgendaNotifier.agendaReminderId(event.id),
             eventId = event.id,
             title = event.title,
             categoryLabel = event.category.label,
@@ -84,13 +74,13 @@ class CourseReminderReceiver : BroadcastReceiver() {
         Analytics.log("agenda_reminder_shown", "agenda_id" to eventId)
     }
 
-    private fun handleReminder(context: Context, intent: Intent) {
-        val planner = planner(context)
+    private suspend fun handleReminder(context: Context, intent: Intent, entry: NotifyEntryPoint) {
+        val planner = entry.reminderPlanner()
         val muteKey = intent.getStringExtra(ReminderPlanner.EXTRA_MUTE_KEY).orEmpty()
         if (muteKey.isNotBlank() && planner.isMuted(muteKey)) return
 
         if (intent.getBooleanExtra(ReminderPlanner.EXTRA_TOMORROW, false)) {
-            Notifier.showTomorrowReminder(
+            CourseNotifier.showTomorrowReminder(
                 context = context,
                 courseCount = intent.getIntExtra(ReminderPlanner.EXTRA_TOMORROW_COUNT, 0),
                 firstName = intent.getStringExtra(ReminderPlanner.EXTRA_COURSE_NAME).orEmpty(),
@@ -115,9 +105,9 @@ class CourseReminderReceiver : BroadcastReceiver() {
             return
         }
 
-        val settings = runBlocking { SettingsRepository(context).settings.first() }
+        val settings = entry.settingsRepository().settings.first()
         val periods = Schedule.parsePeriods(settings.periodTimes)
-        val course = runBlocking { AppDatabase.get(context).courseDao().getById(courseId)?.toDomain() }
+        val course = entry.database().courseDao().getById(courseId)?.toDomain()
         val name = course?.name?.takeIf { it.isNotBlank() } ?: payload.name
         val location = course?.location ?: payload.location
         val teacher = course?.teacher.orEmpty()
@@ -134,16 +124,16 @@ class CourseReminderReceiver : BroadcastReceiver() {
         val started = live && startLiveUpdateService(context, effective)
         if (!started) {
             // 标准模式,或实时活动启动失败(后台启动被拒):普通高优先级通知兜底,保证必达
-            Notifier.showCourseReminder(
+            CourseNotifier.showCourseReminder(
                 context = context,
-                notificationId = Notifier.reminderId(muteKey.ifBlank { "$courseId:$endAt" }),
+                notificationId = CourseNotifier.reminderId(muteKey.ifBlank { "$courseId:$endAt" }),
                 courseId = courseId,
                 courseName = name,
                 startMinute = startMinute,
                 location = location,
                 teacher = teacher,
                 leadMinutes = leadMinutes,
-                announcement = latestAnnouncement(context, courseId, settings),
+                announcement = latestAnnouncement(entry, courseId, settings),
             )
         }
         Analytics.log("course_reminder_shown", "course_id" to courseId)
@@ -157,7 +147,7 @@ class CourseReminderReceiver : BroadcastReceiver() {
         val current = planner.restoreLive() ?: return
         if (current.muteKey != payload.muteKey) return
         planner.clearLive()
-        Notifier.cancelLiveUpdate(context)
+        LiveUpdateNotifier.cancelLiveUpdate(context)
         context.stopService(Intent(context, CourseLiveUpdateService::class.java))
     }
 
@@ -168,10 +158,14 @@ class CourseReminderReceiver : BroadcastReceiver() {
      * 缓存由后台任务与「立即刷新」维护。雨课堂自己的「上课提醒」在这里被筛掉 —— 我们自己
      * 的提醒已经说了一遍,不必再复述它。
      */
-    private fun latestAnnouncement(context: Context, courseId: String, settings: AppSettings): String? {
+    private suspend fun latestAnnouncement(
+        entry: NotifyEntryPoint,
+        courseId: String,
+        settings: AppSettings,
+    ): String? {
         if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) return null
         return runCatching {
-            runBlocking { YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(context), courseId) }
+            YuketangNoticeFilter.latestTitleForCourse(entry.database(), courseId)
         }.getOrNull()
     }
 }

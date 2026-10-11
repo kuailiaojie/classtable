@@ -1,6 +1,8 @@
 package com.kxin.classtable.domain.model
 
+import com.kxin.classtable.domain.Defaults
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.enumOrDefault
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -15,7 +17,7 @@ enum class IconCadence(val label: String) {
     ;
 
     companion object {
-        fun of(name: String): IconCadence = runCatching { valueOf(name) }.getOrDefault(LAUNCH)
+        fun of(name: String): IconCadence = enumOrDefault(name, LAUNCH)
     }
 }
 
@@ -39,7 +41,7 @@ enum class AiProvider(val label: String, val defaultModel: String, val defaultBa
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val accentHex: String = "#C56473",
+    val accentHex: String = Defaults.ACCENT_HEX,
     val currentWeek: Int = 1,
     val periodTimes: String = Schedule.DEFAULT_PERIODS,
     val semesterStartDay: Long = 0L,
@@ -128,8 +130,7 @@ data class AppSettings(
     /** 轮播节奏(见 [IconCadence])。 */
     val iconCarouselCadence: String = IconCadence.LAUNCH.name,
 ) {
-    fun provider(): AiProvider = runCatching { AiProvider.valueOf(aiProvider) }
-        .getOrDefault(AiProvider.GEMINI)
+    fun provider(): AiProvider = enumOrDefault(aiProvider, AiProvider.GEMINI)
 
     fun updateCadence(): UpdateCadence = UpdateCadence.of(updateCheckIntervalDays)
 }

@@ -51,6 +51,7 @@ import com.kxin.classtable.design.courseTint
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.Course
@@ -89,7 +90,7 @@ internal fun WeekdayHeader(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "一二三四五六日"[d - 1].toString(),
+                    text = Dates.weekdayChar(d),
                     style = YohakuType.gridWeekday,
                     color = if (isToday) colors.accent else colors.neutral8,
                 )

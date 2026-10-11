@@ -5,7 +5,8 @@ import com.google.firebase.messaging.RemoteMessage
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.yuketang.YuketangNoticeFilter
 import com.kxin.classtable.domain.Schedule
-import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.notify.CourseNotifier
+import com.kxin.classtable.notify.PushNotifier
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -59,13 +60,13 @@ class FcmMessagingService : FirebaseMessagingService() {
     private fun handleMarketing(message: RemoteMessage): Boolean {
         val title = message.notification?.title ?: message.data["title"] ?: return false
         val body = message.notification?.body ?: message.data["body"] ?: ""
-        Notifier.showLiveUpdate(this, title, body)
+        PushNotifier.showLiveUpdate(this, title, body)
         return true
     }
 
     /** 课表变更:提示 + 触发云同步与闹钟重排(调课/停课/换教室等)。 */
     private fun handleCourseChanged(data: Map<String, String>): Boolean {
-        Notifier.showLiveUpdate(
+        PushNotifier.showLiveUpdate(
             this,
             data["title"] ?: "课表已更新",
             data["body"] ?: "课程有变动,请查看最新课表",
@@ -92,7 +93,7 @@ class FcmMessagingService : FirebaseMessagingService() {
             ?: (data["startTime"]?.let { Schedule.parseClock(it) })
             ?: -1
         val courseId = data["courseId"].orEmpty()
-        val notificationId = Notifier.reminderId("$courseId:${java.time.LocalDate.now().toEpochDay()}")
+        val notificationId = CourseNotifier.reminderId("$courseId:${java.time.LocalDate.now().toEpochDay()}")
         val location = data["location"].orEmpty()
         val teacher = data["teacher"].orEmpty()
         val leadMinutes = data["leadMinutes"]?.toIntOrNull() ?: 0
@@ -101,7 +102,7 @@ class FcmMessagingService : FirebaseMessagingService() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             val announcement = latestAnnouncement(courseId)
             runCatching {
-                Notifier.showCourseReminder(
+                CourseNotifier.showCourseReminder(
                     context = this@FcmMessagingService,
                     notificationId = notificationId,
                     courseId = courseId,
@@ -126,11 +127,12 @@ class FcmMessagingService : FirebaseMessagingService() {
     private suspend fun latestAnnouncement(courseId: String): String? {
         if (courseId.isBlank()) return null
         return runCatching {
-            val settings = SettingsRepository(this).settings.first()
+            val entry = EntryPointAccessors.fromApplication(applicationContext, FcmEntryPoint::class.java)
+            val settings = entry.settingsRepository().settings.first()
             if (!settings.yuketangEnabled || !settings.yuketangIncludeInReminder) {
                 return@runCatching null
             }
-            YuketangNoticeFilter.latestTitleForCourse(AppDatabase.get(this), courseId)
+            YuketangNoticeFilter.latestTitleForCourse(entry.database(), courseId)
         }.getOrNull()
     }
 
@@ -140,5 +142,7 @@ class FcmMessagingService : FirebaseMessagingService() {
         fun fcmTokens(): FcmTokens
         fun syncRepository(): SyncRepository
         fun reminderPlanner(): com.kxin.classtable.notify.ReminderPlanner
+        fun settingsRepository(): SettingsRepository
+        fun database(): AppDatabase
     }
 }

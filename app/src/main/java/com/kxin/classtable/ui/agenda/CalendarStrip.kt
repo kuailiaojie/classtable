@@ -37,6 +37,7 @@ import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.LunarDate
 import java.time.LocalDate
 
@@ -180,7 +181,7 @@ private fun DayCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "一二三四五六日"[date.dayOfWeek.value - 1].toString(),
+            text = Dates.weekdayChar(date.dayOfWeek.value),
             style = YohakuType.label12,
             color = if (isToday) colors.accent else colors.neutral6,
         )

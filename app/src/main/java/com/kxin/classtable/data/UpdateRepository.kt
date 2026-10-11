@@ -3,12 +3,12 @@ package com.kxin.classtable.data
 import android.content.Context
 import android.os.Build
 import com.kxin.classtable.BuildConfig
+import com.kxin.classtable.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,11 +73,11 @@ sealed interface DownloadState {
 class UpdateRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val proxyBase: String = BuildConfig.FIREBASE_PROXY_URL.trimEnd('/')
     private val versionUrl: String get() = "$proxyBase/version"
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var downloadJob: Job? = null
 
     private val _download = MutableStateFlow<DownloadState>(DownloadState.Idle)

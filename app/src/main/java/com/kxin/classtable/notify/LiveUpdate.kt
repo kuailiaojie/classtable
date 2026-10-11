@@ -25,7 +25,7 @@ enum class LiveUpdatePhase { BEFORE_CLASS, IN_CLASS, BREAK, FINISHED }
  * 某一时刻的展示状态:**只跟相位走的一行状态文案**、以及下一个相变时刻(即倒计时目标)。
  *
  * 文案里不写分钟数 —— 秒级倒计时交给系统的 `when` + Chronometer 自己走(见
- * [Notifier.buildLiveUpdate]),我们只在相位边界重画一帧。通知上没有进度条:它不会自己动,
+ * [LiveUpdateNotifier.buildLiveUpdate]),我们只在相位边界重画一帧。通知上没有进度条:它不会自己动,
  * 只能靠重发推进,而重发在国产胶囊眼里就是「又一条新提醒」。
  */
 data class LiveUpdateStatus(

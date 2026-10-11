@@ -66,7 +66,9 @@ import com.kxin.classtable.design.fadeScaleIn
 import com.kxin.classtable.design.fadeScaleOut
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.ThemeMode
-import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.notify.AgendaNotifier
+import com.kxin.classtable.notify.CourseNotifier
+import com.kxin.classtable.notify.PushNotifier
 import com.kxin.classtable.ui.navigateToTab
 import com.kxin.classtable.ui.onboarding.IntroScreen
 import com.kxin.classtable.ui.onboarding.OnboardingScreen
@@ -173,16 +175,16 @@ fun ClasstableRoot(
         var handledDeepLink by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(Unit) {
             val intent = context.findActivity()?.intent
-            val courseId = runCatching { intent?.getStringExtra(Notifier.EXTRA_COURSE_ID) }.getOrNull()
-            val agendaId = runCatching { intent?.getStringExtra(Notifier.EXTRA_AGENDA_ID) }.getOrNull()
+            val courseId = runCatching { intent?.getStringExtra(CourseNotifier.EXTRA_COURSE_ID) }.getOrNull()
+            val agendaId = runCatching { intent?.getStringExtra(AgendaNotifier.EXTRA_AGENDA_ID) }.getOrNull()
             val agendaDay = runCatching {
-                intent?.getLongExtra(Notifier.EXTRA_AGENDA_DAY, 0L) ?: 0L
+                intent?.getLongExtra(AgendaNotifier.EXTRA_AGENDA_DAY, 0L) ?: 0L
             }.getOrDefault(0L)
             val openUpdate = runCatching {
-                intent?.getBooleanExtra(Notifier.EXTRA_OPEN_UPDATE, false) ?: false
+                intent?.getBooleanExtra(PushNotifier.EXTRA_OPEN_UPDATE, false) ?: false
             }.getOrDefault(false)
             val openRainClassroom = runCatching {
-                intent?.getBooleanExtra(Notifier.EXTRA_OPEN_RAIN_CLASSROOM, false) ?: false
+                intent?.getBooleanExtra(PushNotifier.EXTRA_OPEN_RAIN_CLASSROOM, false) ?: false
             }.getOrDefault(false)
             if (!handledDeepLink && !courseId.isNullOrBlank()) {
                 handledDeepLink = true

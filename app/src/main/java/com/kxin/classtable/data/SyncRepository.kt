@@ -6,7 +6,9 @@ import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.CourseEntity
 import com.kxin.classtable.data.local.DeletedAgendaDao
 import com.kxin.classtable.data.local.DeletedCourseDao
+import com.kxin.classtable.domain.Defaults
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.ThemeMode
@@ -290,8 +292,8 @@ class SyncRepository @Inject constructor(
         fun int(key: String) = f.optJSONObject(key)?.optString("integerValue")?.toLongOrNull() ?: 0L
         fun bool(key: String) = f.optJSONObject(key)?.optBoolean("booleanValue") ?: false
         val settings = AppSettings(
-            themeMode = runCatching { ThemeMode.valueOf(str("themeMode")) }.getOrDefault(ThemeMode.SYSTEM),
-            accentHex = str("accentHex").ifBlank { "#C56473" },
+            themeMode = enumOrDefault(str("themeMode"), ThemeMode.SYSTEM),
+            accentHex = str("accentHex").ifBlank { Defaults.ACCENT_HEX },
             currentWeek = int("currentWeek").toInt().coerceAtLeast(1),
             periodTimes = str("periodTimes").ifBlank { Schedule.DEFAULT_PERIODS },
             semesterStartDay = int("semesterStartDay"),

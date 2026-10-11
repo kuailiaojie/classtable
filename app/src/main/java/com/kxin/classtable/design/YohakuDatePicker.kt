@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kxin.classtable.domain.Dates
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -89,7 +90,7 @@ fun YohakuDatePicker(
 
         // 星期表头(周一对齐,与周视图一致)
         Row(modifier = Modifier.fillMaxWidth()) {
-            "一二三四五六日".forEach { c ->
+            Dates.WEEKDAY_CHARS.forEach { c ->
                 Text(
                     text = c.toString(),
                     style = YohakuType.gridDate,

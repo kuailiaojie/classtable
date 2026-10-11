@@ -1,5 +1,6 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaPriority
@@ -23,13 +24,13 @@ data class RemoteAgenda(
     fun toDomain(): AgendaEvent = AgendaEvent(
         id = id,
         title = title,
-        category = runCatching { AgendaCategory.valueOf(category) }.getOrDefault(AgendaCategory.TODO),
+        category = enumOrDefault(category, AgendaCategory.TODO),
         startAt = startAt,
         endAt = endAt,
         allDay = allDay,
         location = location,
         note = note,
-        priority = runCatching { AgendaPriority.valueOf(priority) }.getOrDefault(AgendaPriority.NONE),
+        priority = enumOrDefault(priority, AgendaPriority.NONE),
         remindEnabled = remindEnabled,
         remindLeadMinutes = remindLeadMinutes,
         updatedAt = updatedAt,

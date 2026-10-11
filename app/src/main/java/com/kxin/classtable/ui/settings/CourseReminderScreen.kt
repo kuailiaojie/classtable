@@ -41,6 +41,7 @@ import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.NotifyMode
 import com.kxin.classtable.notify.LiveUpdate
@@ -75,9 +76,7 @@ class CourseReminderViewModel @Inject constructor(
     ) = viewModelScope.launch {
         settingsRepository.setNotificationsEnabled(enabled)
         settingsRepository.setNotifyLeadMinutes(leadMinutes)
-        settingsRepository.setNotifyMode(
-            runCatching { NotifyMode.valueOf(mode) }.getOrDefault(NotifyMode.STANDARD),
-        )
+        settingsRepository.setNotifyMode(enumOrDefault(mode, NotifyMode.STANDARD))
         settingsRepository.setTomorrowReminder(tomorrowEnabled, tomorrowTime)
         _saved.value = true
     }

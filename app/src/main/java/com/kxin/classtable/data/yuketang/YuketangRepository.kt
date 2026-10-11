@@ -8,10 +8,9 @@ import com.kxin.classtable.data.local.AnnouncementEntity
 import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.YuketangBindingDao
 import com.kxin.classtable.data.local.YuketangBindingEntity
+import com.kxin.classtable.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,10 +48,9 @@ class YuketangRepository @Inject constructor(
     private val announcementDao: AnnouncementDao,
     private val courseDao: CourseDao,
     private val settingsRepository: SettingsRepository,
+    /** [loggedIn] 用:注入的应用级作用域,活到进程结束。 */
+    @ApplicationScope private val loggedInScope: CoroutineScope,
 ) {
-    /** [loggedIn] 用:单例仓库自己持一个小作用域,随进程存活。 */
-    private val loggedInScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     fun isLoggedIn(): Boolean = sessionStore.read() != null
 
     /**

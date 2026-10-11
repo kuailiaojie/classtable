@@ -47,6 +47,7 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseMark
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -209,7 +210,7 @@ fun CourseDetailScreen(
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                             ) {
                                 Text(
-                                    text = "${date.monthValue}/${date.dayOfMonth} 周${Course.WEEKDAY_CHARS[date.dayOfWeek.value - 1]}",
+                                    text = Dates.slashWeek(date),
                                     style = YohakuType.label12,
                                     color = if (active) androidx.compose.ui.graphics.Color.White else colors.neutral7,
                                 )

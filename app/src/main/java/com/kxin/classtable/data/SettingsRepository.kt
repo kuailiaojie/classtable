@@ -7,7 +7,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.kxin.classtable.di.ApplicationScope
+import com.kxin.classtable.domain.Defaults
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.AiProvider
 import com.kxin.classtable.domain.model.IconCadence
@@ -17,8 +20,6 @@ import com.kxin.classtable.domain.model.UpdateCadence
 import com.kxin.classtable.icon.AppIcon
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -39,10 +40,8 @@ data class UsageStats(
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    @ApplicationScope private val settingsScope: CoroutineScope,
 ) {
-    /** 共享设置流用的应用级作用域(单例,活到进程结束)。 */
-    private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     private val KEY_THEME = stringPreferencesKey("theme_mode")
     private val KEY_ACCENT = stringPreferencesKey("accent_hex")
     private val KEY_WEEK = intPreferencesKey("current_week")
@@ -100,8 +99,8 @@ class SettingsRepository @Inject constructor(
     val settings: Flow<AppSettings> = context.settingsDataStore.data
         .map { p ->
             AppSettings(
-                themeMode = runCatching { ThemeMode.valueOf(p[KEY_THEME] ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
-                accentHex = p[KEY_ACCENT] ?: "#C56473",
+                themeMode = enumOrDefault(p[KEY_THEME], ThemeMode.SYSTEM),
+                accentHex = p[KEY_ACCENT] ?: Defaults.ACCENT_HEX,
                 currentWeek = p[KEY_WEEK] ?: 1,
                 // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
                 // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。

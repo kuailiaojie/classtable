@@ -3,6 +3,7 @@ package com.kxin.classtable.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.kxin.classtable.domain.WeekSpec
+import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.WeekType
 
@@ -39,7 +40,7 @@ data class CourseEntity(
         weekday = weekday,
         startPeriod = startPeriod,
         endPeriod = endPeriod,
-        weekType = runCatching { WeekType.valueOf(weekType) }.getOrDefault(WeekType.EVERY_WEEK),
+        weekType = enumOrDefault(weekType, WeekType.EVERY_WEEK),
         weekStart = weekStart,
         weekEnd = weekEnd,
         weeks = WeekSpec.decode(weeks),

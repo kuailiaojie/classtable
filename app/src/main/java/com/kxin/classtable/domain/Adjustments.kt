@@ -20,16 +20,11 @@ data class ScheduleAdjustment(
 ) {
     val isRest: Boolean get() = sourceDate == null
 
-    /** 列表里那行副标题:`停课 · 国庆` / `补 9/9 的课`。 */
+    /** 列表里那行副标题:`停课 · 国庆` / `补 9/9 (周二)的课`。 */
     fun summary(): String = if (sourceDate == null) {
         "停课" + label.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
     } else {
-        "补 ${sourceDate.monthValue}/${sourceDate.dayOfMonth} " +
-            "(周${WEEKDAY_CHARS[sourceDate.dayOfWeek.value - 1]})的课"
-    }
-
-    private companion object {
-        const val WEEKDAY_CHARS = "一二三四五六日"
+        "补 ${Dates.slash(sourceDate)} ${Dates.weekdayLabel(sourceDate.dayOfWeek.value)}的课"
     }
 }
 

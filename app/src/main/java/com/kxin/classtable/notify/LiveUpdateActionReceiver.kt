@@ -3,8 +3,7 @@ package com.kxin.classtable.notify
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.data.local.AppDatabase
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,19 +19,15 @@ class LiveUpdateActionReceiver : BroadcastReceiver() {
         val appContext = context.applicationContext
         val muteKey = intent.getStringExtra(EXTRA_MUTE_KEY).orEmpty()
         val muteUntil = intent.getLongExtra(EXTRA_MUTE_UNTIL, 0L)
+        val entry = EntryPointAccessors.fromApplication(appContext, NotifyEntryPoint::class.java)
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (muteKey.isNotBlank() && muteUntil > 0L) {
-                    ReminderPlanner(
-                        appContext,
-                        AppDatabase.get(appContext).courseDao(),
-                        AppDatabase.get(appContext).agendaDao(),
-                        SettingsRepository(appContext),
-                    ).mute(muteKey, muteUntil)
+                    entry.reminderPlanner().mute(muteKey, muteUntil)
                 }
-                Notifier.cancelLiveUpdate(appContext)
+                LiveUpdateNotifier.cancelLiveUpdate(appContext)
                 appContext.stopService(Intent(appContext, CourseLiveUpdateService::class.java))
             } finally {
                 pendingResult.finish()

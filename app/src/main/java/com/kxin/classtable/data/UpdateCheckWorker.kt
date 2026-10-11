@@ -3,7 +3,7 @@ package com.kxin.classtable.data
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.notify.PushNotifier
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -32,7 +32,7 @@ class UpdateCheckWorker(
 
         val info = repository.check().getOrElse { return Result.retry() }
         if (info.isNewer && info.latestVersion != repository.dismissedVersion()) {
-            Notifier.showUpdateAvailable(applicationContext, info.latestVersion, info.notes)
+            PushNotifier.showUpdateAvailable(applicationContext, info.latestVersion, info.notes)
         }
         return Result.success()
     }

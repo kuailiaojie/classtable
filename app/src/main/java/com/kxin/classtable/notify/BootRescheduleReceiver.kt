@@ -5,8 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.kxin.classtable.data.Crash
-import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.data.local.AppDatabase
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,6 +32,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
             action == Intent.ACTION_LOCKED_BOOT_COMPLETED
 
         val appContext = context.applicationContext
+        val entry = EntryPointAccessors.fromApplication(appContext, NotifyEntryPoint::class.java)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -41,12 +41,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
                 // 那两种情况下这节课可能还在上,下课闹钟仍需按原样恢复。
                 if (rebooted) DndController.forget(appContext)
                 ReminderPlanner.withShortWakeLock(appContext, "boot") {
-                    ReminderPlanner(
-                        appContext,
-                        AppDatabase.get(appContext).courseDao(),
-                        AppDatabase.get(appContext).agendaDao(),
-                        SettingsRepository(appContext),
-                    ).rescheduleAll(force = true)
+                    entry.reminderPlanner().rescheduleAll(force = true)
                 }
             } catch (e: Exception) {
                 Crash.recordException(e, "op" to "boot_receiver", "action" to action)

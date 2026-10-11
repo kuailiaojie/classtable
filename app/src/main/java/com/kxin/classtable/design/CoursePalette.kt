@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.kxin.classtable.domain.CourseHuePlanner
+import com.kxin.classtable.domain.Defaults
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.CourseColorScheme
 
@@ -23,7 +24,7 @@ import com.kxin.classtable.domain.model.CourseColorScheme
 object CoursePalette {
     /** 适合课程卡片的预设和色；用户也可以在课程编辑页输入任意 #RRGGBB。 */
     val PRESETS = listOf(
-        "梅" to "#C56473",
+        "梅" to Defaults.ACCENT_HEX,
         "蘇芳" to "#A64953",
         "茜" to "#B25055",
         "桜" to "#D89AA6",

@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.agenda
 
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.model.AgendaEvent
 import java.time.Instant
 import java.time.LocalDate
@@ -22,20 +23,13 @@ internal fun AgendaEvent.spans(date: LocalDate): Boolean {
 }
 
 /** 「9月27日 周日」 */
-internal fun dateText(date: LocalDate): String =
-    "${date.monthValue}月${date.dayOfMonth}日 周${"一二三四五六日"[date.dayOfWeek.value - 1]}"
+internal fun dateText(date: LocalDate): String = Dates.monthDayWeek(date)
 
 /** 「今天 / 明天 / 后天 / 昨天 / 周X」 */
-internal fun relativeDayLabel(date: LocalDate, today: LocalDate): String = when (daysUntil(date, today)) {
-    0L -> "今天"
-    1L -> "明天"
-    2L -> "后天"
-    -1L -> "昨天"
-    else -> "周${"一二三四五六日"[date.dayOfWeek.value - 1]}"
-}
+internal fun relativeDayLabel(date: LocalDate, today: LocalDate): String = Dates.relativeDay(date, today)
 
 /** 距离某天还有几天(负数 = 已过)。 */
-internal fun daysUntil(date: LocalDate, today: LocalDate): Long = date.toEpochDay() - today.toEpochDay()
+internal fun daysUntil(date: LocalDate, today: LocalDate): Long = Dates.daysUntil(date, today)
 
 /** 「1 小时」「30 分钟」「2 小时 30 分钟」 */
 internal fun formatDurationText(minutes: Long): String {

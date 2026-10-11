@@ -1,5 +1,7 @@
 package com.kxin.classtable.domain.model
 
+import com.kxin.classtable.domain.Dates
+
 enum class WeekType { EVERY_WEEK, ODD_WEEK, EVEN_WEEK, CUSTOM }
 
 /**
@@ -76,7 +78,7 @@ data class Course(
 
     companion object {
         val WEEKDAY_NAMES = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-        const val WEEKDAY_CHARS = "一二三四五六日"
+        const val WEEKDAY_CHARS = Dates.WEEKDAY_CHARS
 
         fun weekdayName(day: Int): String = WEEKDAY_NAMES.getOrElse(day - 1) { "" }
 
@@ -86,6 +88,6 @@ data class Course(
 
         /** "一三五" 紧凑形式 */
         fun weekdaysShort(course: Course): String =
-            course.weekdaysList().joinToString("") { WEEKDAY_CHARS[it - 1].toString() }
+            course.weekdaysList().joinToString("") { Dates.weekdayChar(it) }
     }
 }

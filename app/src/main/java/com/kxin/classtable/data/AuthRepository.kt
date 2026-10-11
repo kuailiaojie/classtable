@@ -1,8 +1,7 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,9 +23,8 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val gateway: FirebaseGateway,
     private val sessionStore: SessionStore,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     private val _currentUser = MutableStateFlow<AuthSession?>(null)
     val currentUser: StateFlow<AuthSession?> = _currentUser.asStateFlow()
 

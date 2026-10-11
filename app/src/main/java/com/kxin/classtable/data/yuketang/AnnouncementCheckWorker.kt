@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.notify.Notifier
+import com.kxin.classtable.notify.PushNotifier
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -54,7 +54,7 @@ class AnnouncementCheckWorker(
 
         settingsRepository.markYuketangFetched()
         if (settings.yuketangNotifyNew && result.newCount > 0 && !result.latestTitle.isNullOrBlank()) {
-            Notifier.showNewAnnouncement(
+            PushNotifier.showNewAnnouncement(
                 context = applicationContext,
                 courseName = result.latestCourseName.orEmpty(),
                 title = result.latestTitle,

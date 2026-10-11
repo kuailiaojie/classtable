@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.settingsDataStore
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AgendaEvent
@@ -81,7 +82,7 @@ object WidgetData {
         /** 这天的「周几 · 第几周」,小组件表头用。 */
         fun header(date: LocalDate): String {
             val week = Schedule.weekOf(date.toEpochDay(), settings.semesterStart, settings.semesterWeeks)
-            val weekday = "一二三四五六日"[date.dayOfWeek.value - 1]
+            val weekday = Dates.weekdayChar(date.dayOfWeek.value)
             val rest = isRestOn(date)
             return "周$weekday · 第 $week 周" + if (rest) " · 停课" else ""
         }
@@ -97,7 +98,7 @@ object WidgetData {
          * 遇到作息本身就是大节的学校会把已经上过的课当成「下节课」。
          */
         fun nextCourse(date: LocalDate): Course? {
-            val now = LocalTime.now().let { it.hour * 60 + it.minute }
+            val now = Schedule.nowMinute()
             return coursesOn(date)
                 .mapNotNull { c ->
                     val start = c.customStartMinute ?: settings.periods.getOrNull(c.startPeriod - 1)?.start

@@ -60,6 +60,7 @@ import com.kxin.classtable.design.rememberEntranceTracker
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Adjustments
+import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
@@ -377,8 +378,7 @@ fun TimetableScreen(
                         modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
                     ) {
                         Text(
-                            text = "${todayDate.monthValue}月${todayDate.dayOfMonth}日 " +
-                                "周${"一二三四五六日"[todayDate.dayOfWeek.value - 1]}",
+                            text = Dates.monthDayWeek(todayDate),
                             style = YohakuType.title20,
                             color = colors.neutral10,
                         )

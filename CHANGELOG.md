@@ -49,6 +49,26 @@
 ### 版本
 - 3.0.0-rc1(77) → 3.0.0-rc2(78) → 3.0.0(79),转正式版。
 
+### 内部重构(3.0.0 定稿)
+
+面向可维护性的一轮结构重整,不改用户可见行为:
+
+- **DI 统一**:接收器 / 服务不再手工 `new ReminderPlanner(…, SettingsRepository(ctx), AppDatabase.get(ctx)…)`,
+  统一走 `@EntryPoint`(`NotifyEntryPoint`、扩充后的 `FcmEntryPoint`);新增 `di/CoroutineModule.kt`
+  提供单一 `@ApplicationScope` 协程作用域,课程 / 日程 / 认证 / 设置 / 更新 / 雨课堂六个仓库与
+  `ClasstableApp` 共用它,不再各自 `CoroutineScope(SupervisorJob() + Dispatchers.IO)`。
+- **线程**:`ReminderPlanner.rescheduleAll` / `withShortWakeLock` 改 `suspend`;接收器里散落的
+  `runBlocking`(读设置 / 课表 / 公告)全部消除 —— goAsync 协程内直接挂起读。
+- **去重**:新增 `domain/Dates.kt`(中文日期 / 星期 / 相对日的唯一来源)与 `domain/Enums.kt`
+  (`enumOrDefault`),`domain/Defaults.kt`(`ACCENT_HEX`);`"一二三四五六日"[day - 1]` 的 11 处
+  内联、`runCatching { X.valueOf(…) }.getOrDefault(…)` 的 15 处样板、`#C56473` 的 8 处字面量、
+  `hour * 60 + minute` 的多处重复全部收敛;`Schedule.nowMinute()` 成为唯一实现。
+- **拆巨型文件**:`notify/Notifier.kt`(583 行)拆为 `NotifyChannels` / `CourseNotifier` /
+  `AgendaNotifier` / `LiveUpdateNotifier` / `PushNotifier` + `NotifyShared`;
+  `ui/importer/ImportScreen.kt`(1265 行)拆为 `ImportScreen`(根屏)/ `ImportSteps`(三步 UI)/
+  `ImportWebView`(WebView 配置与客户端)。
+- **构建**:Gradle `-Xmx` 提到 4G。
+
 ## 3.0.0-rc2 (2026-10-11)
 
 一次以「稳定性 + 流畅度」为主的底层加固:修掉会静默丢数据 / 启动崩溃 / 安全暴露的老问题,

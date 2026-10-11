@@ -6,13 +6,13 @@ import com.kxin.classtable.data.local.AgendaDao
 import com.kxin.classtable.data.local.AgendaEntity
 import com.kxin.classtable.data.local.DeletedAgendaDao
 import com.kxin.classtable.data.local.DeletedAgendaEntity
+import com.kxin.classtable.di.ApplicationScope
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.notify.ReminderPlanner
 import com.kxin.classtable.widget.AgendaWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -32,9 +32,8 @@ class AgendaRepository @Inject constructor(
     private val deletedDao: DeletedAgendaDao,
     private val sync: SyncRepository,
     private val reminderPlanner: ReminderPlanner,
+    @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     fun observeAll(): Flow<List<AgendaEvent>> =
         dao.observeAll()
             .map { list -> list.map { it.toDomain() } }

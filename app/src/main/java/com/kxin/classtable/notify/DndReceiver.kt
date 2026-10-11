@@ -4,15 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.kxin.classtable.data.Crash
-import com.kxin.classtable.data.SettingsRepository
-import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 
 /**
@@ -28,6 +26,7 @@ class DndReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
         val appContext = context.applicationContext
+        val entry = EntryPointAccessors.fromApplication(appContext, NotifyEntryPoint::class.java)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -36,7 +35,7 @@ class DndReceiver : BroadcastReceiver() {
                     when (action) {
                         ReminderPlanner.ACTION_DND_ON -> DndController.enter(appContext)
                         ReminderPlanner.ACTION_DND_OFF -> {
-                            if (!hasOngoingCourse(appContext)) DndController.exit(appContext)
+                            if (!hasOngoingCourse(entry)) DndController.exit(appContext)
                         }
                     }
                 }
@@ -49,10 +48,10 @@ class DndReceiver : BroadcastReceiver() {
     }
 
     /** 当前时刻是否还有课在上(按调休后的教学日取课)。 */
-    private fun hasOngoingCourse(context: Context): Boolean = runCatching {
-        val settings = runBlocking { SettingsRepository(context).settings.first() }
+    private suspend fun hasOngoingCourse(entry: NotifyEntryPoint): Boolean = runCatching {
+        val settings = entry.settingsRepository().settings.first()
         val periods = Schedule.parsePeriods(settings.periodTimes)
-        val courses = runBlocking { AppDatabase.get(context).courseDao().getAll().map { it.toDomain() } }
+        val courses = entry.database().courseDao().getAll().map { it.toDomain() }
         val today = LocalDate.now()
         val teaching = Adjustments.teachingDay(
             Adjustments.decode(settings.scheduleAdjustments),
