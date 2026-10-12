@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
  * 结构:压暗底层的遮罩 + 从底部滑入的面板。面板占屏高 [PANEL_HEIGHT_FRACTION],顶部圆角,
  * 顶端一道拖拽把手 —— 抓住它往下拽(或甩)即可收起,是底部面板该有的手感。
  *
- * 关闭共四条路:下滑把手 / 点遮罩 / 系统返回键 / 面板内关闭。都先跑退场动画,动画结束才回调
+ * 关闭共三条路:下滑把手 / 点遮罩 / 系统返回键。都先跑退场动画,动画结束才回调
  * [onDismiss] 让宿主卸载,避免面板"啪"地消失。
  *
  * 「打开某个页面」(面板内的导航动作)走同一条收尾路径:先关面板、动画跑完再 [onNavigate] ——
@@ -156,7 +156,6 @@ fun AssistantOverlay(
                         ),
                     )
                     AssistantPanel(
-                        onClose = { close() },
                         onOpenSettings = { close("ai_key") },
                         onNavigate = { route -> close(route) },
                         viewModel = viewModel,

@@ -1,6 +1,7 @@
 package com.kxin.classtable.data
 
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import org.json.JSONArray
@@ -27,6 +28,8 @@ sealed interface AiAction {
         val location: String = "",
         /** 1 = 周一 … 7 = 周日。 */
         val day: Int,
+        /** 多天授课(如 `[1,3]` = 周一 + 周三);非空时优先于 [day]。 */
+        val days: List<Int> = emptyList(),
         val startSection: Int,
         val endSection: Int,
         /** 上课周次(离散);空 = 全学期。 */
@@ -45,6 +48,28 @@ sealed interface AiAction {
         val location: String = "",
         val note: String = "",
     ) : AiAction
+
+    /**
+     * 修改已有日程(局部补丁:未给的字段保留)。[agendaId] 必须来自工具返回的真实 ID。
+     *
+     * [date] 改日期(保留原时刻);[startTime]/[endTime] 要改就**成对给出**;[allDay] 切换全天
+     * (为 true 时忽略时间,取当天 0:00 起)。
+     */
+    data class UpdateAgenda(
+        val agendaId: String,
+        val title: String? = null,
+        val category: String? = null,
+        /** ISO 日期 yyyy-MM-dd;给了就把条目移到这一天,时刻保留。 */
+        val date: String? = null,
+        val startTime: String? = null,
+        val endTime: String? = null,
+        val allDay: Boolean? = null,
+        val location: String? = null,
+        val note: String? = null,
+    ) : AiAction
+
+    /** 删除一条日程。[agendaId] 必须来自工具返回的真实 ID。 */
+    data class DeleteAgenda(val agendaId: String) : AiAction
 
     /**
      * 修改已有课程(局部补丁:未给的字段保留)。[courseId] 必须来自工具返回的真实 ID。
@@ -127,8 +152,8 @@ data class AiChatTurn(val text: String, val toolCalls: List<AiToolCall> = emptyL
 
 /** 助手系统提示词。 */
 val AI_ASSISTANT_PROMPT = """
-    你是「余课」课表 App 里的助手。用户可以让你**新建 / 修改 / 删除课程**、**新建日程**、**记住一条偏好**,
-    或者**询问课表与安排**。
+    你是「余课」课表 App 里的助手。用户可以让你**新建 / 修改 / 删除课程**、**新建 / 修改 / 删除日程**、
+    **记住一条偏好**,或者**询问课表与安排**。
 
     【输出协议】你每轮只输出一个 JSON 对象,不要 markdown 代码块、不要多余文字:
     {"reply":"给用户看的中文(可轻量 Markdown)","tool":{"name":"工具名","args":{}},"actions":[]}
@@ -147,8 +172,8 @@ val AI_ASSISTANT_PROMPT = """
     ${'$'}PAGES
 
     【动作 actions】元素是下列之一:
-    1) 新建课程:
-    {"type":"course","name":"高数","teacher":"张三","location":"教三201","day":3,"startSection":1,"endSection":2,"weeks":[1,2,3],"note":""}
+    1) 新建课程(单天用 day:3;多天用 days:[1,3],二者给其一):
+    {"type":"course","name":"高数","teacher":"张三","location":"教三201","days":[1,3],"startSection":1,"endSection":2,"weeks":[1,2,3],"note":""}
     2) 新建日程(全天就两个时间都省略,不要只给一个):
     {"type":"agenda","title":"小组会议","category":"TODO","date":"2026-10-12","startTime":"14:00","endTime":"16:00","location":""}
     3) 修改课程(局部补丁:只写要改的字段;其余保留。courseId 必须是工具返回的真实 ID):
@@ -165,6 +190,11 @@ val AI_ASSISTANT_PROMPT = """
     {"type":"setting","key":"NOTIFY_LEAD","value":"30"}
     7) 打开某个页面(只把用户带过去,不改数据):
     {"type":"open","page":"MEMORY"}
+    8) 修改日程(局部补丁:只写要改的字段;agendaId 必须是 SEARCH_AGENDA 返回的真实 ID):
+    {"type":"agenda_update","agendaId":"…","title":"小组会议","date":"2026-10-20","startTime":"15:00","endTime":"17:00","allDay":false}
+    - 改时间要 startTime / endTime 成对给出;改全天用 allDay:true(此时不用给时间)。
+    9) 删除日程:
+    {"type":"agenda_delete","agendaId":"…"}
 
     【规则】
     - day/days:1=周一 … 7=周日;startSection/endSection 是第几节;weeks 是周次数组。
@@ -172,6 +202,7 @@ val AI_ASSISTANT_PROMPT = """
     - 只想聊天或回答问题时 actions 给空数组 []。
     - 信息不足(不知星期几 / 没有课程名 / 没指明要改哪门课)时,reply 用中文反问,actions 给 [];
       改 / 删课前若定位不到唯一课程,先用 SEARCH_COURSES 查,仍有多个候选就在 reply 里问清,不要猜。
+      改 / 删日程同理:先用 SEARCH_AGENDA 取真实 agendaId,定位不到就反问,不要臆造 ID。
     - **日期与「今天 / 明天 / 昨天 / 本周」一律以下面给出的「现在」为准**,不要用训练时的日期知识。
     - reply 简短口语化,别复述 JSON;可用无序列表「- 」、加粗「**…**」、小标题「### 」。
     - App 会先做本地校验(节次 / 周次范围、日期时间、课程 ID 是否存在)。不合格会给你一条带
@@ -238,7 +269,8 @@ private fun parseAction(o: JSONObject, index: Int, issues: MutableList<AiActionI
     when (val type = o.optString("type").lowercase()) {
         "course" -> {
             val name = o.optString("name").trim()
-            val day = o.optInt("day")
+            val days = o.intList("days")
+            val day = o.optInt("day").takeIf { it in 1..7 } ?: days.firstOrNull { it in 1..7 }
             val start = o.optInt("startSection")
             val end = o.optInt("endSection", start)
             when {
@@ -246,8 +278,8 @@ private fun parseAction(o: JSONObject, index: Int, issues: MutableList<AiActionI
                     issues += AiActionIssue(index, "name", "缺少课程名"); null
                 }
 
-                day !in 1..7 -> {
-                    issues += AiActionIssue(index, "day", "day=$day 不是 1..7"); null
+                day == null -> {
+                    issues += AiActionIssue(index, "day", "缺少星期:用 day(1..7)或 days(数组)指定,至少给一个"); null
                 }
 
                 start < 1 -> {
@@ -259,6 +291,7 @@ private fun parseAction(o: JSONObject, index: Int, issues: MutableList<AiActionI
                     teacher = o.optString("teacher").trim(),
                     location = o.optString("location").trim(),
                     day = day,
+                    days = days,
                     startSection = start,
                     endSection = end.coerceAtLeast(start),
                     weeks = o.optJSONArray("weeks")?.let { arr ->
@@ -364,6 +397,36 @@ private fun parseAction(o: JSONObject, index: Int, issues: MutableList<AiActionI
             }
         }
 
+        "agenda_update" -> {
+            val id = o.optString("agendaId").trim()
+            if (id.isBlank()) {
+                issues += AiActionIssue(index, "agendaId", "缺少 agendaId(先用 SEARCH_AGENDA 取真实 ID)")
+                null
+            } else {
+                AiAction.UpdateAgenda(
+                    agendaId = id,
+                    title = o.patchString("title"),
+                    category = o.patchString("category"),
+                    date = o.patchString("date"),
+                    startTime = o.patchString("startTime"),
+                    endTime = o.patchString("endTime"),
+                    allDay = o.patchBool("allDay"),
+                    location = o.patchString("location"),
+                    note = o.patchString("note"),
+                )
+            }
+        }
+
+        "agenda_delete" -> {
+            val id = o.optString("agendaId").trim()
+            if (id.isBlank()) {
+                issues += AiActionIssue(index, "agendaId", "缺少 agendaId(先用 SEARCH_AGENDA 取真实 ID)")
+                null
+            } else {
+                AiAction.DeleteAgenda(id)
+            }
+        }
+
         else -> {
             issues += AiActionIssue(index, "type", "未知动作类型「$type」"); null
         }
@@ -371,6 +434,9 @@ private fun parseAction(o: JSONObject, index: Int, issues: MutableList<AiActionI
 
 private fun JSONObject.patchString(key: String): String? =
     if (has(key) && !isNull(key)) optString(key) else null
+
+private fun JSONObject.patchBool(key: String): Boolean? =
+    if (has(key) && !isNull(key)) optBoolean(key) else null
 
 private fun JSONObject.patchInt(key: String): Int? =
     if (has(key) && !isNull(key)) optInt(key, Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE } else null
@@ -394,6 +460,7 @@ fun validateAiActions(
     actions: List<AiAction>,
     settings: AppSettings,
     courses: List<Course>,
+    agenda: List<AgendaEvent>,
 ): List<AiActionIssue> {
     val sectionCount = Schedule.parsePeriods(settings.periodTimes).size
     val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
@@ -418,6 +485,10 @@ fun validateAiActions(
                 if (action.endSection < action.startSection) {
                     issues += AiActionIssue(index, "endSection", "结束节次早于开始节次")
                 }
+                val badDays = action.days.filter { it !in 1..7 }
+                if (badDays.isNotEmpty()) {
+                    issues += AiActionIssue(index, "days", "days 里有非法值 ${badDays.joinToString("、")}(只能是 1..7)")
+                }
                 if (hasSemester) {
                     val bad = action.weeks.filter { it !in 1..weekCount }
                     if (bad.isNotEmpty()) {
@@ -431,6 +502,28 @@ fun validateAiActions(
                     issues += AiActionIssue(index, "date", "日期「${action.date}」不是 yyyy-MM-dd")
                 }
                 issues += validateAgendaTime(index, action.startTime, action.endTime)
+            }
+
+            is AiAction.UpdateAgenda -> {
+                if (agenda.none { it.id == action.agendaId }) {
+                    issues += AiActionIssue(
+                        index, "agendaId", "找不到 id=${action.agendaId} 的日程(请用 SEARCH_AGENDA 取真实 ID)",
+                    )
+                }
+                action.date?.let {
+                    if (runCatching { LocalDate.parse(it) }.getOrNull() == null) {
+                        issues += AiActionIssue(index, "date", "日期「$it」不是 yyyy-MM-dd")
+                    }
+                }
+                issues += validateAgendaTime(index, action.startTime, action.endTime)
+            }
+
+            is AiAction.DeleteAgenda -> {
+                if (agenda.none { it.id == action.agendaId }) {
+                    issues += AiActionIssue(
+                        index, "agendaId", "找不到 id=${action.agendaId} 的日程(请用 SEARCH_AGENDA 取真实 ID)",
+                    )
+                }
             }
 
             is AiAction.UpdateCourse -> {

@@ -21,6 +21,7 @@ import java.time.ZoneId
 enum class AgentToolName {
     GET_CURRENT_OVERVIEW,
     SEARCH_COURSES,
+    SEARCH_AGENDA,
     GET_WEEK_SCHEDULE,
     GET_SEMESTER_SCHEDULE,
     GET_PERIODS,
@@ -134,6 +135,7 @@ object AgentTools {
         when (name) {
             AgentToolName.GET_CURRENT_OVERVIEW -> overview(ctx)
             AgentToolName.SEARCH_COURSES -> search(args, ctx)
+            AgentToolName.SEARCH_AGENDA -> searchAgenda(args, ctx)
             AgentToolName.GET_WEEK_SCHEDULE -> weekSchedule(args["week"]?.toIntOrNull(), ctx)
             AgentToolName.GET_SEMESTER_SCHEDULE -> semesterSchedule(ctx)
             AgentToolName.GET_PERIODS -> periods(ctx)
@@ -184,6 +186,32 @@ object AgentTools {
         if (matched.size > shown.size) sb.append("(已截断,只列前 ${shown.size} 门)")
         sb.append(':')
         shown.forEach { sb.append('\n').append(courseLine(it, ctx)) }
+        return sb.toString()
+    }
+
+    private fun searchAgenda(args: Map<String, String>, ctx: AgentContext): String {
+        val text = listOf("query", "title", "location").mapNotNull { args[it]?.trim() }
+            .filter { it.isNotEmpty() }
+        val date = args["date"]?.trim()?.takeIf { it.isNotEmpty() }?.let { raw ->
+            runCatching { LocalDate.parse(raw) }.getOrNull()
+        }
+        if (text.isEmpty() && date == null) {
+            return "请在 args 里至少给一个条件:query / title / location / date(yyyy-MM-dd)。"
+        }
+        val matched = ctx.agenda.filter { e ->
+            val startLocal = Instant.ofEpochMilli(e.startAt).atZone(ctx.zone).toLocalDate()
+            val hitText = text.isEmpty() || text.all { q ->
+                e.title.contains(q, true) || e.location.contains(q, true) || e.note.contains(q, true)
+            }
+            val hitDate = date == null || startLocal == date
+            hitText && hitDate
+        }.sortedBy { it.startAt }
+        if (matched.isEmpty()) return "没有匹配的日程。"
+        val shown = matched.take(24)
+        val sb = StringBuilder("匹配 ${matched.size} 条")
+        if (matched.size > shown.size) sb.append("(已截断,只列前 ${shown.size} 条)")
+        sb.append(':')
+        shown.forEach { sb.append('\n').append(agendaLine(it, ctx)) }
         return sb.toString()
     }
 
@@ -255,14 +283,19 @@ object AgentTools {
 
     private fun upcomingAgenda(ctx: AgentContext): List<String> {
         val from = ctx.today.atStartOfDay(ctx.zone).toInstant().toEpochMilli()
-        return ctx.agenda.filter { it.endAt >= from }.sortedBy { it.startAt }.take(5).map { e ->
-            val start = Instant.ofEpochMilli(e.startAt).atZone(ctx.zone).toLocalDateTime()
-            buildString {
-                append("- ").append(start.toLocalDate()).append(' ')
-                if (e.allDay) append("全天") else append(Schedule.clockText(start.hour * 60 + start.minute))
-                append(' ').append(e.title)
-                if (e.location.isNotBlank()) append(" @").append(e.location)
-            }
+        return ctx.agenda.filter { it.endAt >= from }.sortedBy { it.startAt }.take(5)
+            .map { agendaLine(it, ctx) }
+    }
+
+    /** 日程一行:`- id=… 日期 [全天|时间] 标题 @地点`。ID 是改 / 删日程的唯一依据。 */
+    private fun agendaLine(event: AgendaEvent, ctx: AgentContext): String {
+        val start = Instant.ofEpochMilli(event.startAt).atZone(ctx.zone).toLocalDateTime()
+        return buildString {
+            append("- id=").append(event.id).append(' ')
+            append(start.toLocalDate()).append(' ')
+            if (event.allDay) append("全天") else append(Schedule.clockText(start.hour * 60 + start.minute))
+            append(' ').append(event.title)
+            if (event.location.isNotBlank()) append(" @").append(event.location)
         }
     }
 }

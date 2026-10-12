@@ -58,6 +58,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kxin.classtable.data.AiAction
 import com.kxin.classtable.data.AiPages
+import com.kxin.classtable.data.AiPlanner
 import com.kxin.classtable.data.AiSettingRegistry
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
@@ -71,13 +72,15 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
-import com.kxin.classtable.domain.Dates
+import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
+import java.time.Instant
+import java.time.ZoneId
 
 /**
- * AI 助手面板内容:一句话建课 / 改课 / 删课 / 建日程 / 记偏好,或者询问课表安排。
+ * AI 助手面板内容:一句话建 / 改 / 删课程、建 / 改 / 删日程、记偏好,或者询问课表安排。
  *
  * 背后是一个**只读工具循环**(见 data/AgentTools):模型先查事实,再给出 `actions`;
  * App 先做本地校验(必要时喂回模型修一次),把动作渲染成预览卡,**用户确认后才落库** ——
@@ -88,16 +91,17 @@ import com.kxin.classtable.domain.weeksText
  */
 @Composable
 fun AssistantPanel(
-    onClose: () -> Unit,
     onOpenSettings: () -> Unit,
     onNavigate: (String) -> Unit,
     viewModel: AssistantViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val courses by viewModel.courses.collectAsStateWithLifecycle()
+    val agenda by viewModel.agenda.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
 
@@ -153,7 +157,6 @@ fun AssistantPanel(
     ) {
         YohakuTopBar(
             title = "AI 助手",
-            onBack = onClose,
             actions = {
                 Text(
                     text = "设置",
@@ -198,9 +201,16 @@ fun AssistantPanel(
                             AssistantBubble(
                                 message = message,
                                 courses = courses,
+                                agenda = agenda,
                                 settings = settings,
-                                onConfirm = { viewModel.confirm(message.id) },
-                                onDismiss = { viewModel.dismiss(message.id) },
+                                onConfirm = {
+                                    haptics.select()
+                                    viewModel.confirm(message.id)
+                                },
+                                onDismiss = {
+                                    haptics.tick()
+                                    viewModel.dismiss(message.id)
+                                },
                             )
                         }
                     }
@@ -303,6 +313,7 @@ private fun assistantBubbleColor(): Color =
 private fun AssistantBubble(
     message: AssistantMessage,
     courses: List<Course>,
+    agenda: List<AgendaEvent>,
     settings: AppSettings,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -342,6 +353,7 @@ private fun AssistantBubble(
                         ActionCard(
                             message = message,
                             courses = courses,
+                            agenda = agenda,
                             settings = settings,
                             onConfirm = onConfirm,
                             onDismiss = onDismiss,
@@ -358,6 +370,7 @@ private fun AssistantBubble(
 private fun ActionCard(
     message: AssistantMessage,
     courses: List<Course>,
+    agenda: List<AgendaEvent>,
     settings: AppSettings,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -371,7 +384,12 @@ private fun ActionCard(
         )
         Spacer(modifier = Modifier.height(6.dp))
         message.actions.forEach { action ->
-            ActionPreview(action, courses.firstOrNull { it.id == courseIdOf(action) }, settings)
+            ActionPreview(
+                action = action,
+                course = courses.firstOrNull { it.id == courseIdOf(action) },
+                agenda = agenda,
+                settings = settings,
+            )
         }
         if (!message.actionsHandled) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
@@ -441,7 +459,10 @@ private fun EmptyHint() {
         Spacer(modifier = Modifier.height(6.dp))
         listOf(
             "周三下午加一门高数,1-16 周,教三 201",
+            "加一门周一、周三的高数,1-16 周",
             "把高数第 3-5 周改到周二 5-6 节",
+            "把「小组会议」改到周五 15:00",
+            "删掉明天的「提交高数作业」",
             "这周还有哪些课?哪天最空?",
             "以后周三下午别给我排课",
         ).forEach {
@@ -600,11 +621,16 @@ private fun Composer(
 }
 
 /**
- * 预览卡片里的一条动作:动作类型 + **字段级明细**。改 / 删会解析出目标课程 [course],
- * 逐字段给出「改前 → 改后」,而不是一长句。
+ * 预览卡片里的一条动作:动作类型 + **字段级明细**。改 / 删会解析出目标课程 [course] 或日程
+ * ([agenda] 里按 id 匹配),逐字段给出「改前 → 改后」,而不是一长句。
  */
 @Composable
-private fun ActionPreview(action: AiAction, course: Course?, settings: AppSettings) {
+private fun ActionPreview(
+    action: AiAction,
+    course: Course?,
+    agenda: List<AgendaEvent>,
+    settings: AppSettings,
+) {
     val colors = LocalYohakuColors.current
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
@@ -613,14 +639,16 @@ private fun ActionPreview(action: AiAction, course: Course?, settings: AppSettin
                 is AiAction.CreateAgenda -> "新增日程"
                 is AiAction.UpdateCourse -> "修改课程"
                 is AiAction.DeleteCourse -> "删除课程"
+                is AiAction.UpdateAgenda -> "修改日程"
+                is AiAction.DeleteAgenda -> "删除日程"
                 is AiAction.Remember -> "记住偏好"
                 is AiAction.SetSetting -> "修改设置"
                 is AiAction.OpenSettings -> "打开页面"
             },
             style = YohakuType.label12,
             color = when (action) {
-                is AiAction.UpdateCourse, is AiAction.SetSetting -> colors.info
-                is AiAction.DeleteCourse -> colors.error
+                is AiAction.UpdateCourse, is AiAction.SetSetting, is AiAction.UpdateAgenda -> colors.info
+                is AiAction.DeleteCourse, is AiAction.DeleteAgenda -> colors.error
                 is AiAction.Remember, is AiAction.OpenSettings -> colors.neutral7
                 else -> colors.success
             },
@@ -628,10 +656,11 @@ private fun ActionPreview(action: AiAction, course: Course?, settings: AppSettin
         when (action) {
             is AiAction.CreateCourse -> {
                 ActionField(label = "名称", value = action.name)
+                val days = action.days.ifEmpty { listOf(action.day) }
                 ActionField(
                     label = "时间",
-                    value = "${Dates.weekdayLabel(action.day)} 第" +
-                        "${action.startSection}-${action.endSection}节",
+                    value = days.joinToString("、") { Course.weekdayName(it) } +
+                        " 第${action.startSection}-${action.endSection}节",
                 )
                 if (action.weeks.isNotEmpty()) ActionField(label = "周次", value = weeksText(action.weeks))
                 if (action.location.isNotBlank()) ActionField(label = "地点", value = action.location)
@@ -650,6 +679,28 @@ private fun ActionPreview(action: AiAction, course: Course?, settings: AppSettin
                     },
                 )
                 if (action.location.isNotBlank()) ActionField(label = "地点", value = action.location)
+            }
+
+            is AiAction.UpdateAgenda -> {
+                val event = agenda.firstOrNull { it.id == action.agendaId }
+                ActionField(label = "日程", value = event?.title ?: "id=${action.agendaId}(已不存在)")
+                if (event != null) {
+                    val patched = AiPlanner.applyAgendaPatch(event, action)
+                    DiffField("标题", event.title, action.title?.takeIf { it.isNotBlank() })
+                    DiffField("日期", agendaDateText(event), patched?.let { agendaDateText(it) })
+                    DiffField("时间", agendaTimeText(event), patched?.let { agendaTimeText(it) })
+                    DiffField("地点", event.location, action.location)
+                    DiffField("备注", event.note, action.note)
+                }
+            }
+
+            is AiAction.DeleteAgenda -> {
+                val event = agenda.firstOrNull { it.id == action.agendaId }
+                ActionField(label = "日程", value = event?.title ?: "id=${action.agendaId}(已不存在)")
+                if (event != null) {
+                    ActionField(label = "日期", value = agendaDateText(event))
+                    ActionField(label = "时间", value = agendaTimeText(event))
+                }
             }
 
             is AiAction.UpdateCourse -> {
@@ -756,6 +807,19 @@ private fun ActionField(label: String, value: String) {
         )
         Text(text = value, style = YohakuType.copy13, color = colors.neutral9)
     }
+}
+
+/** 日程的日期文本(设备时区)。 */
+private fun agendaDateText(event: AgendaEvent): String =
+    Instant.ofEpochMilli(event.startAt).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+
+/** 日程的时间文本:全天为「全天」,否则「HH:MM-HH:MM」。 */
+private fun agendaTimeText(event: AgendaEvent): String {
+    if (event.allDay) return "全天"
+    val zone = ZoneId.systemDefault()
+    val start = Instant.ofEpochMilli(event.startAt).atZone(zone).toLocalDateTime()
+    val end = Instant.ofEpochMilli(event.endAt).atZone(zone).toLocalDateTime()
+    return "%02d:%02d-%02d:%02d".format(start.hour, start.minute, end.hour, end.minute)
 }
 
 private fun weeksText(weeks: List<Int>): String {

@@ -29,6 +29,7 @@ import com.kxin.classtable.data.parseAiChatReply
 import com.kxin.classtable.data.parseToolArgs
 import com.kxin.classtable.data.toolResultMessage
 import com.kxin.classtable.data.validateAiActions
+import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,6 +79,10 @@ class AssistantViewModel @Inject constructor(
 
     /** 现有课程:仅供预览卡解析「改 / 删」的目标课程,展示改前内容。 */
     val courses: StateFlow<List<Course>> = courseRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 现有日程:预览卡解析「改 / 删日程」的目标条目,展示改前内容。 */
+    val agenda: StateFlow<List<AgendaEvent>> = agendaRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 当前设置:预览卡要给「改设置」显示改前的值。 */
@@ -173,7 +178,7 @@ class AssistantViewModel @Inject constructor(
             }
 
             // 本地校验 + 一次修回:把具体字段与原因喂回模型,重出一份完整计划。
-            var issues = parsed.issues + validateAiActions(parsed.actions, settings, courses)
+            var issues = parsed.issues + validateAiActions(parsed.actions, settings, courses, agenda)
             if (issues.isNotEmpty() && parsed.rawActionCount > 0) {
                 // 回放模型自己的原始输出再指出问题 —— 它得先「看见」自己写了什么,才改得对。
                 val repairHistory = history +
@@ -184,7 +189,7 @@ class AssistantViewModel @Inject constructor(
                 if (repairedTurn != null) {
                     val repaired = parseAiChatReply(repairedTurn.text)
                     parsed = repaired
-                    issues = repaired.issues + validateAiActions(repaired.actions, settings, courses)
+                    issues = repaired.issues + validateAiActions(repaired.actions, settings, courses, agenda)
                 }
             }
 
@@ -278,6 +283,19 @@ class AssistantViewModel @Inject constructor(
                         AiPlanner.agendaDraft(action)?.let { agendaRepository.save(it) }
                     }.onSuccess { if (it != null) events++ }
                         .onFailure { Crash.recordException(it, "op" to "ai_create_agenda") }
+
+                    is AiAction.UpdateAgenda -> runCatching {
+                        val existing = agendaRepository.get(action.agendaId) ?: return@runCatching false
+                        val patched = AiPlanner.applyAgendaPatch(existing, action) ?: return@runCatching false
+                        agendaRepository.save(patched)
+                        true
+                    }.onSuccess { if (it) events++ }
+                        .onFailure { Crash.recordException(it, "op" to "ai_update_agenda") }
+
+                    is AiAction.DeleteAgenda -> runCatching {
+                        agendaRepository.delete(action.agendaId)
+                    }.onSuccess { events++ }
+                        .onFailure { Crash.recordException(it, "op" to "ai_delete_agenda") }
 
                     is AiAction.UpdateCourse -> runCatching {
                         applyCourseEdit(action.courseId, action, settings)

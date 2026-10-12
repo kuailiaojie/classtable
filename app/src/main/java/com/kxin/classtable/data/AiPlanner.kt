@@ -9,6 +9,7 @@ import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.weeksText
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -58,16 +59,20 @@ object AiPlanner {
         }
     }
 
-    /** 把建课动作翻成 [Course](已按当前作息钉住时刻、周次归一)。 */
+    /** 把建课动作翻成 [Course](已按当前作息钉住时刻、周次归一;多天落成星期掩码)。 */
     fun courseDraft(action: AiAction.CreateCourse, settings: AppSettings): Course {
         val periods = Schedule.parsePeriods(settings.periodTimes)
         val spec = WeekSpec.fromWeeks(action.weeks, settings.semesterWeekCount)
+        val days = action.days.ifEmpty { listOf(action.day) }.filter { it in 1..7 }.distinct().sorted()
+        val primary = days.firstOrNull() ?: action.day
+        val mask = days.fold(0) { acc, d -> acc or (1 shl (d - 1)) }.takeIf { it != 0 } ?: (1 shl (primary - 1))
         val base = Course(
             id = newCourseId(),
             name = action.name,
             teacher = action.teacher,
             location = action.location,
-            weekday = action.day,
+            weekday = primary,
+            weekdays = mask,
             startPeriod = action.startSection,
             endPeriod = action.endSection,
             weekType = spec.type,
@@ -105,6 +110,49 @@ object AiPlanner {
             allDay = allDay,
             location = action.location,
             note = action.note,
+        )
+    }
+
+    /**
+     * 把「改日程」动作落成新的 [AgendaEvent](局部补丁:未给的字段保留)。
+     *
+     * [AiAction.UpdateAgenda.date] 给了就把条目移到这一天(时刻保留);[AiAction.UpdateAgenda.startTime]
+     * / [AiAction.UpdateAgenda.endTime] 成对给才改时刻(只给一边视为沿用,非法时间返回 null);
+     * [AiAction.UpdateAgenda.allDay] 给了才切换全天 —— 若给出具体时间则默认切回非全天。
+     */
+    fun applyAgendaPatch(
+        existing: AgendaEvent,
+        action: AiAction.UpdateAgenda,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): AgendaEvent? {
+        val currentStart = Instant.ofEpochMilli(existing.startAt).atZone(zone).toLocalDateTime()
+        val currentEnd = Instant.ofEpochMilli(existing.endAt).atZone(zone).toLocalDateTime()
+        val date = action.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: currentStart.toLocalDate()
+        val gaveTime = action.startTime != null || action.endTime != null
+        val allDay = action.allDay ?: if (gaveTime) false else existing.allDay
+
+        val startAt: Long
+        val endAt: Long
+        if (allDay) {
+            startAt = date.atStartOfDay(zone).toInstant().toEpochMilli()
+            endAt = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1L
+        } else {
+            val startMin = action.startTime?.let(Schedule::parseClock) ?: (currentStart.hour * 60 + currentStart.minute)
+            val endMin = action.endTime?.let(Schedule::parseClock) ?: (currentEnd.hour * 60 + currentEnd.minute)
+            if (endMin <= startMin) return null
+            val dayStart = date.atStartOfDay(zone).toInstant().toEpochMilli()
+            startAt = dayStart + startMin * 60_000L
+            endAt = dayStart + endMin * 60_000L
+        }
+
+        return existing.copy(
+            title = action.title?.takeIf { it.isNotBlank() } ?: existing.title,
+            category = action.category?.let { enumOrDefault(it, existing.category) } ?: existing.category,
+            startAt = startAt,
+            endAt = endAt,
+            allDay = allDay,
+            location = action.location ?: existing.location,
+            note = action.note ?: existing.note,
         )
     }
 

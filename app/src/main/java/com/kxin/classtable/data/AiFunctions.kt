@@ -63,6 +63,15 @@ object AiFunctions {
             ),
         ),
         AiFunctionSpec(
+            name = "SEARCH_AGENDA",
+            description = "按标题 / 地点 / 日期定位日程,返回日程 ID(修改或删除日程前用它取真实 ID)",
+            readOnly = true,
+            parameters = schema(
+                "query" to str("关键词,匹配标题 / 地点 / 备注"),
+                "date" to str("限定日期 yyyy-MM-dd"),
+            ),
+        ),
+        AiFunctionSpec(
             name = "GET_WEEK_SCHEDULE",
             description = "某一周的课程与空档",
             readOnly = true,
