@@ -81,10 +81,10 @@ import com.kxin.classtable.domain.weeksText
  *
  * 背后是一个**只读工具循环**(见 data/AgentTools):模型先查事实,再给出 `actions`;
  * App 先做本地校验(必要时喂回模型修一次),把动作渲染成预览卡,**用户确认后才落库** ——
- * 模型幻觉不会直接改到课表。面板本身由 [AssistantOverlay] 从课表页顶部滑入(入口是页头的「✦ 助手」按钮)。
+ * 模型幻觉不会直接改到课表。面板本身由 [AssistantOverlay] 从屏幕底部滑入(入口是课表页头的「✦ 助手」按钮)。
  *
- * 三条区分「谁在说话」的线索:用户是右对齐的 accent 实底气泡;助手是带「✦ 助手」标签的
- * 无气泡正文(走 [YohakuMarkdown],列表 / 加粗都能落回纸面字阶);待落库动作另起一张确认卡。
+ * 三条区分「谁在说话」的线索:用户是右对齐的 accent 实底气泡;助手是左对齐的浅底气泡,首行带
+ * 「✦ 助手」标签、正文走 [YohakuMarkdown];待落库动作另起一张确认卡,嵌在助手气泡里。
  */
 @Composable
 fun AssistantPanel(
@@ -270,7 +270,7 @@ private fun MessageEntrance(
 private fun UserBubble(text: String) {
     val colors = LocalYohakuColors.current
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Box(modifier = Modifier.fillMaxWidth(0.85f), contentAlignment = Alignment.CenterEnd) {
+        Box(modifier = Modifier.fillMaxWidth(BUBBLE_MAX_WIDTH), contentAlignment = Alignment.CenterEnd) {
             Surface(
                 shape = RoundedCornerShape(YohakuDimens.radiusSheet),
                 color = colors.accent,
@@ -286,9 +286,18 @@ private fun UserBubble(text: String) {
     }
 }
 
+/** 助手气泡底色(含等待态气泡):面板浮起面上叠一层极淡前景色,浅色下浅灰、深色下略亮的底。 */
+@Composable
+private fun assistantBubbleColor(): Color =
+    LocalYohakuColors.current.neutral10.copy(alpha = 0.06f)
+
 /**
- * 助手消息:先一行身份标签(「✦ 助手」/「⚠ 出错了」)亮明这是 AI 说的,再是正文。
- * 正文无气泡 —— 与用户气泡拉开层级,也更适合承载成段的列表 / 小标题。
+ * 助手消息:左对齐的气泡,首行是身份标签(「✦ 助手」/「⚠ 出错了」)亮明这是 AI 说的,再是正文。
+ *
+ * 气泡底色:在面板浮起面上叠一层极淡前景色([assistantBubbleColor]) + 一道细边框 ——
+ * 浅色下是白纸面上一抹浅灰,深色下是浮起面板里一块略亮的底;一套值同时适配两个主题,
+ * 都读得出「这是一条收到的消息」,又不至于抢戏。
+ * 正文成段(列表 / 小标题)时气泡随内容撑高、纵向铺满 [BUBBLE_MAX_WIDTH] 的上限。
  */
 @Composable
 private fun AssistantBubble(
@@ -299,40 +308,44 @@ private fun AssistantBubble(
     onDismiss: () -> Unit,
 ) {
     val colors = LocalYohakuColors.current
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = if (message.failed) "⚠ 出错了" else "✦ 助手",
-            style = YohakuType.label12,
-            color = if (message.failed) colors.error else colors.neutral7,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        if (message.failed) {
-            Text(text = message.text, style = YohakuType.copy15, color = colors.error)
-        } else {
-            YohakuMarkdown(
-                text = message.text,
-                baseStyle = YohakuType.copy15,
-                baseColor = colors.neutral9,
-            )
-        }
-        if (message.actions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-            YohakuCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = if (message.actionsHandled) "✓ 已处理" else "将执行以下操作",
-                    style = YohakuType.label12,
-                    color = if (message.actionsHandled) colors.success else colors.neutral7,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                message.actions.forEach { action ->
-                    ActionPreview(action, courses.firstOrNull { it.id == courseIdOf(action) }, settings)
-                }
-                if (!message.actionsHandled) {
-                    Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        YohakuButton(text = "确认执行", onClick = onConfirm)
-                        Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
-                        YohakuOutlineButton(text = "取消", onClick = onDismiss)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Box(
+            modifier = Modifier.fillMaxWidth(BUBBLE_MAX_WIDTH),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(YohakuDimens.radiusSheet),
+                color = if (message.failed) colors.error.copy(alpha = 0.10f) else assistantBubbleColor(),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (message.failed) colors.error.copy(alpha = 0.40f) else colors.line,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(
+                        text = if (message.failed) "⚠ 出错了" else "✦ 助手",
+                        style = YohakuType.label12,
+                        color = if (message.failed) colors.error else colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (message.failed) {
+                        Text(text = message.text, style = YohakuType.copy15, color = colors.error)
+                    } else {
+                        YohakuMarkdown(
+                            text = message.text,
+                            baseStyle = YohakuType.copy15,
+                            baseColor = colors.neutral9,
+                        )
+                    }
+                    if (message.actions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                        ActionCard(
+                            message = message,
+                            courses = courses,
+                            settings = settings,
+                            onConfirm = onConfirm,
+                            onDismiss = onDismiss,
+                        )
                     }
                 }
             }
@@ -340,40 +353,81 @@ private fun AssistantBubble(
     }
 }
 
+/** 待落库动作的确认卡:动作明细 + 「确认执行 / 取消」。嵌在助手气泡内,和「谁在说话」绑在一起。 */
+@Composable
+private fun ActionCard(
+    message: AssistantMessage,
+    courses: List<Course>,
+    settings: AppSettings,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    YohakuCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = if (message.actionsHandled) "✓ 已处理" else "将执行以下操作",
+            style = YohakuType.label12,
+            color = if (message.actionsHandled) colors.success else colors.neutral7,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        message.actions.forEach { action ->
+            ActionPreview(action, courses.firstOrNull { it.id == courseIdOf(action) }, settings)
+        }
+        if (!message.actionsHandled) {
+            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                YohakuButton(text = "确认执行", onClick = onConfirm)
+                Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
+                YohakuOutlineButton(text = "取消", onClick = onDismiss)
+            }
+        }
+    }
+}
+
 /**
- * 等待态:沿用助手身份标签,下面三点错峰呼吸 —— 比一行静止的「正在整理…」更像「在算」。
+ * 等待态:一只和助手消息同款的左对齐气泡,里面「✦ 助手」+ 三点错峰呼吸 ——
+ * 比一行静止的「正在整理…」更像「在算」,也提前占住助手气泡的位置。
  * 初值取满亮:系统「移除动画」时无限动画停在初值,三点仍清晰可读,不留半亮的残缺态。
  */
 @Composable
 private fun TypingIndicator() {
     val colors = LocalYohakuColors.current
     val transition = rememberInfiniteTransition(label = "typing")
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "✦ 助手", style = YohakuType.label12, color = colors.neutral7)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            repeat(3) { index ->
-                val dotAlpha by transition.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 0.25f,
-                    animationSpec = infiniteRepeatable(
-                        animation = YohakuMotion.tween(
-                            durationMs = YohakuMotion.durBase,
-                            easing = YohakuMotion.easeInOut,
-                            delayMs = index * 160,
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Surface(
+            shape = RoundedCornerShape(YohakuDimens.radiusSheet),
+            color = assistantBubbleColor(),
+            border = BorderStroke(1.dp, colors.line),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = "✦ 助手", style = YohakuType.label12, color = colors.neutral7)
+                Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
+                repeat(3) { index ->
+                    val dotAlpha by transition.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 0.25f,
+                        animationSpec = infiniteRepeatable(
+                            animation = YohakuMotion.tween(
+                                durationMs = YohakuMotion.durBase,
+                                easing = YohakuMotion.easeInOut,
+                                delayMs = index * 160,
+                            ),
+                            repeatMode = RepeatMode.Reverse,
                         ),
-                        repeatMode = RepeatMode.Reverse,
-                    ),
-                    label = "typingDot$index",
-                )
-                Box(
-                    modifier = Modifier
-                        .padding(end = 5.dp)
-                        .size(6.dp)
-                        .graphicsLayer { alpha = dotAlpha }
-                        .clip(CircleShape)
-                        .background(colors.neutral7),
-                )
+                        label = "typingDot$index",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 5.dp)
+                            .size(6.dp)
+                            .graphicsLayer { alpha = dotAlpha }
+                            .clip(CircleShape)
+                            .background(colors.neutral7),
+                    )
+                }
             }
         }
     }
@@ -712,3 +766,6 @@ private fun weeksText(weeks: List<Int>): String {
         "第 ${sorted.first()}-${sorted.last()} 周"
     }
 }
+
+/** 气泡最大宽度占消息列的比例:留出对侧余白,一眼看出左右谁在说话。 */
+private const val BUBBLE_MAX_WIDTH = 0.85f

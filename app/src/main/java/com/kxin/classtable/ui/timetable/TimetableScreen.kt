@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -275,25 +276,15 @@ fun TimetableScreen(
             Spacer(modifier = Modifier.weight(1f))
             // 导航簇:「我在看哪儿」——定位(今天)+ 视图粒度(周/日)。两者同属一把意思,收紧成一组。
             // 「今天」:已经在今天时不给可点态 —— 点了没有任何变化,给出可点的样子就是骗人
-            Text(
+            HeaderTextAction(
                 text = "今天",
-                style = YohakuType.copy13,
                 color = if (atToday) colors.neutral5 else colors.neutral7,
-                modifier = Modifier
-                    .then(
-                        if (atToday) {
-                            Modifier
-                        } else {
-                            Modifier.clickable {
-                                haptics.tick()
-                                anchorWeek = realWeek
-                                anchorWeekday = today
-                            }
-                        },
-                    )
-                    .yohakuTouchTarget()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+                enabled = !atToday,
+            ) {
+                haptics.tick()
+                anchorWeek = realWeek
+                anchorWeekday = today
+            }
             // 周 / 日:同一处的两个互斥视图 —— 用分段控件(与「日程 / 倒计时」同一套语言),
             // 一块底槽 + 会滑动的指示块,比两颗各自描边的 chip 更收敛,也把「切视图」和「做动作」分开。
             YohakuSegmentedControl(
@@ -304,28 +295,12 @@ fun TimetableScreen(
             )
             // 动作簇:与导航簇之间留一道更宽的缝,靠留白分组(不画分隔线)
             Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = "添加",
-                style = YohakuType.copy13,
-                color = colors.accent,
-                modifier = Modifier
-                    .yohakuTouchTarget()
-                    .clickable { showAdd = true }
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-            // AI 助手:页头里的可见入口(取代此前隐蔽的顶部下拉条);点击后助手仍从顶部滑入
-            Text(
-                text = "✦ 助手",
-                style = YohakuType.copy13,
-                color = colors.accent,
-                modifier = Modifier
-                    .yohakuTouchTarget()
-                    .clickable {
-                        haptics.tick()
-                        onOpenAssistant()
-                    }
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
+            HeaderTextAction(text = "添加", color = colors.accent) { showAdd = true }
+            // AI 助手:页头里的可见入口;点击后助手从屏幕底部升起
+            HeaderTextAction(text = "✦ 助手", color = colors.accent) {
+                haptics.tick()
+                onOpenAssistant()
+            }
         }
 
         // 周 / 日:同一份内容换粒度。横向共享轴 —— 退场页整幅滑出、入场页整幅滑入,
@@ -568,5 +543,31 @@ private fun InfoLine(label: String, value: String) {
             modifier = Modifier.width(44.dp),
         )
         Text(text = value, style = YohakuType.copy14, color = colors.neutral9)
+    }
+}
+
+/**
+ * 页头里的纯文字动作(今天 / 添加 / ✦ 助手)。
+ *
+ * 用 [Box] + [Alignment.Center] 兜住 44dp 的触达高度:把 `defaultMinSize` 直接挂在 [Text] 上时,
+ * 文字会**顶对齐**在那 44dp 里(下方空出十几 dp),于是和同一行的分段控件(固定 34dp,文字居中)、
+ * 天气图标(22dp)的中线错开约 8dp —— 整排读起来就是「不齐平」。居中的 Box 让字形落回行中线,
+ * 触达高度不变。
+ */
+@Composable
+private fun HeaderTextAction(
+    text: String,
+    color: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .yohakuTouchTarget()
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = text, style = YohakuType.copy13, color = color)
     }
 }
