@@ -87,6 +87,7 @@ import com.kxin.classtable.ui.importer.ManualImportScreen
 import com.kxin.classtable.ui.settings.AdjustmentsScreen
 import com.kxin.classtable.ui.settings.AgendaReminderScreen
 import com.kxin.classtable.ui.settings.AiKeyScreen
+import com.kxin.classtable.ui.settings.AgentMemoryScreen
 import com.kxin.classtable.ui.settings.CourseReminderScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
@@ -305,6 +306,7 @@ fun ClasstableRoot(
                 composable("permissions") { PermissionsScreen(nav) }
                 composable("account") { AccountScreen(nav) }
                 composable("ai_key") { AiKeyScreen(nav) }
+                composable("agent_memory") { AgentMemoryScreen(nav) }
                 composable("course_reminder") { CourseReminderScreen(nav) }
                 composable("agenda_reminder") { AgendaReminderScreen(nav) }
                 composable("update") { UpdateScreen(nav) }
@@ -329,9 +331,10 @@ fun ClasstableRoot(
             if (assistantOpen) {
                 AssistantOverlay(
                     onDismiss = { assistantOpen = false },
-                    onOpenSettings = {
+                    // 「打开页面」统一走这里:先关面板(动画跑完),再把用户带到目标页
+                    onNavigate = { route ->
                         assistantOpen = false
-                        nav.navigate("ai_key")
+                        nav.navigate(route)
                     },
                 )
             }

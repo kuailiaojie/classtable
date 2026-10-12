@@ -96,6 +96,7 @@ LaunchedEffect(Unit) {
 | `design/EntranceTracker.kt` | 一次性入场守卫:同一个 key 在一次屏幕存活期内只播一次入场(翻页回收后回头不重播) |
 | `ui/SplashOverlay.kt` | 开屏时间线(条生长 → 扫光 → 标题 / 副标题 → 收场) |
 | `ui/BrandMark.kt` | 品牌条生长与扫光的绘制(受开屏时间线驱动) |
+| `ui/assistant/AssistantScreen.kt` | 消息气泡入场(淡入 + 上移,受 `EntranceTracker` 去重)、等待三点错峰呼吸、toast 出入场、发送键按压缩放 + 可用 / 不可用状态变色 |
 | `ui/timetable/WeekGrid.kt` | 「现在」线缓动、课程块错峰入场(受 `EntranceTracker` 去重)、当前课 accent 条**呼吸**(`durPulse` 无限动画,初值 1f) |
 | `ui/timetable/DayList.kt` | 卡片错峰入场(受 `EntranceTracker` 去重)+ 列表增删重排 |
 | `ui/timetable/TimetableScreen.kt` | 温度数字滚动、翻页、表头视差;**周 ↔ 日切换的横向共享轴转场** |

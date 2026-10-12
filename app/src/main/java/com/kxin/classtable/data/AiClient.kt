@@ -34,7 +34,12 @@ object AiClient {
         )
     }
 
-    /** 助手页的文本对话。返回模型原始文本(约定为一段 JSON,由调用方解析)。 */
+    /**
+     * 助手页的文本对话。返回这一轮的文本与可能携带的**原生函数调用**。
+     *
+     * [functions] 非空时按 provider 的 wire 形态下发 tools;空则退回「模型在 JSON 里给 tool 字段」
+     * 的老协议 —— 两条路径共用同一份 [AiFunctions] 定义与 [AgentTools] 执行。
+     */
     suspend fun chat(
         provider: AiProvider,
         apiKey: String,
@@ -42,12 +47,14 @@ object AiClient {
         model: String,
         systemPrompt: String,
         history: List<AiChatMessage>,
-    ): Result<String> = when (provider) {
+        functions: List<AiFunctionSpec> = emptyList(),
+    ): Result<AiChatTurn> = when (provider) {
         AiProvider.GEMINI -> GeminiClient.chat(
             apiKey = apiKey,
             model = model.ifBlank { AiProvider.GEMINI.defaultModel },
             systemPrompt = systemPrompt,
             history = history,
+            functions = functions,
         )
         AiProvider.OPENAI_COMPAT -> OpenAiClient.chat(
             apiKey = apiKey,
@@ -55,6 +62,7 @@ object AiClient {
             model = model.ifBlank { AiProvider.OPENAI_COMPAT.defaultModel },
             systemPrompt = systemPrompt,
             history = history,
+            functions = functions,
         )
     }
 }

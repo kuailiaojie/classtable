@@ -8,7 +8,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,11 +48,11 @@ import com.kxin.classtable.data.TimetablePrefsStore
 import com.kxin.classtable.data.Weather
 import com.kxin.classtable.data.WeatherRepository
 import com.kxin.classtable.design.LocalYohakuColors
-import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
+import com.kxin.classtable.design.YohakuSegmentedControl
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberEntranceTracker
@@ -274,6 +273,7 @@ fun TimetableScreen(
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
+            // 导航簇:「我在看哪儿」——定位(今天)+ 视图粒度(周/日)。两者同属一把意思,收紧成一组。
             // 「今天」:已经在今天时不给可点态 —— 点了没有任何变化,给出可点的样子就是骗人
             Text(
                 text = "今天",
@@ -292,20 +292,18 @@ fun TimetableScreen(
                         },
                     )
                     .yohakuTouchTarget()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                YohakuChip(
-                    text = "周",
-                    selected = !isDayMode,
-                    onClick = { isDayMode = false },
-                )
-                YohakuChip(
-                    text = "日",
-                    selected = isDayMode,
-                    onClick = { isDayMode = true },
-                )
-            }
+            // 周 / 日:同一处的两个互斥视图 —— 用分段控件(与「日程 / 倒计时」同一套语言),
+            // 一块底槽 + 会滑动的指示块,比两颗各自描边的 chip 更收敛,也把「切视图」和「做动作」分开。
+            YohakuSegmentedControl(
+                options = listOf("周", "日"),
+                selectedIndex = if (isDayMode) 1 else 0,
+                onSelect = { isDayMode = it == 1 },
+                modifier = Modifier.width(60.dp),
+            )
+            // 动作簇:与导航簇之间留一道更宽的缝,靠留白分组(不画分隔线)
+            Spacer(modifier = Modifier.width(14.dp))
             Text(
                 text = "添加",
                 style = YohakuType.copy13,
@@ -313,7 +311,7 @@ fun TimetableScreen(
                 modifier = Modifier
                     .yohakuTouchTarget()
                     .clickable { showAdd = true }
-                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
             )
             // AI 助手:页头里的可见入口(取代此前隐蔽的顶部下拉条);点击后助手仍从顶部滑入
             Text(
@@ -326,7 +324,7 @@ fun TimetableScreen(
                         haptics.tick()
                         onOpenAssistant()
                     }
-                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
             )
         }
 
@@ -387,17 +385,31 @@ fun TimetableScreen(
                 // 日模式下这一天由 DayList 逐页绘制(随翻页一起滑动),这里不再画一遍 ——
                 // 否则表头与列表会各显示一次同一个日期。
                 if (!dayMode) {
-                    val todayDate = LocalDate.now()
+                    val noStart = settings.semesterStartDay <= 0L
+                    val atCurrentWeek = displayedWeek == realWeek
+                    // 大标题随「所看的那一周」走:在当前周亮今天,翻到别的周就亮这一周的日期区间 ——
+                    // 原先恒显示今天,翻到第 4 周时表头列已是别的日期,标题却还写着今天,对不上。
+                    val title = if (noStart || atCurrentWeek) {
+                        Dates.monthDayWeek(LocalDate.now())
+                    } else {
+                        weekRange.ifEmpty { "第 $displayedWeek 周" }
+                    }
+                    // 副标题不重复区间:区间已经在标题里时就只剩「第 N 周」。
+                    val subtitle = buildString {
+                        append("第 ").append(displayedWeek).append(" 周")
+                        if (atCurrentWeek && weekRange.isNotEmpty()) append(" · ").append(weekRange)
+                        if (noStart) append(" · 未设置开学日")
+                    }
                     Column(
                         modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
                     ) {
                         Text(
-                            text = Dates.monthDayWeek(todayDate),
+                            text = title,
                             style = YohakuType.title20,
                             color = colors.neutral10,
                         )
                         Text(
-                            text = weekLabel,
+                            text = subtitle,
                             style = YohakuType.copy13,
                             color = colors.neutral7,
                         )

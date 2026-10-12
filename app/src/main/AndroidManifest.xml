@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -28,7 +30,8 @@
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Classtable">
+        android:theme="@style/Theme.Classtable"
+        appfn:description="余课课程表:查询今日 / 某周课程、作息与学期周次,添加课程与日程。">
 
         <!--
           桌面入口交给下面 9 个 activity-alias:每个 alias 一套图标、名字相同,同一时刻只启用一个,
@@ -289,6 +292,32 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/agenda_widget_info" />
         </receiver>
+
+        <!--
+          AppFunctions(Android 16+):把课表能力以函数形式暴露给设备端智能体(设备端 MCP)。
+          清单里的类名是 KSP 依据 BaseClasstableAppFunctionService 上
+          @AppFunctionServiceEntryPoint(serviceName=…) 生成的**具体**服务类;
+          XML 与 schema 文件同样由编译器生成。低版本 / 未授权时系统不会调用,不影响应用其余部分。
+        -->
+        <service
+            android:name="com.kxin.classtable.appfunctions.ClasstableAppFunctionService"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            android:exported="true"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="classtable_app_function_service.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+
+        <property
+            android:name="android.app.appfunctions.app_metadata"
+            android:resource="@xml/app_metadata" />
 
     </application>
 

@@ -182,6 +182,11 @@ dependencies {
     // 农历/节气:日历周条下的小字(纯 Java,无反射,可在 Android 直接使用)
     implementation(libs.lunar)
 
+    // AppFunctions(Android 16+):把课表能力以函数形式暴露给设备端智能体。
+    // 运行时是可选能力 —— 不支持的系统上库自身会跳过,不影响应用其余部分。
+    implementation(libs.androidx.appfunctions)
+    ksp(libs.androidx.appfunctions.compiler)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
 }

@@ -61,45 +61,122 @@ object OpenAiClient {
         }
     }
 
-    /** 文本对话(助手页用):返回模型原始文本(约定里是一段 JSON)。 */
+    /**
+     * 文本对话(助手页用):返回这一轮的文本,以及可能携带的**原生函数调用**。
+     *
+     * [functions] 非空时把只读工具以 `tools` 下发。有些第三方兼容端不认 `tools`,带工具请求失败
+     * 会**自动退回纯文本**再试一次 —— 原生 function calling 与老的 JSON 协议两条路都走得通。
+     */
     suspend fun chat(
         apiKey: String,
         baseUrl: String,
         model: String,
         systemPrompt: String,
         history: List<AiChatMessage>,
-    ): Result<String> = withContext(Dispatchers.IO) {
+        functions: List<AiFunctionSpec>,
+    ): Result<AiChatTurn> = withContext(Dispatchers.IO) {
         runCatching {
-            val messages = JSONArray()
-                .put(JSONObject().put("role", "system").put("content", systemPrompt))
-            history.forEach { m ->
-                messages.put(JSONObject().put("role", m.role).put("content", m.content))
+            val endpoint = baseUrl.trimEnd('/') + "/chat/completions"
+            val text = try {
+                postJson(endpoint, apiKey, buildChatBody(model, systemPrompt, history, functions))
+            } catch (error: Exception) {
+                if (functions.isEmpty()) throw error
+                postJson(endpoint, apiKey, buildChatBody(model, systemPrompt, history, emptyList()))
             }
-            val body = JSONObject()
-                .put("model", model)
-                .put("messages", messages)
-                .put("max_tokens", 1500)
-                .put("temperature", 0.4)
-                .toString()
-
-            val conn = URL(baseUrl.trimEnd('/') + "/chat/completions").openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Authorization", "Bearer $apiKey")
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 90_000
-            conn.doOutput = true
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = conn.responseCode
-            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
-                ?.bufferedReader()?.use { it.readText() } ?: ""
-            conn.disconnect()
-            check(code in 200..299) { "AI 接口返回 $code:${text.take(200)}" }
-
-            JSONObject(text)
-                .getJSONArray("choices").getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
+            parseChatTurn(text)
         }
+    }
+
+    private fun buildChatBody(
+        model: String,
+        systemPrompt: String,
+        history: List<AiChatMessage>,
+        functions: List<AiFunctionSpec>,
+    ): String {
+        val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt))
+        history.forEach { messages.put(toWireMessage(it)) }
+        val body = JSONObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("max_tokens", 1500)
+            .put("temperature", 0.4)
+        if (functions.isNotEmpty()) {
+            body.put("tools", AiFunctions.openAiToolsJson(functions))
+            body.put("tool_choice", "auto")
+        }
+        return body.toString()
+    }
+
+    /** 历史消息 → OpenAI wire 形态(助手带 tool_calls、工具结果带 tool_call_id)。 */
+    private fun toWireMessage(message: AiChatMessage): JSONObject = when {
+        message.role == "assistant" && message.toolCalls.isNotEmpty() -> {
+            val obj = JSONObject().put("role", "assistant")
+            obj.put("content", if (message.content.isBlank()) JSONObject.NULL else message.content)
+            obj.put(
+                "tool_calls",
+                JSONArray().apply {
+                    message.toolCalls.forEach { call ->
+                        put(
+                            JSONObject()
+                                .put("id", call.id)
+                                .put("type", "function")
+                                .put(
+                                    "function",
+                                    JSONObject().put("name", call.name).put("arguments", call.argumentsJson),
+                                ),
+                        )
+                    }
+                },
+            )
+            obj
+        }
+
+        message.role == "tool" -> JSONObject()
+            .put("role", "tool")
+            .put("content", message.content)
+            .apply { message.toolCallId?.let { put("tool_call_id", it) } }
+
+        else -> JSONObject().put("role", message.role).put("content", message.content)
+    }
+
+    private fun parseChatTurn(text: String): AiChatTurn {
+        val message = JSONObject(text)
+            .getJSONArray("choices").getJSONObject(0)
+            .getJSONObject("message")
+        val content = if (message.isNull("content")) "" else message.optString("content")
+        val calls = message.optJSONArray("tool_calls")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val call = arr.optJSONObject(i) ?: return@mapNotNull null
+                val fn = call.optJSONObject("function") ?: return@mapNotNull null
+                val name = fn.optString("name").trim()
+                if (name.isBlank()) {
+                    null
+                } else {
+                    AiToolCall(
+                        id = call.optString("id").ifBlank { name },
+                        name = name,
+                        argumentsJson = fn.optString("arguments").ifBlank { "{}" },
+                    )
+                }
+            }
+        }.orEmpty()
+        return AiChatTurn(content, calls)
+    }
+
+    private fun postJson(endpoint: String, apiKey: String, body: String): String {
+        val conn = URL(endpoint).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        conn.connectTimeout = 30_000
+        conn.readTimeout = 90_000
+        conn.doOutput = true
+        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader()?.use { it.readText() } ?: ""
+        conn.disconnect()
+        check(code in 200..299) { "AI 接口返回 $code:${text.take(200)}" }
+        return text
     }
 }

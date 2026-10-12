@@ -56,6 +56,11 @@ class SettingsViewModel @Inject constructor(
         .map { it.colorScheme }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CourseColorScheme.STANDARD)
 
+    /** 助手记忆条数:设置首页那一行的说明文字。 */
+    val agentMemoryCount: StateFlow<Int> = settingsRepository.agentMemory
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val userEmail: StateFlow<String?> = authRepository.currentUser
         .map { it?.email }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -115,6 +120,7 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
     val yuketangLoggedIn by viewModel.yuketangLoggedIn.collectAsStateWithLifecycle()
+    val memoryCount by viewModel.agentMemoryCount.collectAsStateWithLifecycle()
 
     val themeLabel = when (settings.themeMode) {
         ThemeMode.SYSTEM -> "跟随系统"
@@ -142,6 +148,12 @@ fun SettingsScreen(
                 title = "AI 设置",
                 value = if (settings.aiApiKey.isBlank()) "未配置" else "已配置 · ${settings.provider().label}",
                 onClick = { nav.navigate("ai_key") },
+            )
+            DividerLine()
+            SettingRow(
+                title = "助手记忆",
+                value = if (memoryCount == 0) "无" else "$memoryCount 条",
+                onClick = { nav.navigate("agent_memory") },
             )
             DividerLine()
             SettingRow("提醒", reminderSummary(settings)) { nav.navigate(SettingsHub.REMINDER.route) }

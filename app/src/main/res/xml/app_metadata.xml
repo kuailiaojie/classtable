@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppFunctions 应用级元数据:描述「余课能把什么交给设备端智能体」。
+  与函数自身的 KDoc 一起构成代理的选型依据;不涉及具体实现。
+-->
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="余课(极简课程表)向设备端智能体开放课程表的查询与录入能力。
+可用能力:
+  - 查询今日课程、某一周的课程、按名称 / 教师 / 地点 / 星期搜索课程;
+  - 查询作息(每节起止时间)与学期信息(当前教学周、总周数、开学日期);
+  - 添加课程、添加日程 / 倒计时、按课程 ID 删除课程。
+使用约束:
+  - 删除课程前必须先用 searchCourses 或 getWeekSchedule 拿到真实 courseId,不要臆造 ID;
+  - 添加课程时节次必须在作息范围内(可先调用 getPeriods 确认),日期一律用 yyyy-MM-dd,时刻用 HH:MM;
+  - 所有查询与写入都只作用于用户本机的课表,不涉及账号与云端。"
+    appfn:displayDescription="余课:让智能体帮你查课表、加课、加日程。"/>

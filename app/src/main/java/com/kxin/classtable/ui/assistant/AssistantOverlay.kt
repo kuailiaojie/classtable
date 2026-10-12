@@ -41,29 +41,34 @@ import com.kxin.classtable.design.YohakuMotion
  *
  * 关闭有三条路:点遮罩 / 系统返回键 / 面板左上角返回箭头。三条都先跑退场动画,
  * 动画结束才回调 [onDismiss] 让宿主卸载,避免面板"啪"地消失。
+ *
+ * 「打开某个页面」(页头「设置」按钮,或助手给出的导航动作)走同一条收尾路径:先关面板、
+ * 动画跑完再 [onNavigate] —— 于是不会出现「面板还在、底下的页已经换了」的错位。
  */
 @Composable
 fun AssistantOverlay(
     onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onNavigate: (String) -> Unit,
     viewModel: AssistantViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
     // 命中即入场:初始 targetState = true,首帧就跑滑入动画
     val panel = remember { MutableTransitionState(false).apply { targetState = true } }
     var closing by remember { mutableStateOf(false) }
-    var openSettingsAfterClose by remember { mutableStateOf(false) }
+    // 关面板后要去哪:null = 只是关掉
+    var routeAfterClose by remember { mutableStateOf<String?>(null) }
 
-    fun close() {
+    fun close(then: String? = null) {
         if (closing) return
         closing = true
+        routeAfterClose = then
         panel.targetState = false
     }
 
-    // 退场跑完再通知宿主:去设置 / 单纯关闭二选一
+    // 退场跑完再通知宿主:导航 / 单纯关闭二选一
     LaunchedEffect(panel) {
         snapshotFlow { panel.isIdle && !panel.currentState }
-            .collect { closed -> if (closed) if (openSettingsAfterClose) onOpenSettings() else onDismiss() }
+            .collect { closed -> if (closed) routeAfterClose?.let(onNavigate) ?: onDismiss() }
     }
     BackHandler(onBack = { close() })
 
@@ -112,10 +117,8 @@ fun AssistantOverlay(
             ) {
                 AssistantPanel(
                     onClose = { close() },
-                    onOpenSettings = {
-                        openSettingsAfterClose = true
-                        close()
-                    },
+                    onOpenSettings = { close("ai_key") },
+                    onNavigate = { route -> close(route) },
                     viewModel = viewModel,
                 )
             }

@@ -75,6 +75,8 @@ class SettingsRepository @Inject constructor(
     private val KEY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
     /** 调休课表(JSON 数组):某天停课 / 某天补另一天的课。 */
     private val KEY_ADJUSTMENTS = stringPreferencesKey("schedule_adjustments")
+    /** 助手长期记忆(JSON 字符串数组):用户可查看 / 编辑 / 清空;仅本机。 */
+    private val KEY_AGENT_MEMORY = stringPreferencesKey("agent_memory")
     private val KEY_LAUNCHES = intPreferencesKey("app_launches")
     private val KEY_SURVEY_HANDLED = booleanPreferencesKey("survey_handled")
     /** 雨课堂:开关与上次拉取时间。属于本机数据(与账号无关),不进云端设置同步。 */
@@ -258,6 +260,29 @@ class SettingsRepository @Inject constructor(
     suspend fun setScheduleAdjustments(json: String) {
         context.settingsDataStore.edit { it[KEY_ADJUSTMENTS] = json }
     }
+
+    /**
+     * 助手长期记忆:用户可查看 / 编辑 / 清空,对话时注入上下文。
+     *
+     * 与调休、雨课堂选项同理 —— 属于本机数据,不打同步时间戳、不进 [applySynced]。
+     */
+    val agentMemory: Flow<List<String>> = context.settingsDataStore.data
+        .map { decodeMemory(it[KEY_AGENT_MEMORY].orEmpty()) }
+
+    suspend fun setAgentMemory(items: List<String>) {
+        // 上限 50 条:记忆会整段注入每次对话,无节制增长只会白白推高 token。
+        val cleaned = items.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(50)
+        context.settingsDataStore.edit { it[KEY_AGENT_MEMORY] = encodeMemory(cleaned) }
+    }
+
+    private fun encodeMemory(items: List<String>): String =
+        org.json.JSONArray(items).toString()
+
+    private fun decodeMemory(json: String): List<String> = runCatching {
+        if (json.isBlank()) return emptyList()
+        val arr = org.json.JSONArray(json)
+        (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { s -> s.isNotBlank() } }
+    }.getOrDefault(emptyList())
 
     /** 桌面图标(仅本机,不打同步时间戳)。 */
     suspend fun setAppIconIndex(index: Int) {
