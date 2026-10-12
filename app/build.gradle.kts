@@ -45,8 +45,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 82
-        versionName = "3.3.0"
+        versionCode = 83
+        versionName = "3.4.0"
 
         // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
         buildConfigField(
