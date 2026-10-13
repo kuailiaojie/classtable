@@ -403,12 +403,22 @@
   {
    "folder": "CUST",
    "adapter_id": "CUST_01",
-   "adapter_name": "长春理工大学教务系统（朝阳校区）",
+   "adapter_name": "长春理工大学融合课表（朝阳校区·本科）",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "cust_chaoyang.js",
-   "import_url": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
+   "import_url": "https://kbpro.cust.edu.cn/Schedule/",
    "maintainer": "itdong",
-   "description": "适用于朝阳校区，导入个人课程表并配置第 1～12 节作息时间。"
+   "description": "通过融合课表适配本科生"
+  },
+  {
+   "folder": "CUST",
+   "adapter_id": "CUST_02",
+   "adapter_name": "长春理工大学融合课表（朝阳校区·研究生）",
+   "category": "POSTGRADUATE",
+   "asset_js_path": "cust_chaoyang.js",
+   "import_url": "https://kbpro.cust.edu.cn/Schedule/",
+   "maintainer": "itdong",
+   "description": "通过融合课表适配研究生"
   },
   {
    "folder": "CWXU",
@@ -656,7 +666,7 @@
    "adapter_name": "桂林医科大学教务",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "glmu.js",
-   "import_url": "https://ejwc.glmc.edu.cn/",
+   "import_url": "https://ejwc.glmu.edu.cn/",
    "maintainer": "xhh李",
    "description": "桂林医科大学教务,本校开发者适配，如果有误请加入QQ频道：pd12631377"
   },
@@ -1299,6 +1309,16 @@
    "import_url": "http://jw.imut.edu.cn/academic/login/imut/loginIds6Valid.jsp",
    "maintainer": "wuko233",
    "description": "内蒙古工业大学教务处适配，采用新版统一身份认证登录页面"
+  },
+  {
+   "folder": "JDZVUA",
+   "adapter_id": "JDZVUA",
+   "adapter_name": "景德镇艺术职业大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jdzvua.js",
+   "import_url": "https://jwc.jdzvua.edu.cn/",
+   "maintainer": "Haooz",
+   "description": "景德镇艺术职业大学课表导入，请先在页面上切换到要导入的学期课表，再点击导入！非本校开发者，如有误请提交issues。"
   },
   {
    "folder": "JHZYEDU",
