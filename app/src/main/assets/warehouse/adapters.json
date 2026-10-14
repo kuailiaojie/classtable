@@ -791,6 +791,26 @@
    "description": "广西医科大学智慧教务系统课表导入，登录门户站点以后，进入教务系统，直接点击导入即可"
   },
   {
+   "folder": "GZIST",
+   "adapter_id": "GZIST_01",
+   "adapter_name": "广州理工学院（统一身份认证）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzist_01.js",
+   "import_url": "https://ids.gzist.edu.cn/lyuapServer/login?service=http%3A%2F%2Fjw.gzist.edu.cn%2Fsso%2Flyiotlogin",
+   "maintainer": "YT-O5",
+   "description": "输入统一认证门户账号密码后在信息查询页面进入学生课表查询，随后点击底部“执行导入”。"
+  },
+  {
+   "folder": "GZIST",
+   "adapter_id": "GZIST_02",
+   "adapter_name": "广州理工学院（WebVPN 校外）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzist_01.js",
+   "import_url": "https://webvpn.gzist.edu.cn/login",
+   "maintainer": "YT-O5",
+   "description": "提示：本系统是为非校园网用户提供访问校内资源的途径，如用户使用校园网上网时无需登录本系统。正常可使用统一身份认证通过相关账号密码登录。此项功能未进行测试。"
+  },
+  {
    "folder": "GZMTU",
    "adapter_id": "GZMTU_01",
    "adapter_name": "广州航海学院本科教务",
@@ -929,6 +949,16 @@
    "import_url": "http://urp.hebau.edu.cn:1009/jwapp/sys/homeapp/home/index.html#/",
    "maintainer": "Haooz",
    "description": "河北农业大学课表导入，请先登录教务系统，再点击导入！非本校开发者，如有误请提交issues。"
+  },
+  {
+   "folder": "HEBEU",
+   "adapter_id": "HEBEU_01",
+   "adapter_name": "河北工程大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hebeu.js",
+   "import_url": "https://jwglxxfwpt.hebeu.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "Nanawwa",
+   "description": "登录河北工程大学教务系统后即可导入课表，支持选择学年学期，自动获取开学日期、学期总周数与作息时间"
   },
   {
    "folder": "HFNU",
@@ -2668,7 +2698,7 @@
    "asset_js_path": "zhku_lc6464.js",
    "import_url": "https://edu-admin.zhku.edu.cn/",
    "maintainer": "lc6464",
-   "description": "登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+   "description": "便捷导入流程：登录教务系统后点击右下角“执行导入”，在弹窗中选择学年学期即可。\n\n传统导入流程：登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\n\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
   },
   {
    "folder": "ZJBTI",
@@ -2719,6 +2749,16 @@
    "import_url": "http://jwglxt.zua.edu.cn/eams/loginExt.action",
    "maintainer": "xBefore",
    "description": "郑州航空工业管理学院树维 EAMS 教务课表导入。请在右上角切换为电脑版后登录教务；若页面显示异常，请手动刷新。登录成功后即可执行导入，无需进入“我的课表”等具体课程页面。支持自动同步学期日期与学校标准作息。"
+  },
+  {
+   "folder": "ZWU",
+   "adapter_id": "ZWU_01",
+   "adapter_name": "浙江万里学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zwu_01.js",
+   "import_url": "https://ehall.zwu.edu.cn/_layouts/15/ZWUWSBS/BSDT/HomePage.aspx#",
+   "maintainer": "星河欲转",
+   "description": "浙江万里学院正方教务，校内访问和vpn访问都可以，进入教务系统即可开始导入，支持获取开学日期，已添加令时作息"
   },
   {
    "folder": "ZZU",
