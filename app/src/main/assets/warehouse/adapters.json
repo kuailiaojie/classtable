@@ -121,6 +121,16 @@
    "description": "长春工程学院强智教务适配，webvpn入口，请进入教务系统页面再点击导入，非本校开发者适配如果有误建议提交issues"
   },
   {
+   "folder": "CCSUT",
+   "adapter_id": "CCSUT_01",
+   "adapter_name": "长沙工业学院超星教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ccsut_01.js",
+   "import_url": "https://auth.ccsut.cn/backstage/cas/login?service=https%3A%2F%2Fehall.ccsut.cn%2Fbackstage%2Fcas-proxy%2Fapp%2Fredirect%3FserverName%3Dhttps%253A%252F%252Fehall.ccsut.cn%26wechatBindFlag%3D1",
+   "maintainer": "小漫君",
+   "description": "登录智慧校园后进入超星教务系统 tls.ccsut.cn 即可导入，无需打开课表页面；通过网络请求获取参数与课程，按系统实际选项选择学期与校区。"
+  },
+  {
    "folder": "CCZU",
    "adapter_id": "CCZU",
    "adapter_name": "常州大学教务管理信息系统",
@@ -393,12 +403,22 @@
   {
    "folder": "CUST",
    "adapter_id": "CUST_01",
-   "adapter_name": "长春理工大学教务系统（朝阳校区）",
+   "adapter_name": "长春理工大学融合课表（朝阳校区·本科）",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "cust_chaoyang.js",
-   "import_url": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
+   "import_url": "https://kbpro.cust.edu.cn/Schedule/",
    "maintainer": "itdong",
-   "description": "适用于朝阳校区，导入个人课程表并配置第 1～12 节作息时间。"
+   "description": "通过融合课表适配本科生"
+  },
+  {
+   "folder": "CUST",
+   "adapter_id": "CUST_02",
+   "adapter_name": "长春理工大学融合课表（朝阳校区·研究生）",
+   "category": "POSTGRADUATE",
+   "asset_js_path": "cust_chaoyang.js",
+   "import_url": "https://kbpro.cust.edu.cn/Schedule/",
+   "maintainer": "itdong",
+   "description": "通过融合课表适配研究生"
   },
   {
    "folder": "CWXU",
@@ -646,7 +666,7 @@
    "adapter_name": "桂林医科大学教务",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "glmu.js",
-   "import_url": "https://ejwc.glmc.edu.cn/",
+   "import_url": "https://ejwc.glmu.edu.cn/",
    "maintainer": "xhh李",
    "description": "桂林医科大学教务,本校开发者适配，如果有误请加入QQ频道：pd12631377"
   },
@@ -769,6 +789,26 @@
    "import_url": "https://cas.gxmu.edu.cn/lyuapServer/login",
    "maintainer": "Haooz",
    "description": "广西医科大学智慧教务系统课表导入，登录门户站点以后，进入教务系统，直接点击导入即可"
+  },
+  {
+   "folder": "GZIST",
+   "adapter_id": "GZIST_01",
+   "adapter_name": "广州理工学院（统一身份认证）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzist_01.js",
+   "import_url": "https://ids.gzist.edu.cn/lyuapServer/login?service=http%3A%2F%2Fjw.gzist.edu.cn%2Fsso%2Flyiotlogin",
+   "maintainer": "YT-O5",
+   "description": "输入统一认证门户账号密码后在信息查询页面进入学生课表查询，随后点击底部“执行导入”。"
+  },
+  {
+   "folder": "GZIST",
+   "adapter_id": "GZIST_02",
+   "adapter_name": "广州理工学院（WebVPN 校外）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzist_01.js",
+   "import_url": "https://webvpn.gzist.edu.cn/login",
+   "maintainer": "YT-O5",
+   "description": "提示：本系统是为非校园网用户提供访问校内资源的途径，如用户使用校园网上网时无需登录本系统。正常可使用统一身份认证通过相关账号密码登录。此项功能未进行测试。"
   },
   {
    "folder": "GZMTU",
@@ -909,6 +949,16 @@
    "import_url": "http://urp.hebau.edu.cn:1009/jwapp/sys/homeapp/home/index.html#/",
    "maintainer": "Haooz",
    "description": "河北农业大学课表导入，请先登录教务系统，再点击导入！非本校开发者，如有误请提交issues。"
+  },
+  {
+   "folder": "HEBEU",
+   "adapter_id": "HEBEU_01",
+   "adapter_name": "河北工程大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hebeu.js",
+   "import_url": "https://jwglxxfwpt.hebeu.edu.cn/xtgl/login_slogin.html",
+   "maintainer": "Nanawwa",
+   "description": "登录河北工程大学教务系统后即可导入课表，支持选择学年学期，自动获取开学日期、学期总周数与作息时间"
   },
   {
    "folder": "HFNU",
@@ -1289,6 +1339,16 @@
    "import_url": "http://jw.imut.edu.cn/academic/login/imut/loginIds6Valid.jsp",
    "maintainer": "wuko233",
    "description": "内蒙古工业大学教务处适配，采用新版统一身份认证登录页面"
+  },
+  {
+   "folder": "JDZVUA",
+   "adapter_id": "JDZVUA",
+   "adapter_name": "景德镇艺术职业大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "jdzvua.js",
+   "import_url": "https://jwc.jdzvua.edu.cn/",
+   "maintainer": "Haooz",
+   "description": "景德镇艺术职业大学课表导入，请先在页面上切换到要导入的学期课表，再点击导入！非本校开发者，如有误请提交issues。"
   },
   {
    "folder": "JHZYEDU",
@@ -1971,6 +2031,16 @@
    "description": "山东师范大学教务系统适配"
   },
   {
+   "folder": "SDUFE",
+   "adapter_id": "SDUFE_01",
+   "adapter_name": "山东财经大学强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdufe_01.js",
+   "import_url": "http://jw.sdufe.edu.cn/",
+   "maintainer": "Kurisu90",
+   "description": "适用于 jw.sdufe.edu.cn 的强智教务。登录教务系统后直接点击开始导入,可选择学期,并自动获取开学日期。如有问题欢迎提交 issue。"
+  },
+  {
    "folder": "SHIEP",
    "adapter_id": "SHIEP_01",
    "adapter_name": "上海电力大学本科教务系统",
@@ -2628,7 +2698,7 @@
    "asset_js_path": "zhku_lc6464.js",
    "import_url": "https://edu-admin.zhku.edu.cn/",
    "maintainer": "lc6464",
-   "description": "登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\n学期理论课表默认为当前学期，若导入本学期课表则无需修改。\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
+   "description": "便捷导入流程：登录教务系统后点击右下角“执行导入”，在弹窗中选择学年学期即可。\n\n传统导入流程：登录教务系统后在左侧找到“培养管理”->“我的课表”->“学期理论课表”，选择学期后点击右下角“执行导入”即可。\n\n目前仅支持导入“学期理论课表”内任意学期的课表，暂不支持导入其它类型的课表。"
   },
   {
    "folder": "ZJBTI",
@@ -2679,6 +2749,16 @@
    "import_url": "http://jwglxt.zua.edu.cn/eams/loginExt.action",
    "maintainer": "xBefore",
    "description": "郑州航空工业管理学院树维 EAMS 教务课表导入。请在右上角切换为电脑版后登录教务；若页面显示异常，请手动刷新。登录成功后即可执行导入，无需进入“我的课表”等具体课程页面。支持自动同步学期日期与学校标准作息。"
+  },
+  {
+   "folder": "ZWU",
+   "adapter_id": "ZWU_01",
+   "adapter_name": "浙江万里学院正方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zwu_01.js",
+   "import_url": "https://ehall.zwu.edu.cn/_layouts/15/ZWUWSBS/BSDT/HomePage.aspx#",
+   "maintainer": "星河欲转",
+   "description": "浙江万里学院正方教务，校内访问和vpn访问都可以，进入教务系统即可开始导入，支持获取开学日期，已添加令时作息"
   },
   {
    "folder": "ZZU",
