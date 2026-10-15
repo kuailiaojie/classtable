@@ -44,7 +44,7 @@ fun AboutScreen(nav: NavHostController) {
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
             Text(
-                text = "余课 · Yohaku 极简课程表",
+                text = "余课",
                 style = YohakuType.title28,
                 color = colors.neutral10,
             )
@@ -69,8 +69,7 @@ fun AboutScreen(nav: NavHostController) {
 
             SectionTitle("设计理念")
             Text(
-                text = "• 课程不上色:全应用仅使用单一强调色,标记「此刻值得注意」的元素\n" +
-                    "• 空堂即留白:无课的时间段保持纸面留白,不绘制任何占位装饰\n" +
+                text = "• 空堂即留白:无课的时间段保持纸面留白,不绘制任何占位装饰\n" +
                     "• 衬线纸感:内置思源宋体与等宽数字,呈现纸质课表的翻阅体验",
                 style = YohakuType.copy14,
                 color = colors.neutral9,
@@ -79,7 +78,7 @@ fun AboutScreen(nav: NavHostController) {
             SectionTitle("数据与隐私")
             Text(
                 text = "• 本地优先:课表数据存储于设备本地数据库,离线可用,不强制联网\n" +
-                    "• 云同步可选:登录后同步至本人账号(Firebase Firestore),数据仅本人可见,可随时退出\n" +
+                    "• 云同步可选:登录后同步至本人账号,数据仅本人可见,可随时退出\n" +
                     "• 教务账号:仅在导入时用于本机 WebView 登录,凭证不离开设备\n" +
                     "• AI 密钥:由用户自行配置,仅存于本机,用于课表图片识别与「AI 助手」对话\n" +
                     "• 崩溃报告:经 Firebase Crashlytics 匿名上报,仅用于改进稳定性",
