@@ -1283,7 +1283,17 @@ schools:
     initial: "S"
     resource_folder: "LIDAPOLY"
 
+  - id: "SWFU"
+    name: "西南林业大学"
+    initial: "X"
+    resource_folder: "SWFU"
+    
   - id: "BJTU"
     name: "北京交通大学"
     initial: "B"
     resource_folder: "BJTU"
+
+  - id: "NWAFU"
+    name: "西北农林科技大学"
+    initial: "X"
+    resource_folder: "NWAFU"

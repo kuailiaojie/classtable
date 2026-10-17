@@ -1811,6 +1811,16 @@
    "description": "南京信息工程大学金智教务系统课表适配"
   },
   {
+   "folder": "NWAFU",
+   "adapter_id": "NWAFU_01",
+   "adapter_name": "西北农林科技大学",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "nwafu.js",
+   "import_url": "https://newehall.nwafu.edu.cn/",
+   "maintainer": "123zhuzhu61",
+   "description": "西北农林科技大学：登录后进入「我的本研课表」点击执行导入。接口取数，写入学期总周数与冬令/夏令作息（硬编码）"
+  },
+  {
    "folder": "NWPU",
    "adapter_id": "NWPU_01",
    "adapter_name": "西北工业大学",
@@ -2159,6 +2169,16 @@
    "import_url": "https://cas.sustech.edu.cn/cas/login?service=https%3A%2F%2Ftis.sustech.edu.cn%2Fcas",
    "maintainer": "yusancky",
    "description": "南方科技大学 TIS 教学管理与服务平台（tis.sustech.edu.cn），需先通过 CAS 登录，登录后可直接导入；移动端需切换为电脑模式访问教务系统"
+  },
+  {
+   "folder": "SWFU",
+   "adapter_id": "SWFU",
+   "adapter_name": "西南林业大学教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "swfu.js",
+   "import_url": "https://jw.swfu.edu.cn/jwglxt/xtgl/login_slogin.html",
+   "maintainer": "Haooz",
+   "description": "西南林业大学课表导入，请先登录教务系统，再点击导入！非本校开发者，如有误请提交issues。"
   },
   {
    "folder": "SWJTU",
