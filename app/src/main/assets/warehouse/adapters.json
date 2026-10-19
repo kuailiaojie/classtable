@@ -581,6 +581,26 @@
    "description": "登录教务系统后直接点导入即可；自动抓取周课表并导入课程、作息时间与开学日期，实测正常使用，如有问题请提issues。"
   },
   {
+   "folder": "GDCP",
+   "adapter_id": "GDCP_01",
+   "adapter_name": "广东交通职业技术学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdcp_01.js",
+   "import_url": "https://cas.gdcp.edu.cn/",
+   "maintainer": "小漫君",
+   "description": "登录融合门户并进入新教务系统后导入，选择学期与上课校区，按教学楼应用学校作息，并读取开学日期与总周数。"
+  },
+  {
+   "folder": "GDCP",
+   "adapter_id": "GDCP_02",
+   "adapter_name": "广东交通职业技术学院强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdcp_02.js",
+   "import_url": "https://jw.gdcp.edu.cn/",
+   "maintainer": "Haooz",
+   "description": "登录教务系统后，选择学期后直接执行导入，按教学楼自动判定校区"
+  },
+  {
    "folder": "GDIPU",
    "adapter_id": "GDIPU_01",
    "adapter_name": "广东轻工职业技术大学教务",
@@ -1841,6 +1861,16 @@
    "description": "南阳师范学院青果教务系统课表导入，需先登录学校VPN并通过统一身份认证进入教务系统后执行导入"
   },
   {
+   "folder": "OUC",
+   "adapter_id": "OUC_01",
+   "adapter_name": "中国海洋大学本科教务系统",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "ouc_01.js",
+   "import_url": "https://id.ouc.edu.cn/sso/login?service=https%3A%2F%2Fjwgl2024.ouc.edu.cn%2F",
+   "maintainer": "anOsprey",
+   "description": "中国海洋大学本科生教务课程表导入，基于强智教务系统网络请求适配。使用校园网络登录教务系统后，可选择目标学期一键导入课程表，自动读取教学周历获取开学日期与总周数，并对课程进行合并去重；导入时可按需选择崂山/鱼山或西海岸校区的作息时间进行配置。如遇问题可及时反馈"
+  },
+  {
    "folder": "QAU",
    "adapter_id": "QAU_01",
    "adapter_name": "青岛农业大学综合教务管理系统（强智科技）",
@@ -2069,6 +2099,16 @@
    "import_url": "http://jw.sdufe.edu.cn/",
    "maintainer": "Kurisu90",
    "description": "适用于 jw.sdufe.edu.cn 的强智教务。登录教务系统后直接点击开始导入,可选择学期,并自动获取开学日期。如有问题欢迎提交 issue。"
+  },
+  {
+   "folder": "SDWCVC",
+   "adapter_id": "SDWCVC_01",
+   "adapter_name": "山东水利职业学院树维教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "sdwcvc_01.js",
+   "import_url": "https://sso.sdwcvc.cn/",
+   "maintainer": "小漫君",
+   "description": "登录统一认证并在门户中打开教务系统后导入，按所选学期读取课程与校历，使用学校公布的统一作息（第1～10节）。"
   },
   {
    "folder": "SHIEP",
@@ -2773,12 +2813,12 @@
   {
    "folder": "ZQU",
    "adapter_id": "ZQU_01",
-   "adapter_name": "肇庆学院（WebVPN）",
+   "adapter_name": "肇庆学院",
    "category": "BACHELOR_AND_ASSOCIATE",
    "asset_js_path": "zqu_01.js",
-   "import_url": "https://webvpn.zqu.edu.cn/login",
+   "import_url": "https://jwgl.zqu.edu.cn/",
    "maintainer": "NoobLLiu",
-   "description": "肇庆学院URP教务，校外访问走WebVPN。登录进入教务系统后点击开始导入，脚本直取课表JSON接口（getKbRq）一次读取整学期数据，导入过程中会请用户确认开学日期。无需打开课表查询页面，停留在教务系统任意页面即可。校内直连版本另行提交。非本校开发者适配，如有误差欢迎提issue"
+   "description": "肇庆学院教务系统对接，登录进入教务系统后点击开始导入，无需打开课表查询页面，停留在教务系统任意页面即可。校外经WebVPN访问或校内直连均支持。"
   },
   {
    "folder": "ZUA",

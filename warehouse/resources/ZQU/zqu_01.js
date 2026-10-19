@@ -1,6 +1,7 @@
 // 肇庆学院(zqu.edu.cn) 拾光课程表适配脚本
 // 教务系统：URP 系（Struts2，形如 xxx!yyy.action）
-// 适用范围：本脚本为【WebVPN 校外访问】版本；校内直连版本另行提交
+// 适用范围：校外经 WebVPN 访问、或校内直连，两种渠道均支持。
+// 渠道由当前页面 URL 自动识别（见 siteBase），无需分别提供脚本。
 // 维护者：NoobLLiu
 //
 // 课表数据直接取自后台 JSON 接口，不做 HTML 表格解析：
@@ -8,7 +9,7 @@
 // zc 传空即不限周次，一次可取回整学期排课记录；每条记录自带 zc 字段
 // 标明该门课的上课周次，因此无需逐周请求，也无需读取页面 DOM。
 //
-// 使用前提：用户已在弹窗打开的网页中登录 WebVPN 并进入教务系统，
+// 使用前提：用户已在弹窗打开的网页中登录教务系统，
 // 停留在教务系统内的任意页面即可，无需打开课表查询页。
 
 // ---------------------------------------------------------------- 常量
@@ -45,11 +46,13 @@ const UNKNOWN_POSITION = '未获取到教室';
 /**
  * 推算教务系统的站点根路径。
  *
- * WebVPN 下页面地址形如：
- *   https://webvpn.zqu.edu.cn/https/<加密串>/xsgrkbcx!getXsgrbkList.action
- * 校内直连下形如：
- *   https://jwgl.zqu.edu.cn/xsgrkbcx!getXsgrbkList.action
- * 取到 <加密串>/ 这一层，后续所有接口都基于它拼接。
+ * 两种登录渠道下页面地址形如：
+ *   校外 WebVPN：https://webvpn.zqu.edu.cn/https/<加密串>/xsgrkbcx!getXsgrbkList.action
+ *   校内直连：    https://jwgl.zqu.edu.cn/xsgrkbcx!getXsgrbkList.action
+ *
+ * 二者只是站点根不同，其余完全一致。因此这里不判断渠道，
+ * 只按教务内部页面的路径特征截断：取到 xsgrkbcx! 之前的一段即为站点根
+ * （WebVPN 场景会自然带上 <加密串>/ 这一层），后续所有接口都基于它拼接。
  */
 function siteBase() {
     try {
@@ -405,7 +408,7 @@ function collectCourses(records) {
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         '肇庆学院课表导入',
-        '导入前请确认：\n1) 已在当前网页登录 WebVPN；\n2) 已进入教务系统（停留在任意页面即可，无需打开课表查询）。',
+        '导入前请确认：\n1) 已进入教务系统（校外经 WebVPN、校内直连均可）；\n2) 停留在教务系统任意页面即可，无需打开课表查询。',
         '开始导入'
     );
 }
