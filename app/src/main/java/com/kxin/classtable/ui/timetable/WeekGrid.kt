@@ -312,9 +312,10 @@ private fun CourseBlock(
 ) {
     val colors = LocalYohakuColors.current
     val blockH = rowH * height
-    // 够高才放第二行(元信息);只够一行时让课程名独占
-    val roomy = blockH >= 30.dp
-    val spacious = blockH >= 54.dp
+    val isWideCol = width >= 70.dp
+    // 够高才放第二行(元信息);只够一行时让课程名独占。宽列时(折叠屏展开态通常 >= 70dp)判定条件适当放宽
+    val roomy = blockH >= 28.dp || (isWideCol && blockH >= 22.dp)
+    val spacious = blockH >= 52.dp || (isWideCol && blockH >= 42.dp)
     val shape = RoundedCornerShape(cornerRadius(prefs.corner))
     val tinted = prefs.showTint
 
@@ -367,7 +368,7 @@ private fun CourseBlock(
         if (prefs.showLocation && course.location.isNotEmpty()) add(course.location)
         if (prefs.showTeacher && course.teacher.isNotEmpty()) add(course.teacher)
     }
-    val metaCount = if (spacious) 2 else if (roomy) 1 else 0
+    val metaCount = if (blockH >= 64.dp && isWideCol) 3 else if (spacious) 2 else if (roomy) 1 else 0
 
     Box(
         modifier = Modifier

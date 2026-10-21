@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -134,12 +136,19 @@ fun CourseDetailScreen(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        YohakuTopBar(title = "课程详情", onBack = { nav.popBackStack() })
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxContentWidth)
+                .fillMaxWidth(),
+        ) {
+            YohakuTopBar(title = "课程详情", onBack = { nav.popBackStack() })
 
         val c = course
         if (c == null) {
@@ -276,6 +285,7 @@ fun CourseDetailScreen(
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
             }
         }
+    }
     }
 }
 

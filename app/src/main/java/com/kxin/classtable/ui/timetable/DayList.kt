@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
@@ -87,11 +90,18 @@ internal fun DayList(
     val ongoing = if (isToday) scheduled.firstOrNull { nowMinute >= it.second && nowMinute < it.third } else null
     val next = if (isToday) scheduled.firstOrNull { it.second > nowMinute } else null
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxContentWidth)
+                .fillMaxWidth(),
+        ) {
         val weekName = Dates.weekdayChar(date.dayOfWeek.value)
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -212,4 +222,5 @@ internal fun DayList(
             }
         }
     }
+}
 }

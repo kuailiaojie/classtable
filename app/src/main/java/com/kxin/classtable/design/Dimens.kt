@@ -36,4 +36,13 @@ object YohakuDimens {
     val gridBlockPadding = 3.dp
     /** 周视图课程块左侧「当前正在上」的 accent 条宽 */
     val gridAccentBarWidth = 2.dp
+
+    /** 折叠屏展开/平板等大屏适配:内容区最大宽度约束,避免在宽屏上横向过度拉伸 */
+    val maxContentWidth = 680.dp
+    /** 表单类界面的最大宽度 */
+    val maxFormWidth = 600.dp
+    /** 弹窗在宽屏上的最大宽度 */
+    val maxDialogWidth = 420.dp
+    /** AI 助手面板在宽屏上的最大宽度 */
+    val maxPanelWidth = 640.dp
 }

@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -104,15 +106,22 @@ fun AgendaFormScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        YohakuTopBar(
-            title = if (eventId != null) "编辑${kind.label}" else "新建${kind.label}",
-            onBack = { nav.popBackStack() },
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxFormWidth)
+                .fillMaxWidth(),
+        ) {
+            YohakuTopBar(
+                title = if (eventId != null) "编辑${kind.label}" else "新建${kind.label}",
+                onBack = { nav.popBackStack() },
+            )
         if (eventId != null && editing == null) {
             // 编辑态:等目标条目从本地库出来再建表单,避免把「还没读到」当成新建。
             // 加载中给一行轻提示,而不是留一整屏空白(那看起来像页面坏了)。
@@ -133,6 +142,7 @@ fun AgendaFormScreen(
                 onDelete = { viewModel.delete(it) },
             )
         }
+    }
     }
 }
 

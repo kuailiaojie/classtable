@@ -1,12 +1,16 @@
 package com.kxin.classtable.ui.agenda
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
@@ -19,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -95,12 +100,19 @@ fun AgendaScreen(
     val showCountdown = pagerState.currentPage == 1
     val kind = if (showCountdown) AgendaKind.COUNTDOWN else AgendaKind.SCHEDULE
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        YohakuTopBar(
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxContentWidth)
+                .fillMaxWidth(),
+        ) {
+            YohakuTopBar(
             title = kind.label,
             actions = {
                 YohakuSegmentedControl(
@@ -179,4 +191,5 @@ fun AgendaScreen(
             }
         }
     }
+}
 }

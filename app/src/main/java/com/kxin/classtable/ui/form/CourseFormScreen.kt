@@ -9,7 +9,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -370,15 +372,22 @@ fun CourseFormScreen(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        YohakuTopBar(
-            title = if (editing != null) "编辑课程" else "添加课程",
-            onBack = { nav.popBackStack() },
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxFormWidth)
+                .fillMaxWidth(),
+        ) {
+            YohakuTopBar(
+                title = if (editing != null) "编辑课程" else "添加课程",
+                onBack = { nav.popBackStack() },
+            )
 
         if (courseId != null && editing == null) {
             // 编辑态:等目标课程从本地库出来再建表单,避免先闪一帧空表单再跳变
@@ -725,6 +734,7 @@ fun CourseFormScreen(
             )
         }
         }
+    }
     }
 }
 

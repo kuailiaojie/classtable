@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -33,13 +36,20 @@ import com.kxin.classtable.design.yohakuTouchTarget
 @Composable
 fun AboutScreen(nav: NavHostController) {
     val colors = LocalYohakuColors.current
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.paper)
-            .verticalScroll(rememberScrollState()),
+            .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        YohakuTopBar(title = "关于", onBack = { nav.popBackStack() })
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxContentWidth)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            YohakuTopBar(title = "关于", onBack = { nav.popBackStack() })
 
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
@@ -133,6 +143,7 @@ fun AboutScreen(nav: NavHostController) {
 
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }
+    }
     }
 }
 

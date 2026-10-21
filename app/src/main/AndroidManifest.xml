@@ -41,6 +41,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density"
             android:windowSoftInputMode="adjustResize" />
 
         <!-- 图标 1/9:向左看 -->

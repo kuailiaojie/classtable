@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -39,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -126,16 +129,24 @@ fun AssistantOverlay(
             ) { it } + fadeOut(animationSpec = YohakuMotion.tween(YohakuMotion.durFast)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(PANEL_HEIGHT_FRACTION)
-                    // 跟手位移:拖拽时整块面板随手指下移,松手后回位或继续滑出
-                    .offset { IntOffset(0, dragOffset.value.roundToInt()) },
-                shape = RoundedCornerShape(
+            val isWideScreen = LocalConfiguration.current.screenWidthDp >= 600
+            val sheetShape = if (isWideScreen) {
+                RoundedCornerShape(YohakuDimens.radiusSheet)
+            } else {
+                RoundedCornerShape(
                     topStart = YohakuDimens.radiusSheet,
                     topEnd = YohakuDimens.radiusSheet,
-                ),
+                )
+            }
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = YohakuDimens.maxPanelWidth)
+                    .fillMaxWidth()
+                    .fillMaxHeight(PANEL_HEIGHT_FRACTION)
+                    .then(if (isWideScreen) Modifier.padding(bottom = 12.dp) else Modifier)
+                    // 跟手位移:拖拽时整块面板随手指下移,松手后回位或继续滑出
+                    .offset { IntOffset(0, dragOffset.value.roundToInt()) },
+                shape = sheetShape,
                 // 浮起面 + 投影:面板要读成「浮在课表之上的一层」,而不是盖上去的一张白纸
                 // (与悬浮底部导航同一套浮起语言:更亮的表面 + 一道投影,不用硬边框)。
                 color = colors.raised,

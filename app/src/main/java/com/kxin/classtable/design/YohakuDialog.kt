@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ fun YohakuDialog(
         val shape = RoundedCornerShape(YohakuDimens.radiusSheet)
         Box(
             modifier = modifier
+                .widthIn(max = YohakuDimens.maxDialogWidth)
                 .fillMaxWidth()
                 .graphicsLayer {
                     // back.out 会略微冲过 1,alpha 得夹住;scale 的超调正好就是那点回弹

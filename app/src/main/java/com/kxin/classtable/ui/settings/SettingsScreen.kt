@@ -2,7 +2,12 @@ package com.kxin.classtable.ui.settings
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -128,14 +133,21 @@ fun SettingsScreen(
         ThemeMode.DARK -> "深色"
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.paper)
-            .verticalScroll(rememberScrollState()),
+            .background(colors.paper),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        // 设置是底部导航的根标签页,没有上一级可返回,因此这里不放返回箭头
-        YohakuTopBar(title = "设置")
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = YohakuDimens.maxContentWidth)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            // 设置是底部导航的根标签页,没有上一级可返回,因此这里不放返回箭头
+            YohakuTopBar(title = "设置")
 
         SettingsSection(title = "常用") {
             SettingRow("外观", themeLabel) { nav.navigate(SettingsHub.APPEARANCE.route) }
@@ -175,5 +187,6 @@ fun SettingsScreen(
         // 悬浮导航浮在内容之上:列表中途会从栏下穿过,末尾留出栏体高度,
         // 最后一行才不会被永久盖住。
         Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
+    }
     }
 }

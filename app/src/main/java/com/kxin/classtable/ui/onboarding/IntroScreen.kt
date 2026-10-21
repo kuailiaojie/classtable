@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -78,7 +79,12 @@ fun IntroScreen(onFinish: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         )
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = YohakuDimens.maxFormWidth)
+                .align(Alignment.Center),
+        ) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.weight(1f),

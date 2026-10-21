@@ -157,7 +157,7 @@ fun ClasstableRoot(
         // 开屏退场后才让引导入场:两者接成一次连续编排,而不是引导在开屏后面「偷偷」播完
         // 远程开关(默认 true)可兜底关掉开屏;Remote Config 缓存值在下次启动生效
         val splashEnabled = remember { RemoteConfig.getBoolean("splash_enabled") }
-        var splashExiting by remember { mutableStateOf(!splashEnabled) }
+        var splashExiting by rememberSaveable { mutableStateOf(!splashEnabled) }
         // 权限/ROM 状态快照:读这些是跨进程 binder 调用(通知管理器 / 闹钟 / 电源),不该在
         // 每次重组时做。用 remember 快照 + 回到前台刷新 —— 用户常刚从系统设置里改完回来。
         var permSnapshot by remember { mutableStateOf(readPermissionSnapshot(context)) }
