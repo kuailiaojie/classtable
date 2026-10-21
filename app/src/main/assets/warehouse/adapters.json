@@ -921,6 +921,16 @@
    "description": "河南工业大学适配教务，非本校开发者适配如果有误建议提交issues"
   },
   {
+   "folder": "HBDFXY",
+   "adapter_id": "HBDFXY_01",
+   "adapter_name": "强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "hbdfxy_01.js",
+   "import_url": "http://219.148.95.56:10000/jsxsd/",
+   "maintainer": "小漫君",
+   "description": "登录教务后导入，支持选择学期，自动读取教学周历并写入学校十节作息，课程按教务节次排课。无上课时间的课程会单独提示，不生成虚构安排。"
+  },
+  {
    "folder": "HBGUHX",
    "adapter_id": "HBGUHX",
    "adapter_name": "河北地质大学华信学院强智教务",
@@ -2718,7 +2728,7 @@
    "asset_js_path": "ynufe.js",
    "import_url": "https://xjwis.ynufe.edu.cn/jsxsd/",
    "maintainer": "AxelPLN",
-   "description": "由于学校已于 2026 年上半年启用 aTrust 验证，登录教务系统之前必须使用云财小程序内登记的手机号完成短信验证，完成验证后再使用教务系统账号登录，若无法完成验证请确认是否在小程序登记了正确的手机号码或者向教务处反馈，对此不便开发者表示无能为力。登录教务系统后直接按下面的“执行导入”即可。"
+   "description": "登录教务系统后直接按下面的“执行导入”即可，无需打开课表页面。"
   },
   {
    "folder": "YSSDUFE",
@@ -2829,6 +2839,16 @@
    "import_url": "http://jwglxt.zua.edu.cn/eams/loginExt.action",
    "maintainer": "xBefore",
    "description": "郑州航空工业管理学院树维 EAMS 教务课表导入。请在右上角切换为电脑版后登录教务；若页面显示异常，请手动刷新。登录成功后即可执行导入，无需进入“我的课表”等具体课程页面。支持自动同步学期日期与学校标准作息。"
+  },
+  {
+   "folder": "ZUST",
+   "adapter_id": "ZUST_01",
+   "adapter_name": "浙江科技大学（正方教务）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "zust_01.js",
+   "import_url": "https://https-authserver-zust-edu-cn-443.webvpn.zust.edu.cn/authserver/login?appid=https://https-authserver-zust-edu-cn-443.webvpn.zust.edu.cn/authserver/logout?service=${redirect_url}&service=https://webvpn.zust.edu.cn/callback/cas/TKBCDGsz",
+   "maintainer": "小漫君",
+   "description": "登录 WebVPN 后点击教务系统，进入教学管理信息服务平台再导入。支持选择学年学期，自动读取校历和课程所属校区作息，保留原节次。"
   },
   {
    "folder": "ZWU",
