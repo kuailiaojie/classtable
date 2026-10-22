@@ -943,6 +943,12 @@
    "resource_folder": "CSUFT"
   },
   {
+   "id": "CSU",
+   "name": "中南大学",
+   "initial": "Z",
+   "resource_folder": "CSU"
+  },
+  {
    "id": "JLU",
    "name": "吉林大学",
    "initial": "J",
