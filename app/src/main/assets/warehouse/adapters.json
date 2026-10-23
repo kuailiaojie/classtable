@@ -871,6 +871,16 @@
    "description": "广州松田职业学院强智适配,非本校开发者适配如果有误建议提交issues"
   },
   {
+   "folder": "GZTCME",
+   "adapter_id": "GZTCME",
+   "adapter_name": "贵州机电职业技术学院",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gztcme.js",
+   "import_url": "https://jwxt.gztcme.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default",
+   "maintainer": "Panda君",
+   "description": "点开直达“个人课表查询”；未登录会先跳登录页，登录后回到后台首页直接点导入即可，不用再翻菜单。可选择学年学期，自动读取校历、校区作息与周次，未排定时间的课程会提示。"
+  },
+  {
    "folder": "GZTRC",
    "adapter_id": "GZTRC",
    "adapter_name": "铜仁学院联奕教务（新版教务）",

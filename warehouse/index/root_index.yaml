@@ -1327,3 +1327,8 @@ schools:
     name: "浙江科技大学"
     initial: "Z"
     resource_folder: "ZUST"
+
+  - id: "GZTCME"
+    name: "贵州机电职业技术学院"
+    initial: "G"
+    resource_folder: "GZTCME"
