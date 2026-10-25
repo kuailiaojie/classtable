@@ -648,7 +648,17 @@
    "asset_js_path": "gdou.js",
    "import_url": "https://jw.gdou.edu.cn/",
    "maintainer": "Mccurtain",
-   "description": "广东海洋大学教务适配，如有误请提交 issues"
+   "description": "广东海洋大学教务适配，校园网内优先使用此通道，如有误请提交 issues"
+  },
+  {
+   "folder": "GDOU",
+   "adapter_id": "GDOU_02",
+   "adapter_name": "广东海洋大学教务（校外通道）",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gdou2.js",
+   "import_url": "https://wfw.gdou.edu.cn/https://jw.gdou.edu.cn/",
+   "maintainer": "Mccurtain",
+   "description": "广东海洋大学教务适配，校园网外使用（经学校零信任通道访问教务系统，校内外均可），登录前，请点右上角菜单，选择“电脑模式”。如有误请提交 issues"
   },
   {
    "folder": "GDOU",
@@ -829,6 +839,16 @@
    "import_url": "https://cas.gxmu.edu.cn/lyuapServer/login",
    "maintainer": "Haooz",
    "description": "广西医科大学智慧教务系统课表导入，登录门户站点以后，进入教务系统，直接点击导入即可"
+  },
+  {
+   "folder": "GZHMU",
+   "adapter_id": "GZHMU_01",
+   "adapter_name": "广州医科大学强智教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "gzhmu_01.js",
+   "import_url": "https://webvpn.gzhmu.edu.cn/",
+   "maintainer": "小漫君",
+   "description": "校外请先登录学校 WebVPN，进入教务系统后点击导入。没有教务入口时用快速跳转打开 https://jwgl.gzhmu.edu.cn/jsxsd/framework/xsMainV.htmlx。支持选择学期，采用教务处公布的 16 节作息，医院见习时间请另行核对。"
   },
   {
    "folder": "GZIST",
@@ -2679,6 +2699,16 @@
    "import_url": "https://eone-443.webvpn.xmcu.edu.cn/",
    "maintainer": "星河欲转",
    "description": "输入账号密码登录，进入融合信息门户，在应用中心找到教务系统并进入，在左侧找到教学安排，点击后即可看到学生个人课表。\n厦门城市职业学院适配教务,非本校开发者适配如果有误建议提交issues"
+  },
+  {
+   "folder": "XSYU",
+   "adapter_id": "XSYU_01",
+   "adapter_name": "西安石油大学超星教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "xsyu_01.js",
+   "import_url": "https://jiaowu.xsyu.edu.cn/admin/login",
+   "maintainer": "dr1am1",
+   "description": "西安石油大学超星综合教学管理系统（jiaowu.xsyu.edu.cn）课表导入，自动识别当前学期与校区，导入课程、作息时间、开学日期与总周数；支持账密登录与统一认证登录"
   },
   {
    "folder": "XUST",
