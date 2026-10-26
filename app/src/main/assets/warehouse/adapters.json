@@ -2221,6 +2221,16 @@
    "description": "支持狮子山校区和成龙校区，自动识别学期和课程时间，另可从大学生通进入教务系统(https://zhxg.sicnu.edu.cn/edu/admin/)"
   },
   {
+   "folder": "SMU",
+   "adapter_id": "SMU",
+   "adapter_name": "南方医科大学乘方教务",
+   "category": "BACHELOR_AND_ASSOCIATE",
+   "asset_js_path": "smu_01.js",
+   "import_url": "https://zhjw.smu.edu.cn",
+   "maintainer": "NekoJackie",
+   "description": "南方医科大学乘方教务，登录后进入教务系统执行导入，支持校本部与顺德校区作息，支持自动获取开学日期"
+  },
+  {
    "folder": "SMXY",
    "adapter_id": "SMXY",
    "adapter_name": "三明学院正方教务",
