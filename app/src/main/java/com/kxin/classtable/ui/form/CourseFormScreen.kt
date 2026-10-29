@@ -61,6 +61,9 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.kxin.classtable.domain.CourseConflict
+import com.kxin.classtable.domain.CourseConflicts
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.model.AppSettings
@@ -89,6 +92,9 @@ class CourseFormViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    val allCourses: StateFlow<List<Course>> = courseRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     var editing by mutableStateOf<Course?>(null)
         private set
@@ -142,6 +148,7 @@ fun CourseFormScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val editing = viewModel.editing
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val allCourses by viewModel.allCourses.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
 
@@ -268,17 +275,15 @@ fun CourseFormScreen(
         weekTypeIdx = index
     }
 
-    fun submit() {
+    fun buildCandidateCourse(): Course {
         val trimmed = name.trim()
-        if (trimmed.isEmpty() || !weekValid) return
         val primaryWeekday = (1..7).firstOrNull { weekdaysMask and (1 shl (it - 1)) != 0 } ?: 1
-        if (timeMode == 1) {
-            val cs = Schedule.parseClock(customTimeStart) ?: return
-            val ce = Schedule.parseClock(customTimeEnd) ?: return
-            if (ce <= cs) return
-            val course = Course(
+        return if (timeMode == 1) {
+            val cs = Schedule.parseClock(customTimeStart) ?: 0
+            val ce = Schedule.parseClock(customTimeEnd) ?: (cs + Schedule.PERIOD_LENGTH_MIN)
+            Course(
                 id = editing?.id ?: UUID.randomUUID().toString(),
-                name = trimmed,
+                name = trimmed.ifBlank { "未命名" },
                 teacher = teacher.trim(),
                 location = location.trim(),
                 weekday = primaryWeekday,
@@ -295,13 +300,9 @@ fun CourseFormScreen(
                 weekdays = weekdaysMask,
                 note = note.trim(),
                 colorHex = colorHex.trim(),
-                // 色相是钉在课程上的(见 CourseRepository),编辑时原样带走
                 colorHue = editing?.colorHue,
             )
-            viewModel.save(course)
         } else {
-            // 时刻钉住:节次没动就沿用原来的时刻(改个名字、改个地点不该把时间带走),
-            // 改了节次或新建时才按当前作息换算一次。
             val sameSection = editing != null &&
                 editing.startPeriod == periodStart && editing.endPeriod == periodEnd
             val pinnedStart = if (sameSection) {
@@ -314,9 +315,9 @@ fun CourseFormScreen(
             } else {
                 periods.getOrNull(periodEnd - 1)?.end
             }
-            val course = Course(
+            Course(
                 id = editing?.id ?: UUID.randomUUID().toString(),
-                name = trimmed,
+                name = trimmed.ifBlank { "未命名" },
                 teacher = teacher.trim(),
                 location = location.trim(),
                 weekday = primaryWeekday,
@@ -333,10 +334,31 @@ fun CourseFormScreen(
                 weekdays = weekdaysMask,
                 note = note.trim(),
                 colorHex = colorHex.trim(),
-                // 色相是钉在课程上的(见 CourseRepository),编辑时原样带走
                 colorHue = editing?.colorHue,
             )
-            viewModel.save(course)
+        }
+    }
+
+    val candidateCourse = buildCandidateCourse()
+    val conflicts = remember(candidateCourse, allCourses, periods, weekCount) {
+        if (!canSave) emptyList()
+        else CourseConflicts.findConflicts(candidateCourse, allCourses, periods, weekCount)
+    }
+
+    var confirmConflictSave by remember { mutableStateOf(false) }
+
+    fun doSave() {
+        val course = buildCandidateCourse()
+        viewModel.save(course)
+    }
+
+    fun submit() {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || !weekValid) return
+        if (conflicts.isNotEmpty()) {
+            confirmConflictSave = true
+        } else {
+            doSave()
         }
     }
 
@@ -370,6 +392,47 @@ fun CourseFormScreen(
                 editing?.let { viewModel.delete(it.id) }
             },
         )
+    }
+
+    if (confirmConflictSave) {
+        YohakuDialog(
+            onDismissRequest = { confirmConflictSave = false },
+            title = "存在时间冲突",
+            actions = {
+                YohakuDialogAction(text = "返回修改", onClick = { confirmConflictSave = false })
+                YohakuDialogAction(
+                    text = "仍然保存",
+                    accent = true,
+                    onClick = {
+                        confirmConflictSave = false
+                        doSave()
+                    },
+                )
+            },
+        ) {
+            Column {
+                Text(
+                    text = "检测到当前课程与已有课程在部分时间/周次重叠:",
+                    style = YohakuType.copy13,
+                    color = colors.neutral8,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                conflicts.forEach { conflict ->
+                    Text(
+                        text = "• ${conflict.description}",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "若是平行试听或自由安排，您可以选择仍然保存。",
+                    style = YohakuType.label12,
+                    color = colors.neutral6,
+                )
+            }
+        }
     }
 
     Box(
@@ -705,6 +768,34 @@ fun CourseFormScreen(
                         .clickable { confirmDelete = true }
                         .padding(vertical = 8.dp),
                 )
+            }
+        }
+
+        if (canSave && conflicts.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = YohakuDimens.screenPadding, vertical = 6.dp)
+                    .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                    .background(colors.warning.copy(alpha = 0.08f))
+                    .border(1.dp, colors.warning.copy(alpha = 0.35f), RoundedCornerShape(YohakuDimens.radiusControl))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "⚠️ 时间冲突提示",
+                        style = YohakuType.label12,
+                        color = colors.warning,
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                conflicts.forEach { conflict ->
+                    Text(
+                        text = "• ${conflict.description}",
+                        style = YohakuType.copy13,
+                        color = colors.neutral8,
+                    )
+                }
             }
         }
 

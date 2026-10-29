@@ -19,6 +19,18 @@ enum class NameSize { SMALL, MEDIUM, LARGE }
 /** 课程块圆角档位。 */
 enum class BlockCorner { SQUARE, MEDIUM, ROUND }
 
+/** 周末显示模式:全部 7 天 / 仅工作日 5 天 / 周末无课时自动折叠。 */
+enum class WeekendDisplay(val label: String) {
+    SHOW_ALL("显示 7 天"),
+    HIDE_WEEKEND("仅工作日 (5天)"),
+    AUTO_HIDE("无课自动折叠"),
+    ;
+
+    companion object {
+        fun of(name: String?): WeekendDisplay = enumOrDefault(name, SHOW_ALL)
+    }
+}
+
 /**
  * 课表页(周视图课程块)的显示偏好。
  *
@@ -41,6 +53,8 @@ data class TimetablePrefs(
     val showTint: Boolean = true,
     /** 自动配色方案:决定色相环上有几个色相(即能排下多少门各不相同的课)与淡彩的彩度强弱。 */
     val colorScheme: CourseColorScheme = CourseColorScheme.STANDARD,
+    /** 周末显示模式:全部 7 天 / 仅工作日 5 天 / 周末无课自动折叠。 */
+    val weekendDisplay: WeekendDisplay = WeekendDisplay.SHOW_ALL,
 )
 
 object TimetablePrefsStore {
@@ -54,6 +68,7 @@ object TimetablePrefsStore {
     private val KEY_CORNER = stringPreferencesKey("timetable_corner")
     private val KEY_TINT = booleanPreferencesKey("timetable_show_tint")
     private val KEY_COLOR_SCHEME = stringPreferencesKey("timetable_color_scheme")
+    private val KEY_WEEKEND_DISPLAY = stringPreferencesKey("timetable_weekend_display")
 
     fun flow(context: Context): Flow<TimetablePrefs> = context.settingsDataStore.data.map { p ->
         TimetablePrefs(
@@ -67,6 +82,7 @@ object TimetablePrefsStore {
             corner = enumOrDefault(p[KEY_CORNER], BlockCorner.MEDIUM),
             showTint = p[KEY_TINT] ?: true,
             colorScheme = CourseColorScheme.of(p[KEY_COLOR_SCHEME]),
+            weekendDisplay = WeekendDisplay.of(p[KEY_WEEKEND_DISPLAY]),
         )
     }
 
@@ -82,6 +98,7 @@ object TimetablePrefsStore {
             p[KEY_CORNER] = prefs.corner.name
             p[KEY_TINT] = prefs.showTint
             p[KEY_COLOR_SCHEME] = prefs.colorScheme.name
+            p[KEY_WEEKEND_DISPLAY] = prefs.weekendDisplay.name
         }
     }
 }

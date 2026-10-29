@@ -36,6 +36,7 @@ import com.kxin.classtable.data.GridDensity
 import com.kxin.classtable.data.NameSize
 import com.kxin.classtable.data.TimetablePrefs
 import com.kxin.classtable.data.TimetablePrefsStore
+import com.kxin.classtable.data.WeekendDisplay
 import com.kxin.classtable.design.CoursePalette
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuChip
@@ -173,6 +174,20 @@ fun TimetableDisplayScreen(
                             selected = prefs.density == GridDensity.COMPACT,
                             onClick = { viewModel.update { it.copy(density = GridDensity.COMPACT) } },
                         )
+                    }
+                }
+            }
+
+            SettingsSection(title = "周末显示") {
+                SettingBlock(title = "周视图列数", subtitle = "隐藏周末或无课折叠时，周一至周五列宽显著增大。") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WeekendDisplay.entries.forEach { mode ->
+                            YohakuChip(
+                                text = mode.label,
+                                selected = prefs.weekendDisplay == mode,
+                                onClick = { viewModel.update { it.copy(weekendDisplay = mode) } },
+                            )
+                        }
                     }
                 }
             }

@@ -31,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,7 +47,9 @@ import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.TimetablePrefs
+import com.kxin.classtable.data.TimetableImageExporter
 import com.kxin.classtable.data.TimetablePrefsStore
+import com.kxin.classtable.data.WeekendDisplay
 import com.kxin.classtable.data.Weather
 import com.kxin.classtable.data.WeatherRepository
 import com.kxin.classtable.design.LocalYohakuColors
@@ -84,6 +88,7 @@ class TimetableViewModel @Inject constructor(
     courseRepository: CourseRepository,
     settingsRepository: SettingsRepository,
     private val weatherRepository: WeatherRepository,
+    val imageExporter: TimetableImageExporter,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     /**
@@ -154,6 +159,8 @@ fun TimetableScreen(
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
     var showWeather by remember { mutableStateOf(false) }
+    var showWeekPicker by remember { mutableStateOf(false) }
+    var showExportImage by remember { mutableStateOf(false) }
 
     // 实时动态:每 30 秒刷新「正在上课 / 距下一节」与当前时间线
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -240,6 +247,30 @@ fun TimetableScreen(
     }
     val atToday = if (dayMode) anchorWeek == realWeek && anchorWeekday == today else anchorWeek == realWeek
 
+    if (showWeekPicker) {
+        WeekPickerDialog(
+            weekCount = weekCount,
+            currentWeek = realWeek,
+            selectedWeek = anchorWeek,
+            semesterStartDay = settings.semesterStartDay,
+            courses = courses,
+            onSelectWeek = { week ->
+                showWeekPicker = false
+                anchorWeek = week
+            },
+            onDismiss = { showWeekPicker = false },
+        )
+    }
+
+    if (showExportImage) {
+        TimetableImageDialog(
+            initialWeek = anchorWeek,
+            weekCount = weekCount,
+            imageExporter = viewModel.imageExporter,
+            onDismiss = { showExportImage = false },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -301,6 +332,10 @@ fun TimetableScreen(
             HeaderTextAction(text = "✦ 助手", color = colors.accent) {
                 haptics.tick()
                 onOpenAssistant()
+            }
+            HeaderTextAction(text = "长图", color = colors.accent) {
+                haptics.tick()
+                showExportImage = true
             }
         }
 
@@ -377,18 +412,33 @@ fun TimetableScreen(
                         if (noStart) append(" · 未设置开学日")
                     }
                     Column(
-                        modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding),
+                        modifier = Modifier
+                            .padding(horizontal = YohakuDimens.screenPadding)
+                            .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                            .clickable {
+                                haptics.tick()
+                                showWeekPicker = true
+                            }
+                            .padding(vertical = 2.dp),
                     ) {
                         Text(
                             text = title,
                             style = YohakuType.title20,
                             color = colors.neutral10,
                         )
-                        Text(
-                            text = subtitle,
-                            style = YohakuType.copy13,
-                            color = colors.neutral7,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = subtitle,
+                                style = YohakuType.copy13,
+                                color = colors.neutral7,
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "▾",
+                                style = YohakuType.copy13,
+                                color = colors.neutral6,
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -424,11 +474,27 @@ fun TimetableScreen(
                                 else -> null
                             }
                         }
+                        val visibleDays = remember(prefs.weekendDisplay, teachingDays, courses) {
+                            when (prefs.weekendDisplay) {
+                                WeekendDisplay.SHOW_ALL -> listOf(1, 2, 3, 4, 5, 6, 7)
+                                WeekendDisplay.HIDE_WEEKEND -> listOf(1, 2, 3, 4, 5)
+                                WeekendDisplay.AUTO_HIDE -> {
+                                    val weekendHasClasses = listOf(6, 7).any { d ->
+                                        val teaching = teachingDays.getOrNull(d - 1)
+                                        teaching != null && courses.any {
+                                            it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first)
+                                        }
+                                    }
+                                    if (weekendHasClasses) listOf(1, 2, 3, 4, 5, 6, 7) else listOf(1, 2, 3, 4, 5)
+                                }
+                            }
+                        }
                         Column(modifier = Modifier.fillMaxSize()) {
                             WeekdayHeader(
                                 dayNumbers = dayNumbers,
                                 today = today,
                                 marks = marks,
+                                visibleDays = visibleDays,
                                 onDayClick = { d ->
                                     anchorWeek = pageWeek
                                     anchorWeekday = d
@@ -447,6 +513,7 @@ fun TimetableScreen(
                                 nowMinute = nowMinute,
                                 showNowLine = pageWeek == realWeek,
                                 teachingDays = teachingDays,
+                                visibleDays = visibleDays,
                                 prefs = prefs,
                                 entrance = entrance,
                                 onCourseClick = { detailCourse = it },
@@ -471,6 +538,10 @@ fun TimetableScreen(
                             nowMinute = nowMinute,
                             isToday = date == LocalDate.now(),
                             onCourseClick = { detailCourse = it },
+                            onWeekClick = {
+                                haptics.tick()
+                                showWeekPicker = true
+                            },
                             entrance = entrance,
                             modifier = Modifier.weight(1f),
                         )

@@ -180,7 +180,7 @@ fun SettingsScreen(
             DividerLine()
             SettingRow("桌面", "今日 / 明日 / 下节课 / 日程") { nav.navigate("widget_settings") }
             DividerLine()
-            SettingRow("账号", userEmail ?: "未登录") { nav.navigate("account") }
+            SettingRow("账号与数据", userEmail ?: "离线备份 / 未登录") { nav.navigate("account") }
             DividerLine()
             SettingRow("关于", "v${BuildConfig.VERSION_NAME}") { nav.navigate(SettingsHub.ABOUT.route) }
         }

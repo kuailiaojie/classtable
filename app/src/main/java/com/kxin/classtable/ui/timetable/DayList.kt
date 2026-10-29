@@ -2,6 +2,7 @@ package com.kxin.classtable.ui.timetable
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
@@ -59,6 +62,7 @@ internal fun DayList(
     nowMinute: Int,
     isToday: Boolean,
     onCourseClick: (Course) -> Unit,
+    onWeekClick: (() -> Unit)? = null,
     entrance: EntranceTracker,
     modifier: Modifier = Modifier,
 ) {
@@ -118,12 +122,31 @@ internal fun DayList(
                     color = colors.neutral7,
                 )
             }
-            Text(
-                text = weekLabel,
-                style = YohakuType.copy13,
-                color = colors.neutral7,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = if (onWeekClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                        .clickable { onWeekClick() }
+                        .padding(vertical = 2.dp)
+                } else {
+                    Modifier.padding(top = 2.dp)
+                },
+            ) {
+                Text(
+                    text = weekLabel,
+                    style = YohakuType.copy13,
+                    color = colors.neutral7,
+                )
+                if (onWeekClick != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "▾",
+                        style = YohakuType.copy13,
+                        color = colors.neutral6,
+                    )
+                }
+            }
             val status = when {
                 plan.rest -> "调休 · 停课"
                 plan.makeup -> "调休 · 补 ${Dates.slash(plan.effectiveDate)} 的课"

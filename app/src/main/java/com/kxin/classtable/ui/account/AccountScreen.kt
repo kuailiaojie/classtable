@@ -1,9 +1,14 @@
 package com.kxin.classtable.ui.account
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,11 +38,15 @@ import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-/** 账号页:Email/Password 登录或注册;未登录 = 访客本地模式。 */
+/** 账号与数据页:Email/Password 登录云同步，本地全量离线备份与恢复，及日历生态导出。 */
 @Composable
 fun AccountScreen(
     nav: NavHostController,
@@ -63,7 +72,8 @@ fun AccountScreen(
     var mode by rememberSaveable { mutableIntStateOf(0) } // 0 = 登录, 1 = 注册
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    // 退出登录不可逆(需重登):与雨课堂一致,补一层确认
+
+    // 退出登录确认
     var confirmSignOut by remember { mutableStateOf(false) }
     if (confirmSignOut) {
         YohakuConfirmDialog(
@@ -79,13 +89,58 @@ fun AccountScreen(
         )
     }
 
+    // 离线 JSON 导出 SAF 启动器
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.exportBackup(it, context.contentResolver)
+        }
+    }
+
+    // 离线 JSON 恢复 SAF 启动器与确认弹窗
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    if (pendingRestoreUri != null) {
+        YohakuConfirmDialog(
+            title = "恢复本地备份",
+            message = "将把备份中的全部课程与日程追加合并至当前课表，并恢复作息时间与学期周次设置。是否继续？",
+            confirmText = "确认恢复",
+            destructive = false,
+            onDismiss = { pendingRestoreUri = null },
+            onConfirm = {
+                val uri = pendingRestoreUri
+                pendingRestoreUri = null
+                if (uri != null) {
+                    viewModel.restoreBackup(uri, context.contentResolver)
+                }
+            },
+        )
+    }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        uri?.let {
+            pendingRestoreUri = it
+        }
+    }
+
+    // iCalendar (.ics) 导出 SAF 启动器
+    val icsExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/calendar"),
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.exportIcs(it, context.contentResolver)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.paper)
             .verticalScroll(rememberScrollState()),
     ) {
-        YohakuTopBar(title = "账号", onBack = { nav.popBackStack() })
+        YohakuTopBar(title = "账号与数据", onBack = { nav.popBackStack() })
 
         Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
             if (user != null) {
@@ -159,9 +214,109 @@ fun AccountScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection * 1.5f))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(colors.line),
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+
+            // 本地数据与离线备份
+            Text(
+                text = "本地数据与离线备份",
+                style = YohakuType.title20,
+                color = colors.neutral10,
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+            Text(
+                text = "全量导出全部课程、日程待办与作息学期设置(.classtable.json)。无需联网或账号，可随时在新设备恢复或离线灾备。",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                YohakuOutlineButton(
+                    text = "导出备份文件",
+                    onClick = {
+                        val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                        exportLauncher.launch("余课备份_$dateStr.classtable.json")
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+                YohakuOutlineButton(
+                    text = "从备份恢复",
+                    onClick = {
+                        restoreLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection * 1.5f))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(colors.line),
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+
+            // 日历同步与手表生态 (.ics)
+            Text(
+                text = "日历同步与手表生态 (.ics)",
+                style = YohakuType.title20,
+                color = colors.neutral10,
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+            Text(
+                text = "将全学期课程按周次时间生成标准 RFC 5545 iCalendar 文件，支持导入系统日历（小米、华为、OPPO、Apple、Google 日历等），打通智能手表/手环表盘日程提醒。",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                YohakuOutlineButton(
+                    text = "保存 .ics 文件",
+                    onClick = {
+                        val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+                        icsExportLauncher.launch("余课课表_$dateStr.ics")
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+                YohakuOutlineButton(
+                    text = "发送至日历 / 手表",
+                    onClick = {
+                        viewModel.shareIcs { shareUri ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/calendar"
+                                putExtra(Intent.EXTRA_STREAM, shareUri)
+                                putExtra(Intent.EXTRA_SUBJECT, "余课课程表")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "发送课表到系统日历或设备"))
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
             message?.let {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
-                Text(text = it, style = YohakuType.label12, color = colors.neutral7)
+                Text(text = it, style = YohakuType.copy13, color = colors.accent)
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }

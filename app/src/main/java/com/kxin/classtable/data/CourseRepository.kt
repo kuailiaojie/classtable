@@ -52,6 +52,15 @@ class CourseRepository @Inject constructor(
 
     suspend fun get(id: String): Course? = dao.getById(id)?.toDomain()
 
+    suspend fun getAll(): List<Course> = dao.getAll().map { it.toDomain() }
+
+    suspend fun restoreAll(courses: List<Course>) {
+        if (courses.isEmpty()) return
+        dao.upsertAll(courses.map { CourseEntity.fromDomain(it) })
+        postChangeSideEffects()
+        scope.launch { runCatching { sync.syncNow() } }
+    }
+
     suspend fun save(course: Course) {
         val isNew = dao.getById(course.id) == null
         val stored = course.withPinnedHue()

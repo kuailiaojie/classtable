@@ -41,6 +41,15 @@ class AgendaRepository @Inject constructor(
 
     suspend fun get(id: String): AgendaEvent? = dao.getById(id)?.toDomain()
 
+    suspend fun getAll(): List<AgendaEvent> = dao.getAll().map { it.toDomain() }
+
+    suspend fun importAll(events: List<AgendaEvent>) {
+        if (events.isEmpty()) return
+        dao.upsertAll(events.map { AgendaEntity.fromDomain(it) })
+        scope.launch { runCatching { sync.syncNow() } }
+        postChangeSideEffects()
+    }
+
     suspend fun save(event: AgendaEvent) {
         val stamped = event.copy(updatedAt = System.currentTimeMillis())
         dao.upsert(AgendaEntity.fromDomain(stamped))

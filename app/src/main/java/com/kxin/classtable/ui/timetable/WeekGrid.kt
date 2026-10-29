@@ -64,6 +64,7 @@ internal fun WeekdayHeader(
     marks: List<String?>,
     onDayClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    visibleDays: List<Int> = (1..7).toList(),
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -74,7 +75,7 @@ internal fun WeekdayHeader(
         verticalAlignment = Alignment.Bottom,
     ) {
         Spacer(modifier = Modifier.width(YohakuDimens.gridGutterWidth))
-        (1..7).forEach { d ->
+        visibleDays.forEach { d ->
             val isToday = d == today
             val mark = marks.getOrNull(d - 1)
             Column(
@@ -149,6 +150,7 @@ internal fun WeekGrid(
     entrance: EntranceTracker,
     onCourseClick: (Course) -> Unit,
     modifier: Modifier = Modifier,
+    visibleDays: List<Int> = (1..7).toList(),
 ) {
     val colors = LocalYohakuColors.current
     val rowCount = periods.size.coerceAtLeast(1)
@@ -157,19 +159,20 @@ internal fun WeekGrid(
         // 下限随「行高密度」设置变化(宽松 46 / 标准 38 / 紧凑 32),于是同一块屏能放下多少节由用户定。
         val rowH = maxOf(maxHeight / rowCount, minRowHeight(prefs.density))
         val gridHeight = rowH * rowCount
-        val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / 7
+        val dayCount = visibleDays.size.coerceAtLeast(1)
+        val colW = (maxWidth - YohakuDimens.gridPadding * 2 - YohakuDimens.gridGutterWidth) / dayCount
         val gutter = YohakuDimens.gridGutterWidth
         // 列取课按「这一天实际上哪天的课」算:停课的列空着,补课的列去取原课程日期的课。
         // 只随数据变化重算 —— 否则「现在」线的每帧动画、每次重组都会把 7 天的排序与车道打包重跑一遍。
-        val lanesPerDay = remember(courses, periods, teachingDays) {
-            (1..7).map { d ->
+        val lanesPerDay = remember(courses, periods, teachingDays, visibleDays) {
+            visibleDays.map { d ->
                 val teaching = teachingDays.getOrNull(d - 1)
                 val dayCourses = if (teaching == null) {
                     emptyList()
                 } else {
                     courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
                 }
-                layoutDay(dayCourses, periods)
+                d to layoutDay(dayCourses, periods)
             }
         }
 
@@ -184,10 +187,11 @@ internal fun WeekGrid(
                     .height(gridHeight),
             ) {
                 // 今天整列淡淡的底色(只做方位提示,不喧哗)
-                if (today in 1..7) {
+                val todayVisibleIdx = visibleDays.indexOf(today)
+                if (todayVisibleIdx >= 0) {
                     Box(
                         modifier = Modifier
-                            .offset(x = YohakuDimens.gridPadding + gutter + colW * (today - 1))
+                            .offset(x = YohakuDimens.gridPadding + gutter + colW * todayVisibleIdx)
                             .width(colW)
                             .fillMaxHeight()
                             .background(colors.neutral1),
@@ -226,7 +230,8 @@ internal fun WeekGrid(
                 // 课程块(按天分列,同一天内按车道并排)。错峰序号取「第几天 + 当天第几块」——
                 // 早先是一个横跨整周自增的计数器,越到周末延迟越大(周五的课要等近一秒才出现)。
                 // 按天算既有列到列的波,又不会累积。
-                lanesPerDay.forEachIndexed { dayIdx, (blocks, laneCount) ->
+                lanesPerDay.forEachIndexed { colIdx, (day, dayLayout) ->
+                    val (blocks, laneCount) = dayLayout
                     val used = laneCount.coerceAtMost(3)
                     val laneW = colW / used
                     blocks.forEachIndexed { blockIdx, block ->
@@ -235,15 +240,15 @@ internal fun WeekGrid(
                             rowH = rowH,
                             top = block.top,
                             height = block.height,
-                            x = YohakuDimens.gridPadding + gutter + colW * dayIdx + laneW * block.lane.coerceAtMost(used - 1),
+                            x = YohakuDimens.gridPadding + gutter + colW * colIdx + laneW * block.lane.coerceAtMost(used - 1),
                             width = laneW,
                             // 「正在上」只在**真实当前周**的今天那一列标出:翻到别的周时,
                             // 时间点虽然对得上(只看时刻),但那一天并不是今天,不该再标。
-                            isCurrent = showNowLine && dayIdx + 1 == today &&
+                            isCurrent = showNowLine && day == today &&
                                 Schedule.isCourseOngoing(block.course, periods),
                             prefs = prefs,
                             periods = periods,
-                            staggerIndex = dayIdx + blockIdx,
+                            staggerIndex = colIdx + blockIdx,
                             entrance = entrance,
                             onClick = onCourseClick,
                         )
@@ -253,13 +258,13 @@ internal fun WeekGrid(
                 // 当前时间线:只画在「今天」那一列,位置带缓动(分钟变化或切周全周时不跳)。
                 // 必须带标签 —— 光一条横线没人知道那是什么,之前就被当成「莫名多出来的小横条」。
                 val targetRow = Schedule.fractionalRow(nowMinute, periods)
-                if (showNowLine && today in 1..7 && targetRow != null) {
+                if (showNowLine && todayVisibleIdx >= 0 && targetRow != null) {
                     val row = animateFloatAsState(
                         targetValue = targetRow,
                         animationSpec = YohakuMotion.gentleSpring(),
                         label = "nowLine",
                     )
-                    val lineX = YohakuDimens.gridPadding + gutter + colW * (today - 1)
+                    val lineX = YohakuDimens.gridPadding + gutter + colW * todayVisibleIdx
                     // 位置在布局阶段读取(offset lambda),不读进组合 ——
                     // 否则每帧动画都会让整个网格(含全部课程块)重组一次。
                     Box(
