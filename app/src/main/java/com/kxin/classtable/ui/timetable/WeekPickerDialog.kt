@@ -121,23 +121,6 @@ fun WeekPickerDialog(
                         .padding(horizontal = 4.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (isCurrent) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 4.dp, end = 4.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(if (isSelected) colors.accent else colors.neutral6)
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                        ) {
-                            Text(
-                                text = "今",
-                                style = YohakuType.gridMeta,
-                                color = colors.paper,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                    }
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
