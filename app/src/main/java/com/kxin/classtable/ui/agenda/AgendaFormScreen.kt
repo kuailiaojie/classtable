@@ -3,6 +3,7 @@ package com.kxin.classtable.ui.agenda
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,13 +15,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +46,7 @@ import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
+import com.kxin.classtable.design.YohakuSegmentedControl
 import com.kxin.classtable.design.YohakuSwitch
 import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuTimePicker
@@ -52,23 +55,23 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
-import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaKind
 import com.kxin.classtable.domain.model.AgendaPriority
+import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.kind
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 
 /**
- * 新建 / 编辑日程:整页表单(与「添加课程」同一套 —— 顶部返回 + 内容滚动 + 底部按钮钉住)。
+ * 新建 / 编辑日程与倒计时:整页表单。
  *
- * 之所以不做成底部弹层:弹层走 Compose `Dialog`,其内容在部分版本里拿不到「一屏」的高度约束,
- * 面板会被撑到屏幕外、底部按钮掉下去。整页没有这个问题 —— 内容就排在导航栈自己的 Box 里。
- *
- * 字段:标题、分类、全天开关、开始与结束(日期 + 时间)、地点、备注、优先级、提醒;编辑态可删除。
+ * 针对「日程」与「倒计时」两种心智深度区分：
+ * - 顶部胶囊提供直观的「📅 日程」与「⏳ 倒计时」模式切换
+ * - 「日程」心智：安排时段，聚焦具体起止时刻与日程时长
+ * - 「倒计时」心智：锚定目标，聚焦截止日期、实时剩余天数预览与备考提醒
  */
 @Composable
 fun AgendaFormScreen(
@@ -92,8 +95,8 @@ fun AgendaFormScreen(
     } else {
         LocalDate.now()
     }
-    // 归属由条目自己的分类(编辑态)或进入时的默认分类(新建态)推断
-    val kind = (editing?.category ?: defaultCategory ?: AgendaCategory.TODO).kind
+    val initialKind = (editing?.category ?: defaultCategory ?: AgendaCategory.TODO).kind
+    var currentKind by remember(editing?.id, initialKind) { mutableStateOf(initialKind) }
 
     // 保存/删除成功后才返回:失败留在表单并弹窗说明,而不是静默返回
     androidx.compose.runtime.LaunchedEffect(saved) { if (saved) nav.popBackStack() }
@@ -122,32 +125,31 @@ fun AgendaFormScreen(
                 .fillMaxWidth(),
         ) {
             YohakuTopBar(
-                title = if (eventId != null) "编辑${kind.label}" else "新建${kind.label}",
+                title = if (eventId != null) "编辑${currentKind.label}" else "新建${currentKind.label}",
                 onBack = { nav.popBackStack() },
             )
-        if (eventId != null && editing == null) {
-            // 编辑态:等目标条目从本地库出来再建表单,避免把「还没读到」当成新建。
-            // 加载中给一行轻提示,而不是留一整屏空白(那看起来像页面坏了)。
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "载入中…",
-                    style = YohakuType.copy14,
-                    color = colors.neutral6,
+            if (eventId != null && editing == null) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "载入中…",
+                        style = YohakuType.copy14,
+                        color = colors.neutral6,
+                    )
+                }
+            } else {
+                AgendaFormBody(
+                    initial = editing,
+                    kind = currentKind,
+                    onKindChange = { currentKind = it },
+                    defaultDate = defaultDate,
+                    defaultCategory = defaultCategory,
+                    courses = courses,
+                    defaultCourseId = defaultCourseId,
+                    onSave = { viewModel.save(it) },
+                    onDelete = { viewModel.delete(it) },
                 )
             }
-        } else {
-            AgendaFormBody(
-                initial = editing,
-                kind = kind,
-                defaultDate = defaultDate,
-                defaultCategory = defaultCategory,
-                courses = courses,
-                defaultCourseId = defaultCourseId,
-                onSave = { viewModel.save(it) },
-                onDelete = { viewModel.delete(it) },
-            )
         }
-    }
     }
 }
 
@@ -156,6 +158,7 @@ fun AgendaFormScreen(
 private fun AgendaFormBody(
     initial: AgendaEvent?,
     kind: AgendaKind,
+    onKindChange: (AgendaKind) -> Unit,
     defaultDate: LocalDate,
     defaultCategory: AgendaCategory?,
     courses: List<Course> = emptyList(),
@@ -164,23 +167,34 @@ private fun AgendaFormBody(
     onDelete: (String) -> Unit,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    val isCountdown = kind == AgendaKind.COUNTDOWN
+
     val startInit = initial?.startLocal() ?: defaultDate.atTime(9, 0)
     val endInit = initial?.endLocal() ?: defaultDate.atTime(10, 0)
 
-    // 以条目 id 为键:编辑态读到条目时初始化一次,之后不再被上游刷新冲掉
     val key = initial?.id
     var title by remember(key) { mutableStateOf(initial?.title ?: "") }
-    var category by remember(key) {
-        mutableStateOf(initial?.category ?: defaultCategory ?: AgendaCategory.TODO)
+    var category by remember(key, kind) {
+        mutableStateOf(
+            initial?.takeIf { it.category.kind == kind }?.category
+                ?: defaultCategory?.takeIf { it.kind == kind }
+                ?: if (isCountdown) AgendaCategory.EXAM else AgendaCategory.TODO
+        )
     }
     var priority by remember(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
     var courseId by remember(key) { mutableStateOf(initial?.courseId ?: defaultCourseId) }
     var completed by remember(key) { mutableStateOf(initial?.completed ?: false) }
-    var allDay by remember(key) { mutableStateOf(initial?.allDay ?: false) }
+    var allDay by remember(key) { mutableStateOf(initial?.allDay ?: isCountdown) }
     var location by remember(key) { mutableStateOf(initial?.location ?: "") }
     var note by remember(key) { mutableStateOf(initial?.note ?: "") }
     var remindEnabled by remember(key) { mutableStateOf(initial?.remindEnabled ?: false) }
-    var remindLeadMinutes by remember(key) { mutableIntStateOf(initial?.remindLeadMinutes ?: 10) }
+    var remindLeadMinutes by remember(key, kind) {
+        mutableIntStateOf(
+            initial?.remindLeadMinutes
+                ?: if (isCountdown) 1440 else 10 // 倒计时默认提前1天(1440分)，日程默认提前10分钟
+        )
+    }
     var startDate by remember(key) { mutableStateOf(startInit.toLocalDate()) }
     var startMinute by remember(key) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
     var endDate by remember(key) { mutableStateOf(endInit.toLocalDate()) }
@@ -190,11 +204,13 @@ private fun AgendaFormBody(
     var pickStartTime by remember { mutableStateOf(false) }
     var pickEndDate by remember { mutableStateOf(false) }
     var pickEndTime by remember { mutableStateOf(false) }
-    // 删除不可逆:补一层确认
     var confirmDelete by remember { mutableStateOf(false) }
-    val haptics = rememberYohakuHaptics()
 
-    val timeValid = allDay || endDate > startDate || (endDate == startDate && endMinute > startMinute)
+    val timeValid = if (isCountdown) {
+        allDay || endMinute >= startMinute
+    } else {
+        allDay || endDate > startDate || (endDate == startDate && endMinute > startMinute)
+    }
     val valid = title.isNotBlank() && timeValid
 
     fun startAtMillis(): Long = if (allDay) {
@@ -218,15 +234,41 @@ private fun AgendaFormBody(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = YohakuDimens.screenPadding),
         ) {
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 1. 顶层类型分段：清晰表达「日程」与「倒计时」
+            YohakuSegmentedControl(
+                options = listOf("📅 日程", "⏳ 倒计时"),
+                selectedIndex = if (isCountdown) 1 else 0,
+                onSelect = { index ->
+                    val newKind = if (index == 0) AgendaKind.SCHEDULE else AgendaKind.COUNTDOWN
+                    if (newKind != kind) {
+                        haptics.select()
+                        onKindChange(newKind)
+                        if (category.kind != newKind) {
+                            category = if (newKind == AgendaKind.COUNTDOWN) AgendaCategory.EXAM else AgendaCategory.TODO
+                        }
+                        if (newKind == AgendaKind.COUNTDOWN) {
+                            allDay = true
+                            endDate = startDate
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+            // 2. 区分度极高的标题输入：名称与占位明确分工
             YohakuTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = "日程标题",
-                placeholder = "如 提交高数作业",
+                label = if (isCountdown) "目标名称" else "日程名称",
+                placeholder = if (isCountdown) "如 期末高数考试、开题答辩、作业截止、六级" else "如 班级例会、图书借还、自习讨论",
                 serifStyle = true,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
+            // 3. 分类标签与归属解释
             FieldLabel("分类")
             val categories = remember(kind) { AgendaCategory.entries.filter { it.kind == kind } }
             FlowRow(
@@ -243,15 +285,17 @@ private fun AgendaFormBody(
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = when (kind) {
-                    AgendaKind.SCHEDULE -> "有时间要做的事,会排在「日程」页签。"
-                    AgendaKind.COUNTDOWN -> "等着倒数的目标,会排在「倒计时」页签。"
+                text = if (isCountdown) {
+                    "收录关键考试、作业或截止节点，将在「倒计时」中按剩余天数置顶倒数。"
+                } else {
+                    "安排具体时间要进行的事务，将在「日程」时间线中按时刻排布。"
                 },
                 style = YohakuType.label12,
                 color = colors.neutral6,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
+            // 4. 关联课程
             val distinctCourses = remember(courses) { courses.distinctBy { it.name } }
             if (distinctCourses.isNotEmpty()) {
                 FieldLabel("关联课程(选填)")
@@ -278,70 +322,162 @@ private fun AgendaFormBody(
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "全天",
-                    style = YohakuType.copy15,
-                    color = colors.neutral9,
-                    modifier = Modifier.weight(1f),
-                )
-                YohakuSwitch(
-                    checked = allDay,
-                    onCheckedChange = { allDay = it },
-                )
-            }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // 5. 时间配置：彻底区分「倒计时目标日」与「日程起止时间段」
+            if (isCountdown) {
+                FieldLabel("目标日期")
                 PickerField(
-                    label = "开始日期",
+                    label = "截止 / 考试日期",
                     value = dateText(startDate),
-                    modifier = Modifier.weight(if (allDay) 1f else 1.4f),
+                    modifier = Modifier.fillMaxWidth(),
                     onClick = { pickStartDate = true },
                 )
-                if (!allDay) {
-                    PickerField(
-                        label = "时间",
-                        value = Schedule.clockText(startMinute),
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 核心视觉反馈：实时倒计时卡片预览，让用户立刻看到倒数天数
+                val today = remember { LocalDate.now() }
+                val days = daysUntil(startDate, today)
+                val cardBg = when {
+                    days < 0L -> colors.neutral2.copy(alpha = 0.6f)
+                    days <= 3L -> colors.accent.copy(alpha = 0.12f)
+                    else -> colors.raised
+                }
+                val cardBorder = when {
+                    days < 0L -> BorderStroke(1.dp, colors.line.copy(alpha = 0.5f))
+                    days <= 3L -> BorderStroke(1.dp, colors.accent.copy(alpha = 0.35f))
+                    else -> BorderStroke(1.dp, colors.line)
+                }
+                val badgeColor = if (days in 0L..3L) colors.accent else colors.neutral10
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(YohakuDimens.radiusCard),
+                    color = cardBg,
+                    border = cardBorder,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "🎯 倒计时目标日 · ${dateText(startDate)}",
+                                style = YohakuType.label12,
+                                color = colors.neutral7,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val countdownStatusText = when {
+                                days > 0L -> "距离今天还有 $days 天"
+                                days == 0L -> "今天到期 · 进行中"
+                                else -> "已截止 ${kotlin.math.abs(days)} 天"
+                            }
+                            Text(
+                                text = countdownStatusText,
+                                style = YohakuType.title20,
+                                color = badgeColor,
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "全天目标 (无需具体时刻)",
+                        style = YohakuType.copy15,
+                        color = colors.neutral9,
                         modifier = Modifier.weight(1f),
-                        onClick = { pickStartTime = true },
+                    )
+                    YohakuSwitch(
+                        checked = allDay,
+                        onCheckedChange = { allDay = it },
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PickerField(
-                    label = "结束日期",
-                    value = dateText(endDate),
-                    modifier = Modifier.weight(if (allDay) 1f else 1.4f),
-                    onClick = { pickEndDate = true },
+                if (!allDay) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PickerField(
+                            label = "开始时刻",
+                            value = Schedule.clockText(startMinute),
+                            modifier = Modifier.weight(1f),
+                            onClick = { pickStartTime = true },
+                        )
+                        PickerField(
+                            label = "结束时刻",
+                            value = Schedule.clockText(endMinute),
+                            modifier = Modifier.weight(1f),
+                            onClick = { pickEndTime = true },
+                        )
+                    }
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "全天",
+                        style = YohakuType.copy15,
+                        color = colors.neutral9,
+                        modifier = Modifier.weight(1f),
+                    )
+                    YohakuSwitch(
+                        checked = allDay,
+                        onCheckedChange = { allDay = it },
+                    )
+                }
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PickerField(
+                        label = "开始日期",
+                        value = dateText(startDate),
+                        modifier = Modifier.weight(if (allDay) 1f else 1.4f),
+                        onClick = { pickStartDate = true },
+                    )
+                    if (!allDay) {
+                        PickerField(
+                            label = "时间",
+                            value = Schedule.clockText(startMinute),
+                            modifier = Modifier.weight(1f),
+                            onClick = { pickStartTime = true },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PickerField(
+                        label = "结束日期",
+                        value = dateText(endDate),
+                        modifier = Modifier.weight(if (allDay) 1f else 1.4f),
+                        onClick = { pickEndDate = true },
+                    )
+                    if (!allDay) {
+                        PickerField(
+                            label = "时间",
+                            value = Schedule.clockText(endMinute),
+                            modifier = Modifier.weight(1f),
+                            onClick = { pickEndTime = true },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = if (timeValid) {
+                        "日程时长 ${formatDurationText((endAtMillis() - startAtMillis()) / 60_000)}"
+                    } else {
+                        "结束时间需要晚于开始时间。"
+                    },
+                    style = YohakuType.label12,
+                    color = if (timeValid) colors.neutral7 else colors.error,
                 )
-                if (!allDay) {
-                    PickerField(
-                        label = "时间",
-                        value = Schedule.clockText(endMinute),
-                        modifier = Modifier.weight(1f),
-                        onClick = { pickEndTime = true },
-                    )
-                }
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = if (timeValid) {
-                    "时长 ${formatDurationText((endAtMillis() - startAtMillis()) / 60_000)}"
-                } else {
-                    "结束时间需要晚于开始时间。"
-                },
-                style = YohakuType.label12,
-                color = if (timeValid) colors.neutral7 else colors.error,
-            )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
+            // 6. 地点与备注
             YohakuTextField(
                 value = location,
                 onValueChange = { location = it },
-                label = "地点(选填)",
-                placeholder = "如 教1-201",
+                label = if (isCountdown) "地点 / 考场(选填)" else "地点(选填)",
+                placeholder = if (isCountdown) "如 第一教学楼 201 考场" else "如 教1-201",
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
@@ -349,12 +485,13 @@ private fun AgendaFormBody(
                 value = note,
                 onValueChange = { note = it },
                 label = "备注(选填)",
-                placeholder = "如 带课本 / 考试范围",
+                placeholder = if (isCountdown) "如 考试范围、准考证号、文具要求" else "如 带课本 / 讨论议题",
                 singleLine = false,
                 maxLines = 3,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
+            // 7. 优先级
             FieldLabel("优先级")
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -370,9 +507,8 @@ private fun AgendaFormBody(
             }
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
+            // 8. 区分化的提醒选项（倒计时按天备考，日程按分钟临近准备）
             FieldLabel("提醒")
-            // 二值开关就用开关:与「全天」一致。此前这里用一对 chip 表示「提醒 / 不提醒」,
-            // 而同一个应用里别的二值项用的是开关 —— 同一个意思两种控件,人得逐个重新认。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "开启提醒",
@@ -392,25 +528,34 @@ private fun AgendaFormBody(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(YohakuDimens.gapTight))
+                    val remindOptions = if (isCountdown) {
+                        REMIND_COUNTDOWN_OPTIONS
+                    } else {
+                        REMIND_SCHEDULE_OPTIONS
+                    }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        remindOptions.forEach { (minutes, label) ->
+                            YohakuChip(
+                                text = label,
+                                selected = remindLeadMinutes == minutes,
+                                onClick = { remindLeadMinutes = minutes },
+                            )
+                        }
+                    }
                     if (allDay) {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "「全天」日程在当天设置里的时刻提醒,可在「设置 → 提醒 → 日程提醒」修改。",
+                            text = if (isCountdown) {
+                                "全天倒计时提醒将于到期日当天或提前天数的固定时刻（默认 09:00）发送通知。"
+                            } else {
+                                "「全天」日程在当天设置里的时刻提醒，可在「设置 → 提醒 → 日程提醒」修改。"
+                            },
                             style = YohakuType.label12,
                             color = colors.neutral7,
                         )
-                    } else {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            REMIND_LEAD_OPTIONS.forEach { (minutes, label) ->
-                                YohakuChip(
-                                    text = label,
-                                    selected = remindLeadMinutes == minutes,
-                                    onClick = { remindLeadMinutes = minutes },
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -418,7 +563,7 @@ private fun AgendaFormBody(
             if (initial != null) {
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
                 Text(
-                    text = "删除日程",
+                    text = if (isCountdown) "删除倒计时" else "删除日程",
                     style = YohakuType.copy13,
                     color = colors.error,
                     modifier = Modifier
@@ -436,7 +581,11 @@ private fun AgendaFormBody(
                 .padding(YohakuDimens.screenPadding),
         ) {
             YohakuButton(
-                text = if (initial != null) "保存修改" else "创建日程",
+                text = if (initial != null) {
+                    if (isCountdown) "保存倒计时" else "保存日程"
+                } else {
+                    if (isCountdown) "创建倒计时" else "创建日程"
+                },
                 onClick = {
                     if (valid) {
                         onSave(
@@ -468,39 +617,62 @@ private fun AgendaFormBody(
     if (pickStartDate) {
         YohakuDatePicker(
             initialEpochDay = startDate.toEpochDay(),
-            onPick = { pickStartDate = false; startDate = LocalDate.ofEpochDay(it) },
+            onPick = {
+                val d = LocalDate.ofEpochDay(it)
+                startDate = d
+                if (isCountdown || endDate < d) {
+                    endDate = d
+                }
+                pickStartDate = false
+            },
             onClear = { pickStartDate = false },
             onDismiss = { pickStartDate = false },
+        )
+    }
+    if (pickStartTime) {
+        YohakuTimePicker(
+            title = if (isCountdown) "开始时刻" else "开始时间",
+            initial = Schedule.clockText(startMinute),
+            onConfirm = {
+                pickStartTime = false
+                Schedule.parseClock(it)?.let { m ->
+                    startMinute = m
+                    if (endDate == startDate && endMinute < m) {
+                        endMinute = (m + 60).coerceAtMost(23 * 60 + 59)
+                    }
+                }
+            },
+            onDismiss = { pickStartTime = false },
         )
     }
     if (pickEndDate) {
         YohakuDatePicker(
             initialEpochDay = endDate.toEpochDay(),
-            onPick = { pickEndDate = false; endDate = LocalDate.ofEpochDay(it) },
+            onPick = {
+                val d = LocalDate.ofEpochDay(it)
+                endDate = d
+                if (startDate > d) startDate = d
+                pickEndDate = false
+            },
             onClear = { pickEndDate = false },
             onDismiss = { pickEndDate = false },
         )
     }
-    if (pickStartTime) {
-        YohakuTimePicker(
-            title = "开始时间",
-            initial = Schedule.clockText(startMinute),
-            onConfirm = { pickStartTime = false; Schedule.parseClock(it)?.let { m -> startMinute = m } },
-            onDismiss = { pickStartTime = false },
-        )
-    }
     if (pickEndTime) {
         YohakuTimePicker(
-            title = "结束时间",
+            title = if (isCountdown) "结束时刻" else "结束时间",
             initial = Schedule.clockText(endMinute),
-            onConfirm = { pickEndTime = false; Schedule.parseClock(it)?.let { m -> endMinute = m } },
+            onConfirm = {
+                pickEndTime = false
+                Schedule.parseClock(it)?.let { m -> endMinute = m }
+            },
             onDismiss = { pickEndTime = false },
         )
     }
 
     if (confirmDelete && initial != null) {
         YohakuConfirmDialog(
-            title = "删除日程",
+            title = if (isCountdown) "删除倒计时" else "删除日程",
             message = "「${initial.title}」会被删除,且无法撤销。",
             onDismiss = { confirmDelete = false },
             onConfirm = {
@@ -545,12 +717,21 @@ private fun PickerField(
     }
 }
 
-/** 日程提醒的提前量选项(与课程提醒同一套档位,便于理解)。 */
-private val REMIND_LEAD_OPTIONS = listOf(
+/** 日程提醒的提前量选项(聚焦临近准备)。 */
+private val REMIND_SCHEDULE_OPTIONS = listOf(
     0 to "准点",
     5 to "5 分钟",
     10 to "10 分钟",
     15 to "15 分钟",
     30 to "30 分钟",
     60 to "1 小时",
+)
+
+/** 倒计时提醒的提前量选项(聚焦中长期复习与备考)。 */
+private val REMIND_COUNTDOWN_OPTIONS = listOf(
+    0 to "当天提醒",
+    1440 to "提前 1 天",
+    2880 to "提前 2 天",
+    4320 to "提前 3 天",
+    10080 to "提前 1 周",
 )
