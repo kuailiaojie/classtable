@@ -1,7 +1,9 @@
 package com.kxin.classtable.ui.timetable
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,10 +16,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,8 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
@@ -37,18 +44,57 @@ import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
+import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
+import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.ui.agenda.categoryTint
+import com.kxin.classtable.ui.agenda.spans
+import com.kxin.classtable.ui.agenda.startLocal
+import com.kxin.classtable.ui.agenda.endLocal
 import java.time.LocalDate
 
+/** 时间线元素:课程、日程(作业/考试/待办)、课间空堂 */
+internal sealed interface DayTimelineItem {
+    val sortMinute: Int
+    val key: String
+
+    data class CourseItem(
+        val course: Course,
+        val startMinute: Int,
+        val endMinute: Int,
+    ) : DayTimelineItem {
+        override val sortMinute: Int get() = startMinute
+        override val key: String get() = "course_${course.id}_$startMinute"
+    }
+
+    data class AgendaItem(
+        val event: AgendaEvent,
+        val startMinute: Int,
+        val endMinute: Int,
+    ) : DayTimelineItem {
+        override val sortMinute: Int get() = startMinute
+        override val key: String get() = "agenda_${event.id}"
+    }
+
+    data class GapItem(
+        val startMinute: Int,
+        val endMinute: Int,
+        val durationMinutes: Int,
+    ) : DayTimelineItem {
+        override val sortMinute: Int get() = startMinute
+        override val key: String get() = "gap_${startMinute}_$endMinute"
+    }
+}
+
 /**
- * 日模式:某一天的课程列表(卡片式,卡片之间的距离就是空堂)。
+ * 日模式:某一天的全景时间轴(融合课程、空堂规划与个人待办/DDL)。
  *
- * 与周模式共用同一份作息 / 调休解析 —— 停课的这一天列表为空并说明原因,补课的这一天
- * 取的是「原课程日期」那天的课。
+ * 遵循 Apple HIG 融合时间流理念:课程与任务按时间穿插呈现，
+ * 且完成项在时间线上划线淡化保留。
  */
 @Composable
 internal fun DayList(
@@ -65,8 +111,14 @@ internal fun DayList(
     onWeekClick: (() -> Unit)? = null,
     entrance: EntranceTracker,
     modifier: Modifier = Modifier,
+    agendaEvents: List<AgendaEvent> = emptyList(),
+    onToggleAgenda: ((String, Boolean) -> Unit)? = null,
+    onAgendaClick: ((AgendaEvent) -> Unit)? = null,
+    onAddAgenda: (() -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+
     val plan = remember(adjustments, date) { Adjustments.resolve(adjustments, date) }
     val teaching = remember(adjustments, semesterStartDay, semesterWeekCount, date) {
         Adjustments.teachingDay(adjustments, date, semesterStartDay, semesterWeekCount)
@@ -95,6 +147,42 @@ internal fun DayList(
     val ongoing = if (isToday) scheduled.firstOrNull { nowMinute >= it.second && nowMinute < it.third } else null
     val next = if (isToday) scheduled.firstOrNull { it.second > nowMinute } else null
 
+    // 当日日程过滤与全天/分时拆分
+    val dayAgendas = remember(agendaEvents, date) {
+        agendaEvents.filter { it.spans(date) }
+    }
+    val allDayAgendas = remember(dayAgendas) { dayAgendas.filter { it.allDay } }
+    val timedAgendas = remember(dayAgendas) { dayAgendas.filterNot { it.allDay } }
+
+    // 全景时间流编排:课程 + 空堂(>=60分钟) + 定时日程
+    val timelineItems = remember(scheduled, timedAgendas) {
+        val list = mutableListOf<DayTimelineItem>()
+
+        // 1. 课程项
+        scheduled.forEach { (c, s, e) ->
+            list.add(DayTimelineItem.CourseItem(c, s, e))
+        }
+
+        // 2. 空堂检测(相邻两门课之间间隔 >= 60 分钟)
+        for (i in 0 until scheduled.size - 1) {
+            val curEnd = scheduled[i].third
+            val nextStart = scheduled[i + 1].second
+            val gap = nextStart - curEnd
+            if (gap >= 60) {
+                list.add(DayTimelineItem.GapItem(curEnd, nextStart, gap))
+            }
+        }
+
+        // 3. 定时日程项
+        timedAgendas.forEach { a ->
+            val s = a.startLocal().hour * 60 + a.startLocal().minute
+            val e = a.endLocal().hour * 60 + a.endLocal().minute
+            list.add(DayTimelineItem.AgendaItem(a, s, e))
+        }
+
+        list.sortedBy { it.sortMinute }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -107,136 +195,264 @@ internal fun DayList(
                 .widthIn(max = YohakuDimens.maxContentWidth)
                 .fillMaxWidth(),
         ) {
-        val weekName = Dates.weekdayChar(date.dayOfWeek.value)
-        Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = Dates.monthDay(date),
-                    style = YohakuType.title20,
-                    color = colors.neutral10,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "周$weekName",
-                    style = YohakuType.copy13,
-                    color = colors.neutral7,
-                )
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = if (onWeekClick != null) {
-                    Modifier
-                        .clip(RoundedCornerShape(YohakuDimens.radiusChip))
-                        .clickable { onWeekClick() }
-                        .padding(vertical = 2.dp)
-                } else {
-                    Modifier.padding(top = 2.dp)
-                },
-            ) {
-                Text(
-                    text = weekLabel,
-                    style = YohakuType.copy13,
-                    color = colors.neutral7,
-                )
-                if (onWeekClick != null) {
-                    Spacer(modifier = Modifier.width(4.dp))
+            val weekName = Dates.weekdayChar(date.dayOfWeek.value)
+            Column(modifier = Modifier.padding(horizontal = YohakuDimens.screenPadding)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "▾",
-                        style = YohakuType.copy13,
-                        color = colors.neutral6,
+                        text = Dates.monthDay(date),
+                        style = YohakuType.title20,
+                        color = colors.neutral10,
                     )
-                }
-            }
-            val status = when {
-                plan.rest -> "调休 · 停课"
-                plan.makeup -> "调休 · 补 ${Dates.slash(plan.effectiveDate)} 的课"
-                ongoing != null -> "正在上课:${ongoing.first.name} · 还有 ${ongoing.third - nowMinute} 分钟下课"
-                next != null -> "距 ${next.first.name} 上课还有 ${next.second - nowMinute} 分钟"
-                isToday -> "今天没有更多课了"
-                dayCourses.isEmpty() -> "这一天没有课"
-                else -> "${dayCourses.size} 门课"
-            }
-            Text(
-                text = status,
-                style = YohakuType.label12,
-                color = if (plan.rest || plan.makeup || ongoing != null) colors.accent else colors.neutral7,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-
-        Box(modifier = Modifier.weight(1f)) {
-            if (dayCourses.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (plan.rest) "停课(调休)" else "没有课",
-                        style = YohakuType.copy14,
+                        text = "周$weekName",
+                        style = YohakuType.copy13,
                         color = colors.neutral7,
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = YohakuDimens.screenPadding,
-                        end = YohakuDimens.screenPadding,
-                        top = YohakuDimens.gapCard,
-                        // 末尾预留悬浮导航的高度:中途内容从栏下穿过,最后一节课仍能卷上来
-                        bottom = YohakuDimens.gapCard + yohakuNavReservedHeight(),
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = if (onWeekClick != null) {
+                        Modifier
+                            .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                            .clickable { onWeekClick() }
+                            .padding(vertical = 2.dp)
+                    } else {
+                        Modifier.padding(top = 2.dp)
+                    },
                 ) {
-                    itemsIndexed(dayCourses, key = { _, c -> c.id }) { index, course ->
-                        // 入场错峰:延迟按序号递增,但封顶,免得长列表末尾等太久。
-                        // 已在本屏出现过的课程直接呈现,不再因翻页回收而重演(见 EntranceTracker)。
-                        val animate = entrance.shouldAnimate(course.id)
-                        val appear = remember(course.id) { Animatable(if (animate) 0f else 1f) }
-                        LaunchedEffect(course.id) {
-                            if (animate) {
-                                appear.animateTo(
-                                    targetValue = 1f,
-                                    animationSpec = YohakuMotion.tween(
-                                        durationMs = YohakuMotion.durBase,
-                                        easing = YohakuMotion.easeOut,
-                                        delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
-                                    ),
-                                )
-                                entrance.markSeen(course.id)
+                    Text(
+                        text = weekLabel,
+                        style = YohakuType.copy13,
+                        color = colors.neutral7,
+                    )
+                    if (onWeekClick != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "▾",
+                            style = YohakuType.copy13,
+                            color = colors.neutral6,
+                        )
+                    }
+                }
+
+                val status = when {
+                    plan.rest -> "调休 · 停课"
+                    plan.makeup -> "调休 · 补 ${Dates.slash(plan.effectiveDate)} 的课"
+                    ongoing != null -> "正在上课:${ongoing.first.name} · 还有 ${ongoing.third - nowMinute} 分钟下课"
+                    next != null -> "距 ${next.first.name} 上课还有 ${next.second - nowMinute} 分钟"
+                    isToday && dayCourses.isNotEmpty() -> "今日课程结束"
+                    dayCourses.isEmpty() && dayAgendas.isNotEmpty() -> "今日无课 · ${dayAgendas.size} 项日程安排"
+                    dayCourses.isEmpty() -> "这一天没有课"
+                    else -> "${dayCourses.size} 门课" + if (dayAgendas.isNotEmpty()) " · ${dayAgendas.size} 项日程" else ""
+                }
+                Text(
+                    text = status,
+                    style = YohakuType.label12,
+                    color = if (plan.rest || plan.makeup || ongoing != null) colors.accent else colors.neutral7,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
+                if (dayCourses.isEmpty() && dayAgendas.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (plan.rest) "停课(调休)" else "没有课程与日程安排 · 适宜自由阅读",
+                            style = YohakuType.copy14,
+                            color = colors.neutral7,
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = YohakuDimens.screenPadding,
+                            end = YohakuDimens.screenPadding,
+                            top = YohakuDimens.gapCard,
+                            bottom = YohakuDimens.gapCard + yohakuNavReservedHeight(),
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
+                    ) {
+                        // 1. 全天日程固定置顶
+                        if (allDayAgendas.isNotEmpty()) {
+                            item(key = "all_day_section") {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = "全天待办 / 目标",
+                                        style = YohakuType.label12,
+                                        color = colors.neutral6,
+                                        modifier = Modifier.padding(bottom = 2.dp),
+                                    )
+                                    allDayAgendas.forEach { agenda ->
+                                        AllDayAgendaCard(
+                                            event = agenda,
+                                            onToggle = { onToggleAgenda?.invoke(agenda.id, !agenda.completed) },
+                                            onClick = { onAgendaClick?.invoke(agenda) },
+                                        )
+                                    }
+                                }
                             }
                         }
-                        val isCurrent = Schedule.isCourseOngoing(course, periods)
-                        YohakuCard(
-                            modifier = Modifier
-                                .animateItem()
-                                .graphicsLayer {
-                                    alpha = appear.value
-                                    translationY = (1f - appear.value) * 24f
-                                },
-                            accentBar = isCurrent,
-                            containerColor = courseTint(course),
-                            onClick = { onCourseClick(course) },
-                        ) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text(
-                                    text = Schedule.courseTimeText(course, periods),
-                                    style = YohakuType.timeMono,
-                                    color = colors.neutral7,
-                                    modifier = Modifier.width(100.dp),
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = course.name,
-                                        style = YohakuType.copy16,
-                                        color = colors.neutral10,
+
+                        // 2. 混合时间流
+                        itemsIndexed(timelineItems, key = { _, item -> item.key }) { index, item ->
+                            val animate = entrance.shouldAnimate(item.key)
+                            val appear = remember(item.key) { Animatable(if (animate) 0f else 1f) }
+                            LaunchedEffect(item.key) {
+                                if (animate) {
+                                    appear.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = YohakuMotion.tween(
+                                            durationMs = YohakuMotion.durBase,
+                                            easing = YohakuMotion.easeOut,
+                                            delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
+                                        ),
                                     )
-                                    val meta = listOf(course.location, course.teacher)
-                                        .filter { it.isNotEmpty() }
-                                        .joinToString(" · ")
-                                    if (meta.isNotEmpty()) {
-                                        Text(
-                                            text = meta,
-                                            style = YohakuType.copy13,
-                                            color = colors.neutral7,
-                                        )
+                                    entrance.markSeen(item.key)
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .animateItem()
+                                    .graphicsLayer {
+                                        alpha = appear.value
+                                        translationY = (1f - appear.value) * 24f
+                                    },
+                            ) {
+                                when (item) {
+                                    is DayTimelineItem.CourseItem -> {
+                                        val isCurrent = Schedule.isCourseOngoing(item.course, periods)
+                                        YohakuCard(
+                                            accentBar = isCurrent,
+                                            containerColor = courseTint(item.course),
+                                            onClick = { onCourseClick(item.course) },
+                                        ) {
+                                            Row(verticalAlignment = Alignment.Top) {
+                                                Text(
+                                                    text = Schedule.courseTimeText(item.course, periods),
+                                                    style = YohakuType.timeMono,
+                                                    color = colors.neutral7,
+                                                    modifier = Modifier.width(100.dp),
+                                                )
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = item.course.name,
+                                                        style = YohakuType.copy16,
+                                                        color = colors.neutral10,
+                                                    )
+                                                    val meta = listOf(item.course.location, item.course.teacher)
+                                                        .filter { it.isNotEmpty() }
+                                                        .joinToString(" · ")
+                                                    if (meta.isNotEmpty()) {
+                                                        Text(
+                                                            text = meta,
+                                                            style = YohakuType.copy13,
+                                                            color = colors.neutral7,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    is DayTimelineItem.AgendaItem -> {
+                                        // 日程待办:支持打卡、划线淡化
+                                        YohakuCard(
+                                            containerColor = if (item.event.completed) colors.neutral2 else categoryTint(item.event.category),
+                                            onClick = { onAgendaClick?.invoke(item.event) },
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "%02d:%02d–%02d:%02d".format(
+                                                        item.startMinute / 60, item.startMinute % 60,
+                                                        item.endMinute / 60, item.endMinute % 60,
+                                                    ),
+                                                    style = YohakuType.timeMono,
+                                                    color = if (item.event.completed) colors.neutral5 else colors.neutral7,
+                                                    modifier = Modifier.width(100.dp),
+                                                )
+
+                                                // 触感打卡复选框
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (item.event.completed) colors.accent else colors.paper)
+                                                        .border(
+                                                            BorderStroke(1.5.dp, if (item.event.completed) colors.accent else colors.neutral5),
+                                                            CircleShape,
+                                                        )
+                                                        .clickable {
+                                                            haptics.select()
+                                                            onToggleAgenda?.invoke(item.event.id, !item.event.completed)
+                                                        },
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    if (item.event.completed) {
+                                                        Text(
+                                                            text = "✓",
+                                                            style = YohakuType.label12,
+                                                            color = Color.White,
+                                                            textAlign = TextAlign.Center,
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = item.event.title,
+                                                        style = YohakuType.copy16.copy(
+                                                            textDecoration = if (item.event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                                                        ),
+                                                        color = if (item.event.completed) colors.neutral6 else colors.neutral10,
+                                                    )
+                                                    val meta = buildList {
+                                                        add(item.event.category.label)
+                                                        if (item.event.completed) add("已完成")
+                                                        if (item.event.location.isNotEmpty()) add("@${item.event.location}")
+                                                    }.joinToString(" · ")
+                                                    Text(
+                                                        text = meta,
+                                                        style = YohakuType.copy13,
+                                                        color = colors.neutral6,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    is DayTimelineItem.GapItem -> {
+                                        // 空堂规划建议卡片
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(YohakuDimens.radiusCard))
+                                                .background(colors.neutral2)
+                                                .clickable { onAddAgenda?.invoke() }
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                val h = item.durationMinutes / 60
+                                                val m = item.durationMinutes % 60
+                                                val durationStr = if (h > 0 && m > 0) "${h}小时${m}分" else if (h > 0) "${h}小时" else "${m}分钟"
+                                                Text(
+                                                    text = "☕ 课间空堂 $durationStr · 适宜自习与整理",
+                                                    style = YohakuType.label12,
+                                                    color = colors.neutral7,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                Text(
+                                                    text = "＋ 安排待办",
+                                                    style = YohakuType.label12,
+                                                    color = colors.accent,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -247,4 +463,54 @@ internal fun DayList(
         }
     }
 }
+
+@Composable
+private fun AllDayAgendaCard(
+    event: AgendaEvent,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    YohakuCard(
+        containerColor = if (event.completed) colors.neutral2 else categoryTint(event.category),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(if (event.completed) colors.accent else colors.paper)
+                    .border(
+                        BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
+                        CircleShape,
+                    )
+                    .clickable {
+                        haptics.select()
+                        onToggle()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (event.completed) {
+                    Text(text = "✓", style = YohakuType.label12, color = Color.White)
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "[${event.category.label}] ${event.title}",
+                style = YohakuType.copy15.copy(
+                    textDecoration = if (event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                ),
+                color = if (event.completed) colors.neutral6 else colors.neutral10,
+                modifier = Modifier.weight(1f),
+            )
+            if (event.completed) {
+                Text(text = "已完成", style = YohakuType.label12, color = colors.neutral6)
+            }
+        }
+    }
 }

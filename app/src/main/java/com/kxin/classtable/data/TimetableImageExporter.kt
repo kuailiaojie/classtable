@@ -12,6 +12,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.text.StaticLayout
 import android.text.TextPaint
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import com.kxin.classtable.R
@@ -26,14 +27,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Yohaku 美学课表长图导出器。
  *
- * 将指定周次的整周课表渲染为高清纸感长图（PNG），保留思源宋体排版与和色微重音，
- * 支持保存至系统相册或通过多渠道分享。
+ * 将指定周次的整周课表渲染为艺术海报级高清纸感长图（PNG），
+ * 严格对齐课程在界面中的 OKLCh 淡彩与和色标，保留思源宋体排版、
+ * 朱砂落款印与留白美学，支持保存至系统相册或系统多渠道分享。
  */
 @Singleton
 class TimetableImageExporter @Inject constructor(
@@ -49,7 +52,7 @@ class TimetableImageExporter @Inject constructor(
     )
 
     /**
-     * 生成高清周课表 Bitmap。
+     * 生成高清艺术周课表 Bitmap。
      */
     suspend fun generateBitmap(
         week: Int,
@@ -57,6 +60,8 @@ class TimetableImageExporter @Inject constructor(
     ): Bitmap = withContext(Dispatchers.Default) {
         val courses = courseRepository.getAll()
         val settings = settingsRepository.settings.first()
+        val timetablePrefs = TimetablePrefsStore.flow(context).first()
+        val scheme = timetablePrefs.colorScheme
         val adjustments = Adjustments.decode(settings.scheduleAdjustments)
         val periods = Schedule.parsePeriods(settings.periodTimes)
 
@@ -76,139 +81,276 @@ class TimetableImageExporter @Inject constructor(
             }
         }
 
-        // 确定可见星期（5天或7天）
+        // 确定可见星期（根据设置支持 5 天或 7 天）
         val visibleDays = specifiedVisibleDays ?: run {
-            val weekendHasClass = listOf(6, 7).any { d ->
-                val teaching = teachingDays.getOrNull(d - 1)
-                teaching != null && courses.any {
-                    it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first)
+            when (timetablePrefs.weekendDisplay) {
+                WeekendDisplay.HIDE_WEEKEND -> (1..5).toList()
+                WeekendDisplay.SHOW_ALL -> (1..7).toList()
+                WeekendDisplay.AUTO_HIDE -> {
+                    val weekendHasClass = listOf(6, 7).any { d ->
+                        val teaching = teachingDays.getOrNull(d - 1)
+                        teaching != null && courses.any {
+                            it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first)
+                        }
+                    }
+                    if (weekendHasClass) (1..7).toList() else (1..5).toList()
                 }
             }
-            if (weekendHasClass) (1..7).toList() else (1..5).toList()
         }
 
-        val canvasWidth = 1200
-        val headerHeight = 220f
-        val weekdayBarHeight = 90f
-        val gutterWidth = 110f
-        val rowHeight = 125f
-        val footerHeight = 110f
+        // 艺术画报画布尺寸规范
+        val canvasWidth = 1400
+        val marginH = 64f
+        val headerHeight = 260f
+        val weekdayBarHeight = 100f
+        val gutterWidth = 100f
+        val rowHeight = 135f
+        val footerHeight = 140f
         val gridHeight = periods.size * rowHeight
         val totalHeight = (headerHeight + weekdayBarHeight + gridHeight + footerHeight).toInt()
 
         val bitmap = Bitmap.createBitmap(canvasWidth, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // 1. 纸底背景 (Yohaku paper #FEFEFB)
+        // 1. 暖纸底背景 (Yohaku paper #FAF8F5)
         val bgPaint = Paint().apply {
-            color = android.graphics.Color.parseColor("#FEFEFB")
+            color = android.graphics.Color.parseColor("#FAF8F5")
             style = Paint.Style.FILL
         }
         canvas.drawRect(0f, 0f, canvasWidth.toFloat(), totalHeight.toFloat(), bgPaint)
 
-        // 2. 顶部标题与学期信息
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#141312")
-            textSize = 50f
-            typeface = serifTypeface
-        }
-        canvas.drawText("余课 · 第 $week 周", 60f, 95f, titlePaint)
-
-        val dateRange = Schedule.weekRangeText(settings.semesterStartDay, week)
-        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#5C5A55")
-            textSize = 24f
-            typeface = monoTypeface
-        }
-        val subtitle = buildString {
-            if (dateRange.isNotEmpty()) append(dateRange).append(" · ")
-            append("学期第 ").append(week).append(" 周")
-            if (settings.semesterStartDay <= 0L) append(" · 未设置开学日")
-        }
-        canvas.drawText(subtitle, 60f, 150f, subtitlePaint)
-
-        // 顶部分隔细线
-        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#E7E5DF")
-            strokeWidth = 2f
+        // 艺术典雅外框 (Inner museum frame)
+        val outerFramePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#EAE6DC")
+            strokeWidth = 1.5f
             style = Paint.Style.STROKE
         }
-        canvas.drawLine(50f, headerHeight - 10f, canvasWidth - 50f, headerHeight - 10f, linePaint)
+        canvas.drawRect(24f, 24f, canvasWidth - 24f, totalHeight - 24f, outerFramePaint)
 
-        // 3. 表头星期栏
-        val colWidth = (canvasWidth - 100f - gutterWidth) / visibleDays.size
+        // 2. 顶部艺术排版与朱砂印章
+        // 顶栏眉线
+        val eyebrowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#9E9A90")
+            textSize = 18f
+            typeface = monoTypeface
+            letterSpacing = 0.12f
+        }
+        canvas.drawText("—  Y O H A K U   ·   学 期 课 程 历  —", marginH, 80f, eyebrowPaint)
+
+        // 主标题
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#181715")
+            textSize = 54f
+            typeface = serifTypeface
+        }
+        canvas.drawText("第 $week 周 课程表", marginH, 148f, titlePaint)
+
+        // 朱砂印章 (落款印「余课」)
+        val stampSize = 56f
+        val stampRight = canvasWidth - marginH
+        val stampTop = 86f
+        val stampRect = RectF(stampRight - stampSize, stampTop, stampRight, stampTop + stampSize)
+        val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#C56473") // 传统梅红/朱砂
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(stampRect, 8f, 8f, stampPaint)
+
+        val stampInnerRect = RectF(stampRect.left + 3f, stampRect.top + 3f, stampRect.right - 3f, stampRect.bottom - 3f)
+        val stampBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(160, 255, 255, 255)
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawRoundRect(stampInnerRect, 6f, 6f, stampBorderPaint)
+
+        val stampTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 24f
+            typeface = serifTypeface
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText("余", stampRect.centerX(), stampRect.top + 24f, stampTextPaint)
+        canvas.drawText("课", stampRect.centerX(), stampRect.top + 48f, stampTextPaint)
+
+        // 副标题与元信息行
+        val dateRange = Schedule.weekRangeText(settings.semesterStartDay, week)
+        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#5C5952")
+            textSize = 22f
+            typeface = monoTypeface
+        }
+        val subtitleText = buildString {
+            if (dateRange.isNotEmpty()) append(dateRange).append("  ·  ")
+            append("学期第 ").append(week).append(" 周")
+            if (settings.semesterStartDay <= 0L) append(" (未设置开学日)")
+        }
+        canvas.drawText(subtitleText, marginH, 206f, subtitlePaint)
+
+        // 本周课程统计胶囊
+        val activeCourseCount = courses.count { it.isActiveOnWeek(week) }
+        val countBadgeText = "本周共 $activeCourseCount 节课程"
+        val countBadgeWidth = subtitlePaint.measureText(countBadgeText) + 36f
+        val countBadgeRect = RectF(
+            stampRight - countBadgeWidth,
+            184f,
+            stampRight,
+            222f,
+        )
+        val countBadgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#EFECE4")
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(countBadgeRect, 19f, 19f, countBadgeBgPaint)
+        val countBadgeTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#68645C")
+            textSize = 19f
+            typeface = serifTypeface
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(countBadgeText, countBadgeRect.centerX(), countBadgeRect.centerY() + 7f, countBadgeTextPaint)
+
+        // 顶部分隔细线
+        val dividerLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#E2DDD4")
+            strokeWidth = 1.5f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawLine(marginH, headerHeight - 12f, canvasWidth - marginH, headerHeight - 12f, dividerLinePaint)
+
+        // 3. 表头星期栏排版
+        val colWidth = (canvasWidth - 2 * marginH - gutterWidth) / visibleDays.size
         val weekdayNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#141312")
+            color = android.graphics.Color.parseColor("#181715")
             textSize = 28f
             typeface = serifTypeface
             textAlign = Paint.Align.CENTER
         }
+        val weekdayEnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#8E8A80")
+            textSize = 15f
+            typeface = monoTypeface
+            textAlign = Paint.Align.CENTER
+        }
         val dayNumPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#787670")
-            textSize = 20f
+            color = android.graphics.Color.parseColor("#5E5B54")
+            textSize = 19f
             typeface = monoTypeface
             textAlign = Paint.Align.CENTER
         }
 
         val weekDates = Schedule.weekDates(settings.semesterStartDay, week)
+        val todayWeekday = Schedule.todayWeekday()
+        val currentWeek = Schedule.currentWeek(settings.semesterStartDay, settings.semesterWeekCount)
+        val isViewingCurrentWeek = week == currentWeek
+
         visibleDays.forEachIndexed { idx, d ->
-            val cx = 50f + gutterWidth + colWidth * idx + colWidth / 2f
+            val cx = marginH + gutterWidth + colWidth * idx + colWidth / 2f
+            val isTodayCol = isViewingCurrentWeek && d == todayWeekday
+
+            // 若为今天，绘制柔和高亮底衬
+            if (isTodayCol) {
+                val todayHeaderRect = RectF(
+                    marginH + gutterWidth + colWidth * idx + 2f,
+                    headerHeight - 6f,
+                    marginH + gutterWidth + colWidth * (idx + 1) - 2f,
+                    headerHeight + weekdayBarHeight - 6f,
+                )
+                val todayHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = android.graphics.Color.parseColor("#F2EFE8")
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRoundRect(todayHeaderRect, 10f, 10f, todayHeaderPaint)
+            }
+
+            // 星期文字
             val weekdayText = Dates.weekdayLabel(d)
-            canvas.drawText(weekdayText, cx, headerHeight + 36f, weekdayNamePaint)
-            val dateStr = weekDates.getOrNull(d - 1)?.let { "${it.monthValue}/${it.dayOfMonth}" } ?: ""
+            canvas.drawText(weekdayText, cx, headerHeight + 34f, weekdayNamePaint)
+
+            // 英文星期简称
+            val enWeekday = when (d) {
+                1 -> "MON"
+                2 -> "TUE"
+                3 -> "WED"
+                4 -> "THU"
+                5 -> "FRI"
+                6 -> "SAT"
+                7 -> "SUN"
+                else -> ""
+            }
+            canvas.drawText(enWeekday, cx, headerHeight + 58f, weekdayEnPaint)
+
+            // 日期文本
+            val dateStr = weekDates.getOrNull(d - 1)?.let {
+                "${it.monthValue.toString().padStart(2, '0')}/${it.dayOfMonth.toString().padStart(2, '0')}"
+            } ?: ""
             if (dateStr.isNotEmpty()) {
-                canvas.drawText(dateStr, cx, headerHeight + 68f, dayNumPaint)
+                canvas.drawText(dateStr, cx, headerHeight + 84f, dayNumPaint)
             }
         }
 
         // 表头下分隔线
         val gridTop = headerHeight + weekdayBarHeight
-        canvas.drawLine(50f, gridTop, canvasWidth - 50f, gridTop, linePaint)
+        val gridLineBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#DFDAD0")
+            strokeWidth = 2f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawLine(marginH, gridTop, canvasWidth - marginH, gridTop, gridLineBoldPaint)
 
         // 4. 左侧节次与时间留白列
         val periodNumPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#403F3A")
-            textSize = 24f
+            color = android.graphics.Color.parseColor("#3E3C37")
+            textSize = 22f
             typeface = monoTypeface
             textAlign = Paint.Align.RIGHT
         }
-        val periodTimePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#787670")
-            textSize = 18f
+        val periodStartPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#7A766E")
+            textSize = 16f
+            typeface = monoTypeface
+            textAlign = Paint.Align.RIGHT
+        }
+        val periodEndPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#9E9A92")
+            textSize = 14f
             typeface = monoTypeface
             textAlign = Paint.Align.RIGHT
         }
         val gridLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#F0EFEB")
-            strokeWidth = 1.5f
+            color = android.graphics.Color.parseColor("#EDEAE3")
+            strokeWidth = 1.2f
             style = Paint.Style.STROKE
         }
 
         periods.forEachIndexed { pIdx, p ->
             val y = gridTop + pIdx * rowHeight
-            // 节号与时间
-            canvas.drawText("${pIdx + 1}", 50f + gutterWidth - 16f, y + 36f, periodNumPaint)
-            canvas.drawText(Schedule.clockText(p.start), 50f + gutterWidth - 16f, y + 62f, periodTimePaint)
-            // 行底水平线
-            canvas.drawLine(50f + gutterWidth, y + rowHeight, canvasWidth - 50f, y + rowHeight, gridLinePaint)
+            val formattedNum = String.format("%02d", pIdx + 1)
+            canvas.drawText(formattedNum, marginH + gutterWidth - 18f, y + 42f, periodNumPaint)
+            canvas.drawText(Schedule.clockText(p.start), marginH + gutterWidth - 18f, y + 70f, periodStartPaint)
+            canvas.drawText(Schedule.clockText(p.end), marginH + gutterWidth - 18f, y + 94f, periodEndPaint)
+            // 行底水平网格线
+            canvas.drawLine(marginH + gutterWidth, y + rowHeight, canvasWidth - marginH, y + rowHeight, gridLinePaint)
         }
 
         // 列间垂直分割线
         visibleDays.forEachIndexed { idx, _ ->
-            val vx = 50f + gutterWidth + colWidth * idx
+            val vx = marginH + gutterWidth + colWidth * idx
             canvas.drawLine(vx, gridTop, vx, gridTop + gridHeight, gridLinePaint)
         }
-        canvas.drawLine(canvasWidth - 50f, gridTop, canvasWidth - 50f, gridTop + gridHeight, gridLinePaint)
+        canvas.drawLine(canvasWidth - marginH, gridTop, canvasWidth - marginH, gridTop + gridHeight, gridLinePaint)
 
-        // 5. 课程块排布与渲染
+        // 5. 课程卡片真实色彩与艺术排版渲染
         val courseTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#141312")
-            textSize = 24f
+            color = android.graphics.Color.parseColor("#181715")
             typeface = serifTypeface
         }
         val courseMetaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#5C5A55")
-            textSize = 18f
+            color = android.graphics.Color.parseColor("#4D4A43")
+            typeface = serifTypeface
+        }
+        val courseTimePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#7E7A72")
             typeface = monoTypeface
         }
 
@@ -218,7 +360,7 @@ class TimetableImageExporter @Inject constructor(
                 courses.filter { it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first) }
             } else emptyList()
 
-            // 计算车道
+            // 计算重叠车道
             val blocks = dayCourses.mapNotNull { c ->
                 val (top, height) = if (c.hasCustomTime()) {
                     Schedule.customCourseLayout(c, periods)
@@ -240,100 +382,147 @@ class TimetableImageExporter @Inject constructor(
 
             placedBlocks.forEach { block ->
                 val c = block.course
-                val bx = 50f + gutterWidth + colWidth * colIdx + laneW * block.lane.coerceAtMost(laneCount - 1)
+                val bx = marginH + gutterWidth + colWidth * colIdx + laneW * block.lane.coerceAtMost(laneCount - 1)
                 val by = gridTop + block.top * rowHeight
                 val bw = laneW
                 val bh = block.height * rowHeight
 
-                val blockRect = RectF(bx + 3f, by + 3f, bx + bw - 3f, by + bh - 3f)
+                val blockRect = RectF(bx + 4f, by + 4f, bx + bw - 4f, by + bh - 4f)
 
-                // 纯净和色背景计算
-                val hex = c.colorHex.ifBlank {
-                    val hue = c.colorHue ?: CoursePalette.PRESETS[Math.abs(c.name.hashCode()) % CoursePalette.PRESETS.size].first.hashCode()
-                    CoursePalette.PRESETS[Math.abs(hue) % CoursePalette.PRESETS.size].second
-                }
-                val rawColor = runCatching { android.graphics.Color.parseColor(hex) }.getOrDefault(android.graphics.Color.parseColor("#C56473"))
-                val tintBgColor = android.graphics.Color.argb(
-                    38, // ~15% 不透明度
-                    android.graphics.Color.red(rawColor),
-                    android.graphics.Color.green(rawColor),
-                    android.graphics.Color.blue(rawColor),
-                )
+                // 核心:使用与主界面 100% 相同算法解析课程实际底色与色标
+                val bgArgb = CoursePalette.resolveTint(c, scheme, dark = false).toArgb()
+                val markArgb = CoursePalette.resolveMark(c, scheme, dark = false).toArgb()
+
+                // 水彩纸感背景
                 val blockBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = tintBgColor
+                    color = bgArgb
                     style = Paint.Style.FILL
                 }
+                canvas.drawRoundRect(blockRect, 16f, 16f, blockBgPaint)
+
+                // 雅致微边框:取 markColor 的 25% 透明度，清秀不浑浊
+                val borderArgb = android.graphics.Color.argb(
+                    65,
+                    android.graphics.Color.red(markArgb),
+                    android.graphics.Color.green(markArgb),
+                    android.graphics.Color.blue(markArgb),
+                )
                 val blockBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = android.graphics.Color.argb(
-                        90,
-                        android.graphics.Color.red(rawColor),
-                        android.graphics.Color.green(rawColor),
-                        android.graphics.Color.blue(rawColor),
-                    )
-                    strokeWidth = 2f
+                    color = borderArgb
+                    strokeWidth = 1.5f
                     style = Paint.Style.STROKE
                 }
+                canvas.drawRoundRect(blockRect, 16f, 16f, blockBorderPaint)
 
-                canvas.drawRoundRect(blockRect, 14f, 14f, blockBgPaint)
-                canvas.drawRoundRect(blockRect, 14f, 14f, blockBorderPaint)
-
-                // 绘制左边缘和色强调小条
+                // 左侧和色强调细条 (东方手帐质感)
                 val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = android.graphics.Color.argb(
-                        200,
-                        android.graphics.Color.red(rawColor),
-                        android.graphics.Color.green(rawColor),
-                        android.graphics.Color.blue(rawColor),
+                        220,
+                        android.graphics.Color.red(markArgb),
+                        android.graphics.Color.green(markArgb),
+                        android.graphics.Color.blue(markArgb),
                     )
                     style = Paint.Style.FILL
                 }
                 canvas.drawRoundRect(
-                    RectF(blockRect.left, blockRect.top + 6f, blockRect.left + 5f, blockRect.bottom - 6f),
-                    3f, 3f, barPaint,
+                    RectF(blockRect.left + 5f, blockRect.top + 8f, blockRect.left + 8.5f, blockRect.bottom - 8f),
+                    2f, 2f, barPaint,
                 )
 
-                // 文字排版
-                var textY = blockRect.top + 28f
-                // 课程名称
-                val nameWidth = (blockRect.width() - 20f).toInt().coerceAtLeast(30)
+                // 卡片内部文字排版 (严格裁切保护，杜绝溢出)
+                canvas.save()
+                canvas.clipRect(blockRect)
+
+                val contentLeft = blockRect.left + 17f
+                val contentRight = blockRect.right - 10f
+                val contentWidth = (contentRight - contentLeft).toInt().coerceAtLeast(30)
+                var currentY = blockRect.top + 15f
+
+                // 课程名称排版
+                val nameSize = if (laneCount > 1) 20f else 24f
+                courseTitlePaint.textSize = nameSize
+                val maxNameLines = if (bh < 100f) 2 else 3
                 val titleLayout = StaticLayout.Builder.obtain(
-                    c.name, 0, c.name.length, courseTitlePaint, nameWidth,
-                ).setMaxLines(3).build()
+                    c.name, 0, c.name.length, courseTitlePaint, contentWidth,
+                ).setMaxLines(maxNameLines).setLineSpacing(2f, 1f).build()
 
                 canvas.save()
-                canvas.translate(blockRect.left + 12f, textY - 20f)
+                canvas.translate(contentLeft, currentY)
                 titleLayout.draw(canvas)
                 canvas.restore()
 
-                textY += titleLayout.height + 6f
+                currentY += titleLayout.height + 8f
 
-                // 地点与教室
-                if (c.location.isNotBlank() && textY + 20f <= blockRect.bottom) {
-                    val locText = if (c.location.length > 8) c.location.take(7) + "…" else c.location
-                    canvas.drawText(locText, blockRect.left + 12f, textY, courseMetaPaint)
-                    textY += 22f
+                // 教室地点 (配精致图标)
+                if (c.location.isNotBlank() && currentY + 22f <= blockRect.bottom - 8f) {
+                    val locSize = if (laneCount > 1) 15f else 17f
+                    courseMetaPaint.textSize = locSize
+                    val locText = if (c.location.length > 9) c.location.take(8) + "…" else c.location
+                    canvas.drawText("📍 $locText", contentLeft, currentY + 16f, courseMetaPaint)
+                    currentY += 24f
                 }
 
-                // 教师
-                if (c.teacher.isNotBlank() && textY + 18f <= blockRect.bottom) {
-                    val teacherText = if (c.teacher.length > 8) c.teacher.take(7) + "…" else c.teacher
-                    canvas.drawText(teacherText, blockRect.left + 12f, textY, courseMetaPaint)
+                // 任课教师
+                if (c.teacher.isNotBlank() && currentY + 20f <= blockRect.bottom - 8f) {
+                    val teacherSize = if (laneCount > 1) 14f else 16f
+                    courseMetaPaint.textSize = teacherSize
+                    val teacherText = if (c.teacher.length > 7) c.teacher.take(6) + "…" else c.teacher
+                    canvas.drawText("👤 $teacherText", contentLeft, currentY + 16f, courseMetaPaint)
+                    currentY += 24f
                 }
+
+                // 长时间段节次与时间说明
+                if (bh >= 180f && currentY + 20f <= blockRect.bottom - 8f) {
+                    courseTimePaint.textSize = 14f
+                    val timeDesc = if (c.hasCustomTime()) {
+                        Schedule.courseTimeText(c, periods)
+                    } else {
+                        "${c.startPeriod}-${c.endPeriod}节"
+                    }
+                    canvas.drawText(timeDesc, contentLeft, currentY + 16f, courseTimePaint)
+                }
+
+                canvas.restore()
             }
         }
 
-        // 6. 底部品牌与留白印记
-        val footerLineY = gridTop + gridHeight + 20f
-        canvas.drawLine(50f, footerLineY, canvasWidth - 50f, footerLineY, linePaint)
+        // 6. 底部艺术落款与留白结语
+        val footerLineY = gridTop + gridHeight + 18f
+        canvas.drawLine(marginH, footerLineY, canvasWidth - marginH, footerLineY, dividerLinePaint)
 
         val footerBrandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#A8A69F")
-            textSize = 22f
+            color = android.graphics.Color.parseColor("#4A4740")
+            textSize = 24f
+            typeface = serifTypeface
+        }
+        canvas.drawText("余 白 · 极 简 课 表", marginH, footerLineY + 54f, footerBrandPaint)
+
+        val footerEnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#99958C")
+            textSize = 14f
+            typeface = monoTypeface
+            letterSpacing = 0.14f
+        }
+        canvas.drawText("Y O H A K U   C L A S S T A B L E", marginH, footerLineY + 84f, footerEnPaint)
+
+        // 居中艺术铭文
+        val footerMottoPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#858076")
+            textSize = 18f
             typeface = serifTypeface
             textAlign = Paint.Align.CENTER
         }
-        val footerY = footerLineY + 50f
-        canvas.drawText("余 白 · 极 简 课 表   |   Y O H A K U", canvasWidth / 2f, footerY, footerBrandPaint)
+        canvas.drawText("❖   学 习 与 生 活 的 留 白 艺 术   ❖", canvasWidth / 2f, footerLineY + 68f, footerMottoPaint)
+
+        // 右侧导出日期与周次题跋
+        val dateNow = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
+        val footerDatePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#6E6A62")
+            textSize = 17f
+            typeface = monoTypeface
+            textAlign = Paint.Align.RIGHT
+        }
+        canvas.drawText("导 出 于 $dateNow · 第 $week 周", canvasWidth - marginH, footerLineY + 68f, footerDatePaint)
 
         bitmap
     }

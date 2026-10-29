@@ -22,6 +22,8 @@ data class AgendaEntity(
     val remindEnabled: Boolean,
     val remindLeadMinutes: Int,
     val updatedAt: Long,
+    val courseId: String? = null,
+    val completed: Boolean = false,
 ) {
     fun toDomain(): AgendaEvent = AgendaEvent(
         id = id,
@@ -36,6 +38,8 @@ data class AgendaEntity(
         remindEnabled = remindEnabled,
         remindLeadMinutes = remindLeadMinutes,
         updatedAt = updatedAt,
+        courseId = courseId,
+        completed = completed,
     )
 
     companion object {
@@ -52,6 +56,8 @@ data class AgendaEntity(
             remindEnabled = e.remindEnabled,
             remindLeadMinutes = e.remindLeadMinutes,
             updatedAt = e.updatedAt,
+            courseId = e.courseId,
+            completed = e.completed,
         )
     }
 }

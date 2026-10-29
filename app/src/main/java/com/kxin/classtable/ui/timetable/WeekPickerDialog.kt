@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDialog
@@ -94,7 +96,7 @@ fun WeekPickerDialog(
                 val range = Schedule.weekRangeText(semesterStartDay, week)
                 val activeCourseCount = courses.count { it.isActiveOnWeek(week) }
 
-                val shape = RoundedCornerShape(YohakuDimens.radiusChip)
+                val shape = RoundedCornerShape(YohakuDimens.radiusCard)
                 val bg = when {
                     isSelected -> colors.neutral2
                     isCurrent -> colors.neutral1
@@ -108,6 +110,7 @@ fun WeekPickerDialog(
 
                 Box(
                     modifier = Modifier
+                        .aspectRatio(1f)
                         .clip(shape)
                         .background(bg)
                         .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
@@ -115,43 +118,58 @@ fun WeekPickerDialog(
                             haptics.select()
                             onSelectWeek(week)
                         }
-                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {
+                    if (isCurrent) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 4.dp, end = 4.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (isSelected) colors.accent else colors.neutral6)
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                text = "今",
+                                style = YohakuType.gridMeta,
+                                color = colors.paper,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = "第$week 周",
+                            text = "第${week}周",
                             style = YohakuType.copy13,
                             color = if (isSelected) colors.accent else if (isCurrent) colors.neutral10 else colors.neutral8,
-                            fontWeight = if (isSelected || isCurrent) FontWeight.Medium else FontWeight.Normal,
+                            fontWeight = if (isSelected || isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
                         )
                         if (range.isNotEmpty()) {
                             Text(
                                 text = range,
-                                style = YohakuType.gridGutterTime,
+                                style = YohakuType.gridDate,
                                 color = colors.neutral6,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 2.dp),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 3.dp),
                             )
                         }
-                        if (activeCourseCount > 0) {
-                            Text(
-                                text = "$activeCourseCount 节",
-                                style = YohakuType.gridGutterTime,
-                                color = if (isSelected) colors.accent else colors.neutral5,
-                                textAlign = TextAlign.Center,
-                            )
-                        } else {
-                            Text(
-                                text = "无课",
-                                style = YohakuType.gridGutterTime,
-                                color = colors.neutral5,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
+                        val countText = if (activeCourseCount > 0) "$activeCourseCount 节" else "无课"
+                        Text(
+                            text = countText,
+                            style = YohakuType.gridDate,
+                            color = if (isSelected) colors.accent else colors.neutral5,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
                     }
                 }
             }

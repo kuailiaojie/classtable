@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -22,27 +23,32 @@ import javax.inject.Singleton
 /**
  * RFC 5545 iCalendar (.ics) 日历导出管理器。
  *
- * 将全学期课程按周次、星期与节次展开为标准 VEVENT 事件，
- * 支持导入系统日历（如华为、小米、OPPO、Apple、Google 等），
- * 并打通智能手表与手环等可穿戴设备生态。
+ * 将全学期课程与自建日程（作业、考试、待办）展开为标准 VEVENT 事件，
+ * 支持无缝导入系统日历（如 Apple Calendar、华为、小米、OPPO、Google 等），
+ * 并打通 iPhone、iPad、Mac 与智能手表/手环等全生态。
  */
 @Singleton
 class IcsExporter @Inject constructor(
     private val courseRepository: CourseRepository,
+    private val agendaRepository: AgendaRepository,
     private val settingsRepository: SettingsRepository,
     @param:ApplicationContext private val context: Context,
 ) {
     data class IcsExportResult(
         val eventCount: Int,
         val courseCount: Int,
+        val agendaCount: Int,
         val icsText: String,
-    )
+    ) {
+        val totalCount: Int get() = eventCount
+    }
 
     /**
      * 生成符合 RFC 5545 标准的 .ics 日历纯文本。
      */
     suspend fun generateIcsText(): IcsExportResult = withContext(Dispatchers.Default) {
         val courses = courseRepository.getAll()
+        val agendas = agendaRepository.getAll()
         val settings = settingsRepository.settings.first()
         val adjustments = Adjustments.decode(settings.scheduleAdjustments)
         val periods = Schedule.parsePeriods(settings.periodTimes)
@@ -58,6 +64,7 @@ class IcsExporter @Inject constructor(
         val endSunday = startMonday.plusWeeks(weekCount.toLong()).minusDays(1)
 
         val dtFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+        val dateOnlyFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val nowStamp = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
             .format(Instant.now().atZone(ZoneOffset.UTC))
 
@@ -67,10 +74,10 @@ class IcsExporter @Inject constructor(
         sb.append("PRODID:-//Yohaku Classtable//CN\r\n")
         sb.append("CALSCALE:GREGORIAN\r\n")
         sb.append("METHOD:PUBLISH\r\n")
-        sb.append("X-WR-CALNAME:余课课表\r\n")
+        sb.append("X-WR-CALNAME:余课日程\r\n")
         sb.append("X-WR-TIMEZONE:Asia/Shanghai\r\n")
 
-        // 嵌入 Asia/Shanghai VTIMEZONE 保证跨平台（Android、iOS、手表等）绝对对齐
+        // 嵌入 Asia/Shanghai VTIMEZONE 保证跨平台（iOS, Android, Watch）时区对齐
         sb.append("BEGIN:VTIMEZONE\r\n")
         sb.append("TZID:Asia/Shanghai\r\n")
         sb.append("X-LIC-LOCATION:Asia/Shanghai\r\n")
@@ -82,9 +89,10 @@ class IcsExporter @Inject constructor(
         sb.append("END:STANDARD\r\n")
         sb.append("END:VTIMEZONE\r\n")
 
-        var totalEvents = 0
+        var courseEventCount = 0
         val leadMinutes = settings.notifyLeadMinutes.takeIf { it > 0 } ?: 15
 
+        // 1. 导出课程
         var curDate = startMonday
         while (!curDate.isAfter(endSunday)) {
             val daySchedule = Adjustments.resolve(adjustments, curDate)
@@ -94,7 +102,7 @@ class IcsExporter @Inject constructor(
                     val (week, weekday) = teaching
                     for (c in courses) {
                         if (c.isOnWeekday(weekday) && c.isActiveOnWeek(week)) {
-                            totalEvents++
+                            courseEventCount++
                             val startMin = c.customStartMinute
                                 ?: periods.getOrNull(c.startPeriod - 1)?.start
                                 ?: 480
@@ -129,7 +137,6 @@ class IcsExporter @Inject constructor(
                             sb.append("STATUS:CONFIRMED\r\n")
                             sb.append("TRANSP:OPAQUE\r\n")
 
-                            // 课程提醒
                             sb.append("BEGIN:VALARM\r\n")
                             sb.append("ACTION:DISPLAY\r\n")
                             sb.append("DESCRIPTION:").append(escapeIcs("上课提醒: ${c.name}")).append("\r\n")
@@ -144,8 +151,57 @@ class IcsExporter @Inject constructor(
             curDate = curDate.plusDays(1)
         }
 
+        // 2. 导出日程与倒计时（作业、考试、待办）
+        var agendaEventCount = 0
+        val zone = ZoneId.systemDefault()
+        for (a in agendas) {
+            agendaEventCount++
+            val uid = UUID.nameUUIDFromBytes("agenda_${a.id}".toByteArray()).toString()
+            val startLocal = Instant.ofEpochMilli(a.startAt).atZone(zone).toLocalDateTime()
+            val endLocal = Instant.ofEpochMilli(a.endAt).atZone(zone).toLocalDateTime()
+
+            sb.append("BEGIN:VEVENT\r\n")
+            sb.append("UID:").append(uid).append("@classtable.kxin.com\r\n")
+            sb.append("DTSTAMP:").append(nowStamp).append("\r\n")
+
+            if (a.allDay) {
+                sb.append("DTSTART;VALUE=DATE:").append(startLocal.toLocalDate().format(dateOnlyFormatter)).append("\r\n")
+                sb.append("DTEND;VALUE=DATE:").append(endLocal.toLocalDate().plusDays(1).format(dateOnlyFormatter)).append("\r\n")
+            } else {
+                sb.append("DTSTART;TZID=Asia/Shanghai:").append(startLocal.format(dtFormatter)).append("\r\n")
+                sb.append("DTEND;TZID=Asia/Shanghai:").append(endLocal.format(dtFormatter)).append("\r\n")
+            }
+
+            val summaryPrefix = if (a.completed) "[已完成·${a.category.label}]" else "[${a.category.label}]"
+            sb.append("SUMMARY:").append(escapeIcs("$summaryPrefix ${a.title}")).append("\r\n")
+
+            if (a.location.isNotBlank()) {
+                sb.append("LOCATION:").append(escapeIcs(a.location)).append("\r\n")
+            }
+
+            val descList = mutableListOf<String>()
+            descList.add("分类: ${a.category.label}")
+            if (a.priority.name != "NONE") descList.add("优先级: ${a.priority.label}")
+            if (a.note.isNotBlank()) descList.add("备注: ${a.note}")
+            if (a.completed) descList.add("状态: 已完成")
+            sb.append("DESCRIPTION:").append(escapeIcs(descList.joinToString("\n"))).append("\r\n")
+
+            sb.append("STATUS:").append(if (a.completed) "COMPLETED" else "CONFIRMED").append("\r\n")
+            sb.append("TRANSP:OPAQUE\r\n")
+
+            if (a.remindEnabled) {
+                sb.append("BEGIN:VALARM\r\n")
+                sb.append("ACTION:DISPLAY\r\n")
+                sb.append("DESCRIPTION:").append(escapeIcs("日程提醒: ${a.title}")).append("\r\n")
+                sb.append("TRIGGER:-PT").append(a.remindLeadMinutes.coerceAtLeast(0)).append("M\r\n")
+                sb.append("END:VALARM\r\n")
+            }
+
+            sb.append("END:VEVENT\r\n")
+        }
+
         sb.append("END:VCALENDAR\r\n")
-        IcsExportResult(totalEvents, courses.size, sb.toString())
+        IcsExportResult(courseEventCount + agendaEventCount, courseEventCount, agendaEventCount, sb.toString())
     }
 
     /**
@@ -158,12 +214,12 @@ class IcsExporter @Inject constructor(
     }
 
     /**
-     * 导出为临时共享文件，生成用于分享的 File 对象。
+     * 导出为临时共享文件，生成用于系统分享与日历调起的 File 对象。
      */
     suspend fun prepareShareFile(): Pair<File, IcsExportResult> = withContext(Dispatchers.IO) {
         val result = generateIcsText()
         val exportsDir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val shareFile = File(exportsDir, "余课课表.ics")
+        val shareFile = File(exportsDir, "余课课表与日程.ics")
         shareFile.writeText(result.icsText, StandardCharsets.UTF_8)
         shareFile to result
     }

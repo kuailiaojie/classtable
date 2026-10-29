@@ -42,6 +42,7 @@ object CourseNotifier {
         teacher: String,
         leadMinutes: Int,
         announcement: String? = null,
+        taskHint: String? = null,
     ) {
         if (!NotifyChannels.canPost(context, NotifyChannels.REMINDER)) return
         NotifyChannels.ensure(context)
@@ -58,6 +59,10 @@ object CourseNotifier {
             if (announcementText != null) {
                 append("\n最新公告:")
                 append(announcementText.take(ANNOUNCEMENT_MAX_CHARS))
+            }
+            if (!taskHint.isNullOrBlank()) {
+                append("\n待办备忘: ")
+                append(taskHint.take(ANNOUNCEMENT_MAX_CHARS))
             }
         }
 

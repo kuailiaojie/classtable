@@ -44,6 +44,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.kxin.classtable.data.AgendaRepository
+import com.kxin.classtable.data.IcsExporter
+import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.ui.agenda.spans
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.TimetablePrefs
@@ -86,17 +90,24 @@ import kotlin.math.roundToInt
 @HiltViewModel
 class TimetableViewModel @Inject constructor(
     courseRepository: CourseRepository,
+    private val agendaRepository: AgendaRepository,
     settingsRepository: SettingsRepository,
     private val weatherRepository: WeatherRepository,
     val imageExporter: TimetableImageExporter,
+    val icsExporter: IcsExporter,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
-    /**
-     * 订阅全部课程而不是「今天星期几」那一批:调休可能让今天去上**别的星期几**的课
-     * (周六补周四的课),按星期订阅就取不到了。
-     */
     val courses: StateFlow<List<Course>> = courseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val agendas: StateFlow<List<AgendaEvent>> = agendaRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun toggleAgenda(id: String, completed: Boolean) {
+        viewModelScope.launch {
+            runCatching { agendaRepository.toggleCompleted(id, completed) }
+        }
+    }
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -143,6 +154,7 @@ fun TimetableScreen(
 ) {
     val colors = LocalYohakuColors.current
     val courses by viewModel.courses.collectAsStateWithLifecycle()
+    val agendas by viewModel.agendas.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
     val prefs by viewModel.displayPrefs.collectAsStateWithLifecycle()
@@ -160,6 +172,8 @@ fun TimetableScreen(
     var showAdd by remember { mutableStateOf(false) }
     var showWeather by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
+    var showExportMenu by remember { mutableStateOf(false) }
+    var showIcsExport by remember { mutableStateOf(false) }
     var showExportImage by remember { mutableStateOf(false) }
 
     // 实时动态:每 30 秒刷新「正在上课 / 距下一节」与当前时间线
@@ -262,6 +276,27 @@ fun TimetableScreen(
         )
     }
 
+    if (showExportMenu) {
+        ExportChoiceDialog(
+            onDismiss = { showExportMenu = false },
+            onPickIcs = {
+                showExportMenu = false
+                showIcsExport = true
+            },
+            onPickImage = {
+                showExportMenu = false
+                showExportImage = true
+            },
+        )
+    }
+
+    if (showIcsExport) {
+        IcsExportDialog(
+            icsExporter = viewModel.icsExporter,
+            onDismiss = { showIcsExport = false },
+        )
+    }
+
     if (showExportImage) {
         TimetableImageDialog(
             initialWeek = anchorWeek,
@@ -333,9 +368,9 @@ fun TimetableScreen(
                 haptics.tick()
                 onOpenAssistant()
             }
-            HeaderTextAction(text = "长图", color = colors.accent) {
+            HeaderTextAction(text = "导出", color = colors.accent) {
                 haptics.tick()
-                showExportImage = true
+                showExportMenu = true
             }
         }
 
@@ -489,12 +524,19 @@ fun TimetableScreen(
                                 }
                             }
                         }
+                        val pageDates = remember(settings.semesterStartDay, pageWeek) {
+                            Schedule.weekDates(settings.semesterStartDay, pageWeek)
+                        }
+                        val agendaDots = remember(pageDates, agendas) {
+                            pageDates.map { d -> agendas.any { !it.completed && it.spans(d) } }
+                        }
                         Column(modifier = Modifier.fillMaxSize()) {
                             WeekdayHeader(
                                 dayNumbers = dayNumbers,
                                 today = today,
                                 marks = marks,
                                 visibleDays = visibleDays,
+                                agendaDots = agendaDots,
                                 onDayClick = { d ->
                                     anchorWeek = pageWeek
                                     anchorWeekday = d
@@ -544,6 +586,14 @@ fun TimetableScreen(
                             },
                             entrance = entrance,
                             modifier = Modifier.weight(1f),
+                            agendaEvents = agendas,
+                            onToggleAgenda = { id, comp -> viewModel.toggleAgenda(id, comp) },
+                            onAgendaClick = { agenda ->
+                                nav.navigate("agenda_form?eventId=&date=")
+                            },
+                            onAddAgenda = {
+                                nav.navigate("agenda_form?date=")
+                            },
                         )
                     }
                 }
@@ -641,5 +691,65 @@ private fun HeaderTextAction(
         contentAlignment = Alignment.Center,
     ) {
         Text(text = text, style = YohakuType.copy13, color = color)
+    }
+}
+
+
+@Composable
+private fun ExportChoiceDialog(
+    onDismiss: () -> Unit,
+    onPickIcs: () -> Unit,
+    onPickImage: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    YohakuDialog(
+        onDismissRequest = onDismiss,
+        title = "导出与分享",
+        actions = { YohakuDialogAction(text = "取消", onClick = onDismiss) },
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPickIcs() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "导出系统日历 (.ics)", style = YohakuType.copy15, color = colors.neutral10)
+                    Text(
+                        text = "全学期课程与作业考试导入 Apple / 华为 / 小米日历或穿戴设备",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                }
+                Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(colors.neutral3),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPickImage() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "导出课表长图", style = YohakuType.copy15, color = colors.neutral10)
+                    Text(
+                        text = "生成周课表高清美学长图，保存至相册或直接分享",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                }
+                Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+            }
+        }
     }
 }

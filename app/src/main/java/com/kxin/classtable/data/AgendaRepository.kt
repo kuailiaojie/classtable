@@ -39,6 +39,11 @@ class AgendaRepository @Inject constructor(
             .map { list -> list.map { it.toDomain() } }
             .flowOn(Dispatchers.Default)
 
+    fun observeByCourse(courseId: String): Flow<List<AgendaEvent>> =
+        dao.observeByCourse(courseId)
+            .map { list -> list.map { it.toDomain() } }
+            .flowOn(Dispatchers.Default)
+
     suspend fun get(id: String): AgendaEvent? = dao.getById(id)?.toDomain()
 
     suspend fun getAll(): List<AgendaEvent> = dao.getAll().map { it.toDomain() }
@@ -53,6 +58,12 @@ class AgendaRepository @Inject constructor(
     suspend fun save(event: AgendaEvent) {
         val stamped = event.copy(updatedAt = System.currentTimeMillis())
         dao.upsert(AgendaEntity.fromDomain(stamped))
+        scope.launch { runCatching { sync.syncNow() } }
+        postChangeSideEffects()
+    }
+
+    suspend fun toggleCompleted(id: String, completed: Boolean) {
+        dao.updateCompleted(id, completed, System.currentTimeMillis())
         scope.launch { runCatching { sync.syncNow() } }
         postChangeSideEffects()
     }

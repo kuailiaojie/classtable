@@ -64,6 +64,10 @@ data class AgendaEvent(
     /** 提前多少分钟提醒;仅非全天且 [remindEnabled] 时有意义(全天按设置里的固定时刻)。 */
     val remindLeadMinutes: Int = 10,
     val updatedAt: Long = 0L,
+    /** 关联的课程 ID(可选,便于将作业/实验/考试与具体课程挂钩)。 */
+    val courseId: String? = null,
+    /** 是否已完成(用于待办划线打卡与作业完成标记)。 */
+    val completed: Boolean = false,
 ) {
     /** 是否已经结束。 */
     fun isPast(now: Long = System.currentTimeMillis()): Boolean = endAt < now

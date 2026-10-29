@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -65,6 +66,7 @@ internal fun WeekdayHeader(
     onDayClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     visibleDays: List<Int> = (1..7).toList(),
+    agendaDots: List<Boolean> = emptyList(),
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -100,11 +102,22 @@ internal fun WeekdayHeader(
                     style = YohakuType.gridDate,
                     color = if (isToday) colors.accent else colors.neutral6,
                 )
+                val hasAgenda = agendaDots.getOrNull(d - 1) == true
                 if (mark != null) {
                     Text(
                         text = mark,
                         style = YohakuType.gridMeta,
                         color = colors.accent,
+                    )
+                } else if (hasAgenda) {
+                    // Apple HIG 风格日历小圆点标记: 该日有待办/倒计时
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .height(4.dp)
+                            .width(4.dp)
+                            .clip(CircleShape)
+                            .background(colors.accent),
                     )
                 } else {
                     Box(

@@ -3,8 +3,10 @@ package com.kxin.classtable.ui.agenda
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kxin.classtable.data.AgendaRepository
+import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.Crash
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.domain.model.Course
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,8 +19,12 @@ import javax.inject.Inject
 @HiltViewModel
 class AgendaViewModel @Inject constructor(
     private val repository: AgendaRepository,
+    courseRepository: CourseRepository,
 ) : ViewModel() {
     val events: StateFlow<List<AgendaEvent>> = repository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val courses: StateFlow<List<Course>> = courseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _saved = MutableStateFlow(false)
@@ -29,12 +35,21 @@ class AgendaViewModel @Inject constructor(
 
     fun save(event: AgendaEvent) {
         viewModelScope.launch {
-            // 只在真正写成功后返回:失败留在表单,数据不丢,并说明原因
             runCatching { repository.save(event) }
                 .onSuccess { _saved.value = true }
                 .onFailure {
                     Crash.recordException(it, "op" to "agenda_save")
                     _error.value = "保存失败,请重试"
+                }
+        }
+    }
+
+    fun toggleCompleted(id: String, completed: Boolean) {
+        viewModelScope.launch {
+            runCatching { repository.toggleCompleted(id, completed) }
+                .onFailure {
+                    Crash.recordException(it, "op" to "agenda_toggle_completed")
+                    _error.value = "更新状态失败"
                 }
         }
     }

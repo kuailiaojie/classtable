@@ -52,6 +52,7 @@ import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Schedule
+import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaKind

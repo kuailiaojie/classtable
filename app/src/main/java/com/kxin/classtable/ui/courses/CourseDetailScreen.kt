@@ -1,6 +1,13 @@
 package com.kxin.classtable.ui.courses
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
+import com.kxin.classtable.data.AgendaRepository
+import com.kxin.classtable.domain.model.AgendaEvent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +21,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +75,7 @@ import javax.inject.Inject
 @HiltViewModel
 class CourseDetailViewModel @Inject constructor(
     private val courseRepository: CourseRepository,
+    private val agendaRepository: AgendaRepository,
     settingsRepository: SettingsRepository,
     private val yuketangRepository: YuketangRepository,
 ) : ViewModel() {
@@ -81,6 +91,12 @@ class CourseDetailViewModel @Inject constructor(
         yuketangRepository.observeAnnouncements(courseId)
 
     /** 空态文案要区分「没登录」与「登录了但这门课没有公告」。 */
+    fun agendas(courseId: String): Flow<List<AgendaEvent>> = agendaRepository.observeByCourse(courseId)
+
+    fun toggleAgenda(id: String, completed: Boolean) {
+        viewModelScope.launch { runCatching { agendaRepository.toggleCompleted(id, completed) } }
+    }
+
     fun isYuketangLoggedIn(): Boolean = yuketangRepository.isLoggedIn()
 
     fun delete(id: String) {
@@ -103,6 +119,8 @@ fun CourseDetailScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
+    val agendasFlow = remember(courseId) { viewModel.agendas(courseId) }
+    val agendas by agendasFlow.collectAsStateWithLifecycle(initialValue = emptyList<AgendaEvent>())
     val announcementsFlow = remember(courseId) { viewModel.announcements(courseId) }
     val announcements by announcementsFlow.collectAsStateWithLifecycle(
         initialValue = emptyList<YuketangAnnouncement>(),
@@ -224,6 +242,56 @@ fun CourseDetailScreen(
                                     color = if (active) androidx.compose.ui.graphics.Color.White else colors.neutral7,
                                 )
                             }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(YohakuDimens.gapCard))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "任务与备考",
+                        style = YohakuType.title20,
+                        color = colors.neutral10,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "＋ 添加任务",
+                        style = YohakuType.copy13,
+                        color = colors.accent,
+                        modifier = Modifier
+                            .yohakuTouchTarget()
+                            .clickable {
+                                nav.navigate("agenda_form?courseId=${c.id}&date=${LocalDate.now().toEpochDay()}&category=HOMEWORK")
+                            }
+                            .padding(vertical = 4.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (agendas.isEmpty()) {
+                    Text(
+                        text = "这门课暂无关联的任务或考试。点击右上角可为它添加平时作业、实验报告或期末复习目标。",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                } else {
+                    Text(
+                        text = "共 ${agendas.size} 项 · 未完成 ${agendas.count { !it.completed }} 项",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (item in agendas) {
+                            CourseAgendaCard(
+                                event = item,
+                                onToggle = { viewModel.toggleAgenda(item.id, !item.completed) },
+                                onClick = { nav.navigate("agenda_form?eventId=${item.id}&date=${LocalDate.now().toEpochDay()}") },
+                            )
                         }
                     }
                 }
@@ -362,6 +430,67 @@ private fun courseDates(course: Course, semesterStartDay: Long, weekCount: Int):
                 if (!course.isOnWeekday(d)) continue
                 add(LocalDate.ofEpochDay(startMonday + (w - 1) * 7L + (d - 1)) to w)
             }
+        }
+    }
+}
+
+
+@Composable
+private fun CourseAgendaCard(
+    event: AgendaEvent,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+            .background(if (event.completed) colors.neutral2 else colors.raised)
+            .border(BorderStroke(1.dp, colors.line), RoundedCornerShape(YohakuDimens.radiusControl))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(if (event.completed) colors.accent else colors.paper)
+                .border(
+                    BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
+                    CircleShape,
+                )
+                .clickable {
+                    haptics.select()
+                    onToggle()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (event.completed) {
+                Text(text = "✓", style = YohakuType.label12, color = Color.White)
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = event.title,
+                style = YohakuType.copy15.copy(
+                    textDecoration = if (event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                ),
+                color = if (event.completed) colors.neutral6 else colors.neutral10,
+            )
+            val meta = buildList {
+                add(event.category.label)
+                if (event.completed) add("已完成")
+                if (event.location.isNotBlank()) add("@${event.location}")
+            }.joinToString(" · ")
+            Text(
+                text = meta,
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
         }
     }
 }

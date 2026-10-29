@@ -29,8 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
@@ -39,6 +41,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.LunarDate
 import com.kxin.classtable.domain.model.AgendaEvent
@@ -47,6 +50,9 @@ import java.time.LocalDate
 
 /**
  * 议程时间线:某一天的日程,按「全天 / 上午 / 下午 / 晚上」分段,每条给出起止时刻。
+ *
+ * 遵循 Apple HIG 交互规范:支持打卡状态切换,完成条目在时间线上划线淡化保留,
+ * 兼顾完成的成就感与时间线完整性。
  */
 @Composable
 internal fun AgendaTimeline(
@@ -57,6 +63,7 @@ internal fun AgendaTimeline(
     onEventClick: (AgendaEvent) -> Unit,
     entrance: EntranceTracker,
     modifier: Modifier = Modifier,
+    onToggleCompleted: ((AgendaEvent) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
     val allDay = events.filter { it.allDay }.sortedBy { it.startAt }
@@ -99,10 +106,16 @@ internal fun AgendaTimeline(
                         color = colors.neutral10,
                     )
                 }
+                val completedCount = events.count { it.completed }
+                val summaryText = if (completedCount > 0) {
+                    "${events.size} 个日程 · 已完成 $completedCount"
+                } else {
+                    "${events.size} 个日程"
+                }
                 Text(
                     text = listOfNotNull(
                         lunar.ifEmpty { null },
-                        "${events.size} 个日程",
+                        summaryText,
                         when (val diff = daysUntil(date, today)) {
                             0L -> null
                             else -> if (diff > 0) "$diff 天后" else "已过 ${-diff} 天"
@@ -145,7 +158,6 @@ internal fun AgendaTimeline(
                         )
                     }
                     itemsIndexed(items, key = { _, e -> e.id }) { index, event ->
-                        // 已出现过的条目不重演入场(切页签会重建组合,否则每次都重播)
                         val animate = entrance.shouldAnimate(event.id)
                         val appear = remember(event.id) { Animatable(if (animate) 0f else 1f) }
                         LaunchedEffect(event.id) {
@@ -170,6 +182,7 @@ internal fun AgendaTimeline(
                                     translationY = (1f - appear.value) * 20f
                                 },
                             onClick = { onEventClick(event) },
+                            onToggleCompleted = onToggleCompleted?.let { toggle -> { toggle(event) } },
                         )
                     }
                 }
@@ -182,51 +195,86 @@ internal fun AgendaTimeline(
 private fun AgendaRow(
     event: AgendaEvent,
     onClick: () -> Unit,
+    onToggleCompleted: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     Row(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
-            modifier = Modifier.width(52.dp),
+            modifier = Modifier.width(48.dp),
             horizontalAlignment = Alignment.End,
         ) {
             if (event.allDay) {
-                Text(text = "全天", style = YohakuType.timeMono, color = colors.neutral8)
+                Text(
+                    text = "全天",
+                    style = YohakuType.timeMono,
+                    color = if (event.completed) colors.neutral5 else colors.neutral8,
+                )
             } else {
                 Text(
                     text = "%02d:%02d".format(event.startLocal().hour, event.startLocal().minute),
                     style = YohakuType.timeMono,
-                    color = colors.neutral8,
+                    color = if (event.completed) colors.neutral5 else colors.neutral8,
                 )
                 Text(
                     text = "%02d:%02d".format(event.endLocal().hour, event.endLocal().minute),
                     style = YohakuType.gridDate,
-                    color = colors.neutral6,
+                    color = colors.neutral5,
                 )
             }
         }
+
         Spacer(modifier = Modifier.width(8.dp))
+
+        // 打卡复选圆圈: HIG 交互触感打卡
         Box(
             modifier = Modifier
-                .size(6.dp)
+                .size(20.dp)
                 .clip(CircleShape)
-                .background(categoryMark(event.category)),
-        )
+                .background(if (event.completed) colors.accent else colors.paper)
+                .border(
+                    BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
+                    CircleShape,
+                )
+                .clickable {
+                    haptics.select()
+                    onToggleCompleted?.invoke()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (event.completed) {
+                Text(
+                    text = "✓",
+                    style = YohakuType.label12,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.width(8.dp))
+
         YohakuCard(
             modifier = Modifier.weight(1f),
-            containerColor = categoryTint(event.category),
+            containerColor = if (event.completed) colors.neutral2 else categoryTint(event.category),
         ) {
             Text(
                 text = event.title,
-                style = YohakuType.copy16,
-                color = colors.neutral10,
+                style = YohakuType.copy16.copy(
+                    textDecoration = if (event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                ),
+                color = if (event.completed) colors.neutral6 else colors.neutral10,
             )
             val meta = buildList {
                 add(event.category.label)
+                if (event.completed) add("已完成")
                 if (event.location.isNotEmpty()) add("@${event.location}")
                 if (event.priority != AgendaPriority.NONE) {
                     add("优先级 ${event.priority.label}")
@@ -235,13 +283,15 @@ private fun AgendaRow(
             Text(
                 text = meta,
                 style = YohakuType.label12,
-                color = colors.neutral7,
+                color = colors.neutral6,
             )
             if (event.note.isNotEmpty()) {
                 Text(
                     text = event.note,
-                    style = YohakuType.copy13,
-                    color = colors.neutral7,
+                    style = YohakuType.copy13.copy(
+                        textDecoration = if (event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                    ),
+                    color = colors.neutral6,
                     maxLines = 2,
                 )
             }
@@ -254,7 +304,6 @@ private fun AgendaRow(
 internal fun AgendaAddButton(onClick: () -> Unit) {
     val colors = LocalYohakuColors.current
     val shape = CircleShape
-    // 视觉仍是 36dp 的圆,可点范围补到 44dp(圆形按钮贴在拇指最容易够到的位置,不该只有 36)
     Box(
         modifier = Modifier
             .yohakuTouchTarget()

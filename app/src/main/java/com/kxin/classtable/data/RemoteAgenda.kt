@@ -20,6 +20,8 @@ data class RemoteAgenda(
     val remindEnabled: Boolean = false,
     val remindLeadMinutes: Int = 10,
     val updatedAt: Long = 0L,
+    val courseId: String? = null,
+    val completed: Boolean = false,
 ) {
     fun toDomain(): AgendaEvent = AgendaEvent(
         id = id,
@@ -34,6 +36,8 @@ data class RemoteAgenda(
         remindEnabled = remindEnabled,
         remindLeadMinutes = remindLeadMinutes,
         updatedAt = updatedAt,
+        courseId = courseId,
+        completed = completed,
     )
 
     companion object {
@@ -50,6 +54,8 @@ data class RemoteAgenda(
             remindEnabled = e.remindEnabled,
             remindLeadMinutes = e.remindLeadMinutes,
             updatedAt = e.updatedAt,
+            courseId = e.courseId,
+            completed = e.completed,
         )
 
         // ---- Firestore REST 字段编解码(org.json,零依赖) ----
@@ -61,6 +67,7 @@ data class RemoteAgenda(
             // 整数要区分「字段不存在」与「值为 0」:提前量 0 = 准点,不能和缺省混为一谈
             fun i(n: String, default: Int) =
                 fields.optJSONObject(n)?.optString("integerValue")?.toIntOrNull() ?: default
+            val rawCourseId = s("courseId")
             return RemoteAgenda(
                 id = s("id"),
                 title = s("title"),
@@ -75,6 +82,8 @@ data class RemoteAgenda(
                 remindEnabled = b("remindEnabled"),
                 remindLeadMinutes = i("remindLeadMinutes", 10),
                 updatedAt = l("updatedAt"),
+                courseId = rawCourseId.ifBlank { null },
+                completed = b("completed"),
             )
         }
 
@@ -94,6 +103,8 @@ data class RemoteAgenda(
             bool("remindEnabled", e.remindEnabled)
             long("remindLeadMinutes", e.remindLeadMinutes.toLong())
             long("updatedAt", e.updatedAt)
+            e.courseId?.let { str("courseId", it) }
+            bool("completed", e.completed)
         }
     }
 }

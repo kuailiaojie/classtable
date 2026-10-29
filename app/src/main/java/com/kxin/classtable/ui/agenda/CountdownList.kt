@@ -2,7 +2,9 @@ package com.kxin.classtable.ui.agenda
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,8 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
@@ -40,6 +45,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
@@ -50,7 +56,7 @@ import kotlin.math.abs
 
 /**
  * 倒计时列表:与议程同一批数据,换个看法 ——
- * 按「还剩几天」排序,进行中的在前,已结束的折叠在后面。
+ * 按「还剩几天」排序,进行中的在前,已结束或已完成的折叠在后面。
  */
 @Composable
 internal fun CountdownList(
@@ -60,10 +66,11 @@ internal fun CountdownList(
     onEventClick: (AgendaEvent) -> Unit,
     entrance: EntranceTracker,
     modifier: Modifier = Modifier,
+    onToggleCompleted: ((AgendaEvent) -> Unit)? = null,
 ) {
     val today = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
-    val upcoming = events.filter { it.endAt >= now }.sortedBy { it.startAt }
-    val finished = events.filter { it.endAt < now }.sortedByDescending { it.endAt }
+    val upcoming = events.filter { it.endAt >= now && !it.completed }.sortedBy { it.startAt }
+    val finished = events.filter { it.endAt < now || it.completed }.sortedByDescending { it.endAt }
     var showFinished by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
@@ -76,10 +83,10 @@ internal fun CountdownList(
         ),
         verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapCard),
     ) {
-        if (upcoming.isEmpty()) {
+        if (upcoming.isEmpty() && finished.isEmpty()) {
             item(key = "empty") { EmptyCountdownCard(onAdd = onAdd) }
         } else {
-            // 汇总行右侧常驻「＋」:此前只有空态才有添加入口,已经有一条倒计时后就再也加不了
+            // 汇总行右侧常驻「＋」
             item(key = "summary") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -97,6 +104,7 @@ internal fun CountdownList(
                     index = index,
                     entrance = entrance,
                     onClick = { onEventClick(event) },
+                    onToggleCompleted = onToggleCompleted?.let { toggle -> { toggle(event) } },
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -119,6 +127,7 @@ internal fun CountdownList(
                         index = index,
                         entrance = entrance,
                         onClick = { onEventClick(event) },
+                        onToggleCompleted = onToggleCompleted?.let { toggle -> { toggle(event) } },
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -127,12 +136,6 @@ internal fun CountdownList(
     }
 }
 
-/**
- * 一条倒计时:入场错峰(与议程一致)+ 列表增删位移动画。
- *
- * 展开「已结束」时,新插入的条目此前是硬冒出来的 —— `.animateItem()`(由调用方从
- * LazyItemScope 传入)让它们按插入动画进场,与折叠箭头的转动对上。
- */
 @Composable
 private fun CountdownItem(
     event: AgendaEvent,
@@ -141,6 +144,7 @@ private fun CountdownItem(
     index: Int,
     entrance: EntranceTracker,
     onClick: () -> Unit,
+    onToggleCompleted: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val animate = entrance.shouldAnimate(event.id)
@@ -163,6 +167,7 @@ private fun CountdownItem(
         today = today,
         finished = finished,
         onClick = onClick,
+        onToggleCompleted = onToggleCompleted,
         modifier = modifier.graphicsLayer {
             alpha = appear.value
             translationY = (1f - appear.value) * 20f
@@ -176,9 +181,11 @@ private fun CountdownCard(
     today: LocalDate,
     finished: Boolean,
     onClick: () -> Unit,
+    onToggleCompleted: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val startDay = event.startLocal().toLocalDate()
     val endDay = event.endLocal().toLocalDate()
     val daysToStart = daysUntil(startDay, today)
@@ -186,15 +193,20 @@ private fun CountdownCard(
     val ongoing = !finished && daysToStart <= 0
 
     val rightText = when {
+        event.completed -> "已完成"
         finished -> "逾期 ${abs(daysOverdue)} 天"
         daysToStart > 0 -> "还有 $daysToStart 天"
         else -> "进行中"
     }
-    val rightColor = if (finished) colors.error else colors.accent
+    val rightColor = when {
+        event.completed -> colors.neutral6
+        finished -> colors.error
+        else -> colors.accent
+    }
 
     YohakuCard(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        containerColor = if (finished) null else categoryTint(event.category),
+        containerColor = if (finished || event.completed) colors.neutral2 else categoryTint(event.category),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CountdownBadge(
@@ -207,8 +219,10 @@ private fun CountdownCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.title,
-                    style = YohakuType.copy16,
-                    color = if (finished) colors.neutral7 else colors.neutral10,
+                    style = YohakuType.copy16.copy(
+                        textDecoration = if (event.completed) TextDecoration.LineThrough else TextDecoration.None,
+                    ),
+                    color = if (finished || event.completed) colors.neutral6 else colors.neutral10,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -221,6 +235,36 @@ private fun CountdownCard(
                     color = colors.neutral7,
                 )
             }
+
+            // 完成打卡复选钮
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(if (event.completed) colors.accent else colors.paper)
+                    .border(
+                        BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
+                        CircleShape,
+                    )
+                    .clickable {
+                        haptics.select()
+                        onToggleCompleted?.invoke()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (event.completed) {
+                    Text(
+                        text = "✓",
+                        style = YohakuType.label12,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
             Text(
                 text = rightText,
                 style = YohakuType.label12,
@@ -246,9 +290,16 @@ private fun CountdownBadge(
             .background(colors.neutral2),
         contentAlignment = Alignment.Center,
     ) {
-        if (finished) {
+        if (event.completed) {
             Text(
-                text = "✓\n已结束",
+                text = "✓\n完成",
+                style = YohakuType.gridDate,
+                color = colors.accent,
+                textAlign = TextAlign.Center,
+            )
+        } else if (finished) {
+            Text(
+                text = "已过\n期",
                 style = YohakuType.gridDate,
                 color = colors.neutral6,
                 textAlign = TextAlign.Center,
@@ -268,14 +319,12 @@ private fun CountdownBadge(
                 Text(
                     text = top,
                     style = if (ongoing) YohakuType.label12 else YohakuType.title20,
-                    color = colors.accent,
-                    textAlign = TextAlign.Center,
+                    color = if (ongoing || daysToStart <= 3) colors.accent else colors.neutral10,
                 )
                 Text(
                     text = bottom,
-                    style = YohakuType.gridDate,
+                    style = YohakuType.label12,
                     color = colors.neutral6,
-                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -283,84 +332,84 @@ private fun CountdownBadge(
 }
 
 @Composable
-private fun CountdownSummary(events: List<AgendaEvent>, today: LocalDate) {
+private fun CountdownSummary(upcoming: List<AgendaEvent>, today: LocalDate) {
     val colors = LocalYohakuColors.current
-    val ongoingCount = events.count { it.startLocal().toLocalDate() <= today }
-    val nearest = events.map { daysUntil(it.startLocal().toLocalDate(), today) }
-        .filter { it > 0 }
-        .minOrNull()
-    val detail = when {
-        ongoingCount > 0 -> "$ongoingCount 个进行中"
-        nearest != null -> "最近还剩 $nearest 天"
-        else -> "今天到期"
+    val urgent = upcoming.firstOrNull()
+    if (urgent == null) return
+    val startDay = urgent.startLocal().toLocalDate()
+    val days = daysUntil(startDay, today)
+    val text = when {
+        days == 0L -> "最近目标:今天「${urgent.title}」"
+        days == 1L -> "最近目标:明天「${urgent.title}」"
+        days > 1L -> "最近目标:还有 $days 天「${urgent.title}」"
+        else -> "最近目标:进行中「${urgent.title}」"
     }
     Text(
-        text = "${events.size} 个倒计时 · $detail",
-        style = YohakuType.label12,
-        color = colors.neutral7,
-        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+        text = text,
+        style = YohakuType.copy13,
+        color = colors.neutral8,
     )
+}
+
+@Composable
+private fun FinishedHeader(
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
+        label = "finishedFoldArrow",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                haptics.tick()
+                onToggle()
+            }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "已结束 / 已完成 · $count",
+            style = YohakuType.label12,
+            color = colors.neutral6,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "▾",
+            style = YohakuType.label12,
+            color = colors.neutral6,
+            modifier = Modifier.graphicsLayer { rotationZ = rotation },
+        )
+    }
 }
 
 @Composable
 private fun EmptyCountdownCard(onAdd: () -> Unit) {
     val colors = LocalYohakuColors.current
-    YohakuCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "没有进行中的倒计时",
-                    style = YohakuType.copy16,
-                    color = colors.neutral10,
-                )
-                Text(
-                    text = "新的考试、作业会排在这里",
-                    style = YohakuType.label12,
-                    color = colors.neutral7,
-                )
-            }
+    YohakuCard(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onAdd),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
-                text = "添加",
-                style = YohakuType.copy13,
-                color = colors.accent,
-                modifier = Modifier
-                    .yohakuTouchTarget()
-                    .clickable(onClick = onAdd)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                text = "还没有倒计时",
+                style = YohakuType.copy16,
+                color = colors.neutral8,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "点右上角「＋」新建考试或作业",
+                style = YohakuType.label12,
+                color = colors.neutral6,
             )
         }
-    }
-}
-
-@Composable
-private fun FinishedHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
-    val colors = LocalYohakuColors.current
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
-        label = "chevron",
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .yohakuTouchTarget()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "已结束 $count",
-            style = YohakuType.label12,
-            color = colors.neutral7,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "⌄",
-            style = YohakuType.copy15,
-            color = colors.neutral6,
-            modifier = Modifier
-                .padding(end = 4.dp)
-                .graphicsLayer { rotationZ = rotation },
-        )
     }
 }

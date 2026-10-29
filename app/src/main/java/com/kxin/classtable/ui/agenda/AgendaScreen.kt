@@ -92,8 +92,7 @@ fun AgendaScreen(
         agendaEvents.filter { it.spans(selected) }.sortedBy { it.startAt }
     }
 
-    // 页签的位移只有一个来源:可拖动的 pager。点分段 = 把 pager 滚过去,拖动 = 指示块跟着走,
-    // 于是「动作」与「视图」永远同源,不再各动各的(过程可控)。
+    // 页签的位移只有一个来源:可拖动的 pager。点分段 = 把 pager 滚过去,拖动 = 指示块跟着走
     val entrance = rememberEntranceTracker()
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 2 })
@@ -113,83 +112,85 @@ fun AgendaScreen(
                 .fillMaxWidth(),
         ) {
             YohakuTopBar(
-            title = kind.label,
-            actions = {
-                YohakuSegmentedControl(
-                    options = listOf(AgendaKind.SCHEDULE.label, AgendaKind.COUNTDOWN.label),
-                    selectedIndex = if (showCountdown) 1 else 0,
-                    onSelect = { index ->
-                        scope.launch { pagerState.animateScrollToPage(index) }
-                    },
-                    // 指示块由拖动进度驱动:手指到哪,它到哪
-                    progress = pagerState.currentPage + pagerState.currentPageOffsetFraction,
-                    modifier = Modifier.width(148.dp),
-                )
-            },
-        )
-        // 一行说明:把「这个页签收什么」写在明面上,两个页签的差别不再靠猜
-        Text(
-            text = when (kind) {
-                AgendaKind.SCHEDULE -> "有时间要做的事 · 待办 / 活动 / 其他"
-                AgendaKind.COUNTDOWN -> "等着倒数的目标 · 考试 / 作业"
-            },
-            style = YohakuType.label12,
-            color = colors.neutral7,
-            modifier = Modifier.padding(
-                start = YohakuDimens.screenPadding,
-                end = YohakuDimens.screenPadding,
-                top = 2.dp,
-                bottom = 6.dp,
-            ),
-        )
+                title = kind.label,
+                actions = {
+                    YohakuSegmentedControl(
+                        options = listOf(AgendaKind.SCHEDULE.label, AgendaKind.COUNTDOWN.label),
+                        selectedIndex = if (showCountdown) 1 else 0,
+                        onSelect = { index ->
+                            scope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                        // 指示块由拖动进度驱动:手指到哪,它到哪
+                        progress = pagerState.currentPage + pagerState.currentPageOffsetFraction,
+                        modifier = Modifier.width(148.dp),
+                    )
+                },
+            )
+            // 一行说明:把「这个页签收什么」写在明面上,两个页签的差别不再靠猜
+            Text(
+                text = when (kind) {
+                    AgendaKind.SCHEDULE -> "有时间要做的事 · 待办 / 活动 / 其他"
+                    AgendaKind.COUNTDOWN -> "等着倒数的目标 · 考试 / 作业"
+                },
+                style = YohakuType.label12,
+                color = colors.neutral7,
+                modifier = Modifier.padding(
+                    start = YohakuDimens.screenPadding,
+                    end = YohakuDimens.screenPadding,
+                    top = 2.dp,
+                    bottom = 6.dp,
+                ),
+            )
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f),
-        ) { page ->
-            if (page == 0) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    CalendarStrip(
-                        monday = monday,
-                        selected = selected,
-                        today = today,
-                        onSelect = { selectedEpoch = it.toEpochDay() },
-                        onWeekChange = { newMonday ->
-                            mondayEpoch = newMonday.toEpochDay()
-                            // 换周后选中日平移到同一星期几,时间线跟着周条走
-                            selectedEpoch = newMonday
-                                .plusDays((selected.dayOfWeek.value - 1).toLong())
-                                .toEpochDay()
-                        },
-                        onToday = {
-                            mondayEpoch = Schedule.mondayEpochDay(today.toEpochDay())
-                            selectedEpoch = today.toEpochDay()
-                        },
-                    )
-                    Spacer(
-                        modifier = Modifier.height(YohakuDimens.gapTight),
-                    )
-                    AgendaTimeline(
-                        date = selected,
-                        today = today,
-                        events = dayEvents,
-                        onAdd = { openForm(null) },
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+            ) { page ->
+                if (page == 0) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        CalendarStrip(
+                            monday = monday,
+                            selected = selected,
+                            today = today,
+                            onSelect = { selectedEpoch = it.toEpochDay() },
+                            onWeekChange = { newMonday ->
+                                mondayEpoch = newMonday.toEpochDay()
+                                // 换周后选中日平移到同一星期几,时间线跟着周条走
+                                selectedEpoch = newMonday
+                                    .plusDays((selected.dayOfWeek.value - 1).toLong())
+                                    .toEpochDay()
+                            },
+                            onToday = {
+                                mondayEpoch = Schedule.mondayEpochDay(today.toEpochDay())
+                                selectedEpoch = today.toEpochDay()
+                            },
+                        )
+                        Spacer(
+                            modifier = Modifier.height(YohakuDimens.gapTight),
+                        )
+                        AgendaTimeline(
+                            date = selected,
+                            today = today,
+                            events = dayEvents,
+                            onAdd = { openForm(null) },
+                            onEventClick = { openForm(it) },
+                            onToggleCompleted = { viewModel.toggleCompleted(it.id, !it.completed) },
+                            entrance = entrance,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                } else {
+                    CountdownList(
+                        events = countdownEvents,
+                        now = nowMillis,
+                        onAdd = { openForm(null, AgendaCategory.EXAM) },
                         onEventClick = { openForm(it) },
+                        onToggleCompleted = { viewModel.toggleCompleted(it.id, !it.completed) },
                         entrance = entrance,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
-            } else {
-                CountdownList(
-                    events = countdownEvents,
-                    now = nowMillis,
-                    onAdd = { openForm(null, AgendaCategory.EXAM) },
-                    onEventClick = { openForm(it) },
-                    entrance = entrance,
-                    modifier = Modifier.fillMaxSize(),
-                )
             }
         }
     }
-}
 }

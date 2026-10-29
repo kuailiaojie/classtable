@@ -108,6 +108,28 @@ object CoursePalette {
 
     /** 由当前主题的纸面色判断深浅(纸面够亮 = 浅色主题)。 */
     fun isDarkTheme(paper: Color): Boolean = paper.luminance() < 0.5f
+
+    /** 解析课程实际底色淡彩(非 Composable 环境如长图导出、小组件、通知等均可直接调用)。 */
+    fun resolveTint(
+        course: Course,
+        scheme: CourseColorScheme = CourseColorScheme.STANDARD,
+        dark: Boolean = false,
+    ): Color {
+        return course.colorHex.toColorOrNull()?.let { base ->
+            if (dark) base.copy(alpha = 0.28f) else base.copy(alpha = 0.12f)
+        } ?: tint(hueOf(course, scheme), dark, scheme)
+    }
+
+    /** 解析课程实际色标/强调色(非 Composable 环境可直接调用)。 */
+    fun resolveMark(
+        course: Course,
+        scheme: CourseColorScheme = CourseColorScheme.STANDARD,
+        dark: Boolean = false,
+    ): Color {
+        return course.colorHex.toColorOrNull()?.let { base ->
+            if (dark) base.copy(alpha = 0.9f) else base.copy(alpha = 0.72f)
+        } ?: mark(hueOf(course, scheme), dark, scheme)
+    }
 }
 
 /** 当前生效的课程配色方案:由 [YohakuTheme] 提供,改设置后所有课程色一起更新。 */
@@ -119,11 +141,8 @@ fun courseTint(course: Course): Color {
     val colors = LocalYohakuColors.current
     val scheme = LocalCourseColorScheme.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
-    val hue = CoursePalette.hueOf(course, scheme)
-    return remember(hue, dark, course.colorHex, scheme) {
-        course.colorHex.toColorOrNull()?.let { base ->
-            if (dark) base.copy(alpha = 0.28f) else base.copy(alpha = 0.12f)
-        } ?: CoursePalette.tint(hue, dark, scheme)
+    return remember(course.colorHex, course.colorHue, course.name, dark, scheme) {
+        CoursePalette.resolveTint(course, scheme, dark)
     }
 }
 
@@ -133,13 +152,10 @@ fun courseMark(course: Course): Color {
     val colors = LocalYohakuColors.current
     val scheme = LocalCourseColorScheme.current
     val dark = CoursePalette.isDarkTheme(colors.paper)
-    val hue = CoursePalette.hueOf(course, scheme)
-    return remember(hue, dark, course.colorHex, scheme) {
-        course.colorHex.toColorOrNull()?.let { base ->
-            if (dark) base.copy(alpha = 0.9f) else base.copy(alpha = 0.72f)
-        } ?: CoursePalette.mark(hue, dark, scheme)
+    return remember(course.colorHex, course.colorHue, course.name, dark, scheme) {
+        CoursePalette.resolveMark(course, scheme, dark)
     }
 }
 
-private fun String.toColorOrNull(): Color? =
+fun String.toColorOrNull(): Color? =
     runCatching { Color(android.graphics.Color.parseColor(this)) }.getOrNull()
