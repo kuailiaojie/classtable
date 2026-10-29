@@ -90,6 +90,8 @@ class BackupManager @Inject constructor(
             o.put("remindEnabled", a.remindEnabled)
             o.put("remindLeadMinutes", a.remindLeadMinutes)
             o.put("updatedAt", a.updatedAt)
+            o.put("courseId", a.courseId ?: JSONObject.NULL)
+            o.put("completed", a.completed)
             agendaArray.put(o)
         }
         root.put("agenda", agendaArray)
@@ -161,6 +163,8 @@ class BackupManager @Inject constructor(
                     val o = agendaArray.getJSONObject(i)
                     val cat = enumOrDefault(o.optString("category"), AgendaCategory.TODO)
                     val prio = enumOrDefault(o.optString("priority"), AgendaPriority.NONE)
+                    val courseIdVal = if (o.isNull("courseId")) null else o.optString("courseId").takeIf { it.isNotBlank() }
+                    val completedVal = o.optBoolean("completed", false)
                     val a = AgendaEvent(
                         id = o.optString("id"),
                         title = o.optString("title"),
@@ -171,9 +175,11 @@ class BackupManager @Inject constructor(
                         location = o.optString("location", ""),
                         note = o.optString("note", ""),
                         priority = prio,
-                        remindEnabled = o.optBoolean("remindEnabled", true),
+                        remindEnabled = o.optBoolean("remindEnabled", false),
                         remindLeadMinutes = o.optInt("remindLeadMinutes", 10),
                         updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+                        courseId = courseIdVal,
+                        completed = completedVal,
                     )
                     agendaList.add(a)
                 }

@@ -173,11 +173,15 @@ internal fun DayList(
             }
         }
 
-        // 3. 定时日程项
+        // 3. 定时日程项: 跨天日程按当日视界截断起止分钟，避免跨天倒置
         timedAgendas.forEach { a ->
-            val s = a.startLocal().hour * 60 + a.startLocal().minute
-            val e = a.endLocal().hour * 60 + a.endLocal().minute
-            list.add(DayTimelineItem.AgendaItem(a, s, e))
+            val startLocal = a.startLocal()
+            val endLocal = a.endLocal()
+            val s = if (startLocal.toLocalDate() < date) 0 else (startLocal.hour * 60 + startLocal.minute)
+            val e = if (endLocal.toLocalDate() > date) 1440 else (endLocal.hour * 60 + endLocal.minute)
+            if (e > s) {
+                list.add(DayTimelineItem.AgendaItem(a, s, e))
+            }
         }
 
         list.sortedBy { it.sortMinute }
@@ -323,7 +327,7 @@ internal fun DayList(
                             ) {
                                 when (item) {
                                     is DayTimelineItem.CourseItem -> {
-                                        val isCurrent = Schedule.isCourseOngoing(item.course, periods)
+                                        val isCurrent = isToday && Schedule.isCourseOngoing(item.course, periods)
                                         YohakuCard(
                                             accentBar = isCurrent,
                                             containerColor = courseTint(item.course),

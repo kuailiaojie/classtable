@@ -8,7 +8,10 @@ import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaPriority
 
 /** 用户自建日程 / 倒计时条目。 */
-@Entity(tableName = "agenda_events")
+@Entity(
+    tableName = "agenda_events",
+    indices = [androidx.room.Index(value = ["courseId"])],
+)
 data class AgendaEntity(
     @PrimaryKey val id: String,
     val title: String,

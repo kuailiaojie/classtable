@@ -270,7 +270,7 @@ fun ClasstableRoot(
                 composable("courses") { CoursesScreen(nav) }
                 composable("agenda") { AgendaScreen(nav) }
                 composable(
-                    route = "agenda_form?eventId={eventId}&date={date}&category={category}",
+                    route = "agenda_form?eventId={eventId}&date={date}&category={category}&courseId={courseId}",
                     arguments = listOf(
                         navArgument("eventId") {
                             type = NavType.StringType
@@ -283,6 +283,11 @@ fun ClasstableRoot(
                             defaultValue = 0L
                         },
                         // 新建时的默认分类(如从倒计时页签进来默认「考试」);缺省用「待办」
+                        navArgument("courseId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
                         navArgument("category") {
                             type = NavType.StringType
                             nullable = true
@@ -296,6 +301,7 @@ fun ClasstableRoot(
                         defaultDateEpoch = entry.arguments?.getLong("date") ?: 0L,
                         defaultCategory = entry.arguments?.getString("category")
                             ?.let { runCatching { AgendaCategory.valueOf(it) }.getOrNull() },
+                        defaultCourseId = entry.arguments?.getString("courseId"),
                     )
                 }
                 composable(

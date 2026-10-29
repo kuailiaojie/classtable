@@ -118,7 +118,7 @@ object WidgetData {
         fun upcomingAgenda(limit: Int): List<AgendaEvent> {
             val now = System.currentTimeMillis()
             return allAgenda
-                .filter { it.endAt >= now }
+                .filter { it.endAt >= now && !it.completed }
                 .sortedBy { it.startAt }
                 .take(limit)
         }

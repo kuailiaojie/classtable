@@ -76,10 +76,12 @@ fun AgendaFormScreen(
     eventId: String?,
     defaultDateEpoch: Long,
     defaultCategory: AgendaCategory? = null,
+    defaultCourseId: String? = null,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
     val events by viewModel.events.collectAsStateWithLifecycle()
+    val courses by viewModel.courses.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val editing = remember(eventId, events) {
@@ -139,6 +141,8 @@ fun AgendaFormScreen(
                 kind = kind,
                 defaultDate = defaultDate,
                 defaultCategory = defaultCategory,
+                courses = courses,
+                defaultCourseId = defaultCourseId,
                 onSave = { viewModel.save(it) },
                 onDelete = { viewModel.delete(it) },
             )
@@ -154,6 +158,8 @@ private fun AgendaFormBody(
     kind: AgendaKind,
     defaultDate: LocalDate,
     defaultCategory: AgendaCategory?,
+    courses: List<Course> = emptyList(),
+    defaultCourseId: String? = null,
     onSave: (AgendaEvent) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -168,6 +174,8 @@ private fun AgendaFormBody(
         mutableStateOf(initial?.category ?: defaultCategory ?: AgendaCategory.TODO)
     }
     var priority by remember(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
+    var courseId by remember(key) { mutableStateOf(initial?.courseId ?: defaultCourseId) }
+    var completed by remember(key) { mutableStateOf(initial?.completed ?: false) }
     var allDay by remember(key) { mutableStateOf(initial?.allDay ?: false) }
     var location by remember(key) { mutableStateOf(initial?.location ?: "") }
     var note by remember(key) { mutableStateOf(initial?.note ?: "") }
@@ -243,6 +251,32 @@ private fun AgendaFormBody(
                 color = colors.neutral6,
             )
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+
+            val distinctCourses = remember(courses) { courses.distinctBy { it.name } }
+            if (distinctCourses.isNotEmpty()) {
+                FieldLabel("关联课程(选填)")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    YohakuChip(
+                        text = "不关联",
+                        selected = courseId == null,
+                        onClick = { courseId = null },
+                    )
+                    distinctCourses.forEach { c ->
+                        val isSelected = courseId == c.id || (courseId != null && courses.find { it.id == courseId }?.name == c.name)
+                        YohakuChip(
+                            text = c.name,
+                            selected = isSelected,
+                            onClick = {
+                                courseId = if (isSelected) null else c.id
+                            },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -419,6 +453,8 @@ private fun AgendaFormBody(
                                 remindEnabled = remindEnabled,
                                 remindLeadMinutes = remindLeadMinutes,
                                 updatedAt = initial?.updatedAt ?: 0L,
+                                courseId = courseId,
+                                completed = completed,
                             ),
                         )
                     }

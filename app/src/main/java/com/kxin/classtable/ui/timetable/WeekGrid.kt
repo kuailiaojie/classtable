@@ -9,7 +9,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -109,24 +111,30 @@ internal fun WeekdayHeader(
                         style = YohakuType.gridMeta,
                         color = colors.accent,
                     )
-                } else if (hasAgenda) {
-                    // Apple HIG 风格日历小圆点标记: 该日有待办/倒计时
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .height(4.dp)
-                            .width(4.dp)
-                            .clip(CircleShape)
-                            .background(colors.accent),
-                    )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 1.dp)
-                            .width(12.dp)
-                            .height(2.dp)
-                            .background(if (isToday) colors.accent else Color.Transparent),
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 1.dp),
+                    ) {
+                        if (hasAgenda) {
+                            Box(
+                                modifier = Modifier
+                                    .size(4.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.accent),
+                            )
+                        }
+                        if (isToday) {
+                            if (hasAgenda) Spacer(modifier = Modifier.width(3.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(if (hasAgenda) 8.dp else 12.dp)
+                                    .height(2.dp)
+                                    .background(colors.accent),
+                            )
+                        }
+                    }
                 }
             }
         }

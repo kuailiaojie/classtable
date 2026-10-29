@@ -589,10 +589,10 @@ fun TimetableScreen(
                             agendaEvents = agendas,
                             onToggleAgenda = { id, comp -> viewModel.toggleAgenda(id, comp) },
                             onAgendaClick = { agenda ->
-                                nav.navigate("agenda_form?eventId=&date=")
+                                nav.navigate("agenda_form?eventId=${agenda.id}&date=${date.toEpochDay()}")
                             },
                             onAddAgenda = {
-                                nav.navigate("agenda_form?date=")
+                                nav.navigate("agenda_form?date=${date.toEpochDay()}")
                             },
                         )
                     }

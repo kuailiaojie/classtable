@@ -341,7 +341,7 @@ class ReminderPlanner @Inject constructor(
             ?: DEFAULT_AGENDA_ALLDAY_MINUTE
         val windowEnd = today.plusDays(HORIZON_DAYS.toLong())
             .atStartOfDay(zone).toInstant().toEpochMilli()
-        agenda.filter { it.remindEnabled }.forEach { event ->
+        agenda.filter { it.remindEnabled && !it.completed }.forEach { event ->
             val trigger = if (event.allDay) {
                 val day = Instant.ofEpochMilli(event.startAt).atZone(zone).toLocalDate()
                 millisAt(day, allDayMinute, zone)
@@ -461,6 +461,7 @@ class ReminderPlanner @Inject constructor(
                 listOf(
                     e.id, e.title, e.location, e.allDay,
                     e.startAt, e.endAt, e.remindEnabled, e.remindLeadMinutes,
+                    e.completed,
                 ).joinToString(":")
             }
         return listOf(
@@ -502,7 +503,7 @@ class ReminderPlanner @Inject constructor(
         private const val KEY_MUTED_KEY = "muted_key"
         private const val KEY_MUTED_UNTIL = "muted_until"
         private const val KEY_LIVE = "live_payload"
-        private const val SIGNATURE_VERSION = "plan-v5"
+        private const val SIGNATURE_VERSION = "plan-v6"
 
         /** 滚动窗口天数(含今天)。 */
         const val HORIZON_DAYS = 8

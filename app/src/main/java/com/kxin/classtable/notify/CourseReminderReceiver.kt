@@ -58,7 +58,7 @@ class CourseReminderReceiver : BroadcastReceiver() {
     private suspend fun handleAgendaReminder(context: Context, intent: Intent, entry: NotifyEntryPoint) {
         val eventId = intent.getStringExtra(ReminderPlanner.EXTRA_AGENDA_ID) ?: return
         val event = entry.database().agendaDao().getById(eventId)?.toDomain() ?: return
-        if (event.isPast()) return
+        if (event.isPast() || event.completed) return
 
         AgendaNotifier.showAgendaReminder(
             context = context,
@@ -134,6 +134,7 @@ class CourseReminderReceiver : BroadcastReceiver() {
                 teacher = teacher,
                 leadMinutes = leadMinutes,
                 announcement = latestAnnouncement(entry, courseId, settings),
+                taskHint = taskHintForCourse(entry, courseId),
             )
         }
         Analytics.log("course_reminder_shown", "course_id" to courseId)
@@ -166,6 +167,21 @@ class CourseReminderReceiver : BroadcastReceiver() {
      * 缓存由后台任务与「立即刷新」维护。雨课堂自己的「上课提醒」在这里被筛掉 —— 我们自己
      * 的提醒已经说了一遍,不必再复述它。
      */
+    private suspend fun taskHintForCourse(entry: NotifyEntryPoint, courseId: String): String? {
+        return runCatching {
+            val tasks = entry.database().agendaDao().getAll()
+                .filter { it.courseId == courseId && !it.completed }
+                .sortedBy { it.startAt }
+            if (tasks.isEmpty()) return null
+            val first = tasks.first()
+            if (tasks.size > 1) {
+                "${first.title} 等 ${tasks.size} 项待办"
+            } else {
+                first.title
+            }
+        }.getOrNull()
+    }
+
     private suspend fun latestAnnouncement(
         entry: NotifyEntryPoint,
         courseId: String,
