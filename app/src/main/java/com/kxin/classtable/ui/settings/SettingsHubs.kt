@@ -260,8 +260,6 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
         }
         DividerLine()
         SettingRow("课表显示", "课程块的样子与配色") { nav.navigate("timetable_display") }
-        DividerLine()
-        SettingRow("导出、备份与日历同步", "离线备份 / .ics 日历 / 手表生态") { nav.navigate("account") }
     }
 }
 
