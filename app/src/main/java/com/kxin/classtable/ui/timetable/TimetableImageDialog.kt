@@ -136,11 +136,11 @@ fun TimetableImageDialog(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 预览区域 (限高 340dp,内部可滚)
+            // 预览区域 (限高 380dp,内部可滚)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .height(380.dp)
                     .clip(RoundedCornerShape(YohakuDimens.radiusControl))
                     .border(1.dp, colors.line, RoundedCornerShape(YohakuDimens.radiusControl))
                     .background(colors.raised),
@@ -148,7 +148,7 @@ fun TimetableImageDialog(
             ) {
                 if (isGenerating || currentBitmap == null) {
                     Text(
-                        text = "正在绘制思源长图…",
+                        text = "正在绘制超清艺术长图…",
                         style = YohakuType.copy14,
                         color = colors.neutral7,
                     )
@@ -170,7 +170,15 @@ fun TimetableImageDialog(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "1800×3900 · 9:19.5 竖屏手机全面屏规格 · 可上下滑动预览",
+                style = YohakuType.label11,
+                color = colors.neutral6,
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // 动作按钮
             Row(
