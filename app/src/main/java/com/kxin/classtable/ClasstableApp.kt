@@ -26,6 +26,7 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SyncRepository
 import com.kxin.classtable.data.UpdateCheckWorker
 import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
+import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.di.ApplicationScope
 import com.kxin.classtable.icon.AppIcon
 import com.kxin.classtable.icon.applyAppIcon
@@ -62,6 +63,9 @@ class ClasstableApp : Application() {
 
     @Inject
     lateinit var fcmTokens: FcmTokens
+
+    @Inject
+    lateinit var yuketangRepository: YuketangRepository
 
     /** 应用级协程作用域,由 Hilt 提供(与各仓库共用同一个,活到进程结束)。 */
     @Inject
@@ -127,17 +131,10 @@ class ClasstableApp : Application() {
 
             // 雨课堂公告:每小时拉一次(仅在联网时跑);开关与登录态在 Worker 里判断,
             // 拉取只为把公告缓存刷新到本机,有新公告时才另发通知。与课程提醒互不相干。
-            workManager.enqueueUniquePeriodicWork(
-                "announcement_check",
-                ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<AnnouncementCheckWorker>(1, java.util.concurrent.TimeUnit.HOURS)
-                    .setConstraints(
-                        Constraints.Builder()
-                            .setRequiredNetworkType(NetworkType.CONNECTED)
-                            .build(),
-                    )
-                    .build(),
-            )
+            AnnouncementCheckWorker.schedulePeriodic(this@ClasstableApp)
+            if (yuketangRepository.isLoggedIn()) {
+                AnnouncementCheckWorker.triggerOneTime(this@ClasstableApp)
+            }
         }
 
         // 登录后自动触发同步(拉远端 → 合并 → 推本地),失败自动重试;并同步 FCM 令牌

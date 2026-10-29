@@ -44,6 +44,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.WebUserAgent
+import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.data.yuketang.YuketangSession
 import com.kxin.classtable.design.LocalYohakuColors
@@ -54,11 +55,13 @@ import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.yohakuTouchTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class YuketangLoginViewModel @Inject constructor(
+    @param:ApplicationContext private val context: Context,
     private val repository: YuketangRepository,
 ) : ViewModel() {
     var verifying by mutableStateOf(false)
@@ -93,6 +96,7 @@ class YuketangLoginViewModel @Inject constructor(
                 onSuccess = { ok ->
                     if (ok) {
                         message = null
+                        AnnouncementCheckWorker.triggerOneTime(context)
                         onSuccess()
                     } else {
                         repository.logout()

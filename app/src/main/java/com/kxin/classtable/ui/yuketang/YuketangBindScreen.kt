@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.yuketang
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.local.YuketangBindingEntity
+import com.kxin.classtable.data.yuketang.AnnouncementCheckWorker
 import com.kxin.classtable.data.yuketang.NotLoggedInException
 import com.kxin.classtable.data.yuketang.YuketangCourse
 import com.kxin.classtable.data.yuketang.YuketangMatcher
@@ -41,6 +43,7 @@ import com.kxin.classtable.ui.settings.SettingRow
 import com.kxin.classtable.ui.settings.SettingRowWithSubtitle
 import com.kxin.classtable.ui.settings.SettingsSection
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +55,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class YuketangBindViewModel @Inject constructor(
+    @param:ApplicationContext private val context: Context,
     private val repository: YuketangRepository,
     courseRepository: CourseRepository,
 ) : ViewModel() {
@@ -104,6 +108,9 @@ class YuketangBindViewModel @Inject constructor(
             .onSuccess { count ->
                 if (classroomsState.value.isEmpty()) classroomsState.value = runCatching { repository.classrooms() }.getOrDefault(emptyList())
                 message = if (count == 0) "没有新的可自动匹配的课程,请手动指定" else "已自动匹配 $count 门课"
+                if (count > 0) {
+                    AnnouncementCheckWorker.triggerOneTime(context)
+                }
             }
             .onFailure {
                 message = "自动匹配失败:${it.message ?: "网络错误"}"
@@ -113,6 +120,7 @@ class YuketangBindViewModel @Inject constructor(
 
     fun bind(courseId: String, classroom: YuketangCourse) = viewModelScope.launch {
         repository.bind(courseId, classroom)
+        AnnouncementCheckWorker.triggerOneTime(context)
         message = null
     }
 

@@ -35,8 +35,10 @@ object YuketangNoticeFilter {
     )
 
     fun isClassReminder(title: String, content: String): Boolean {
-        val text = if (content.isBlank()) title else "$title $content"
-        return CLASS_REMINDER_KEYWORDS.any { text.contains(it) }
+        // 优先按标题匹配。绝大多数雨课堂机器自动推送的提醒标题就是「上课提醒」「进入课堂」等；
+        // 避免在正文全文字符串中匹配通用动词（如正文中老师写“进入课堂后请保持安静”导致真公告被误杀）。
+        val textToCheck = if (title.isNotBlank()) title.trim() else content.trim().take(30)
+        return CLASS_REMINDER_KEYWORDS.any { textToCheck.contains(it) }
     }
 
     /**

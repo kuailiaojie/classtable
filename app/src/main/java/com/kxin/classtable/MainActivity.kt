@@ -3,6 +3,7 @@ package com.kxin.classtable
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -111,18 +112,30 @@ import com.kxin.classtable.ui.yuketang.RainClassroomScreen
 import com.kxin.classtable.ui.yuketang.YuketangBindScreen
 import com.kxin.classtable.ui.yuketang.YuketangLoginScreen
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val pendingIntentFlow = MutableSharedFlow<Intent>(replay = 1)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { ClasstableRoot() }
+        intent?.let { pendingIntentFlow.tryEmit(it) }
+        setContent { ClasstableRoot(pendingIntentFlow) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingIntentFlow.tryEmit(intent)
     }
 }
 
 @Composable
 fun ClasstableRoot(
+    pendingIntentFlow: SharedFlow<Intent>? = null,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
@@ -180,37 +193,42 @@ fun ClasstableRoot(
         // 同一主版本内不再重复(见 SettingsRepository.introSeenVersion)。顺序为「先介绍、再要权限」。
         var introDismissed by rememberSaveable { mutableStateOf(false) }
         val needsIntro = !introDismissed && introRequired(settings.introSeenVersion)
-        // 通知点击 → 直达课程详情 / 检查更新页(仅处理进程首次带参启动,避免重组合重复导航)
-        var handledDeepLink by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            val intent = context.findActivity()?.intent
-            val courseId = runCatching { intent?.getStringExtra(CourseNotifier.EXTRA_COURSE_ID) }.getOrNull()
-            val agendaId = runCatching { intent?.getStringExtra(AgendaNotifier.EXTRA_AGENDA_ID) }.getOrNull()
-            val agendaDay = runCatching {
-                intent?.getLongExtra(AgendaNotifier.EXTRA_AGENDA_DAY, 0L) ?: 0L
-            }.getOrDefault(0L)
-            val openUpdate = runCatching {
-                intent?.getBooleanExtra(PushNotifier.EXTRA_OPEN_UPDATE, false) ?: false
-            }.getOrDefault(false)
-            val openRainClassroom = runCatching {
-                intent?.getBooleanExtra(PushNotifier.EXTRA_OPEN_RAIN_CLASSROOM, false) ?: false
-            }.getOrDefault(false)
-            if (!handledDeepLink && !courseId.isNullOrBlank()) {
-                handledDeepLink = true
-                Analytics.log("reminder_tapped", "kind" to "course")
-                nav.navigate("course_detail/$courseId")
-            } else if (!handledDeepLink && !agendaId.isNullOrBlank()) {
-                handledDeepLink = true
-                Analytics.log("reminder_tapped", "kind" to "agenda")
-                nav.navigate("agenda_form?eventId=$agendaId&date=$agendaDay")
-            } else if (!handledDeepLink && openUpdate) {
-                handledDeepLink = true
-                Analytics.log("notification_tapped", "kind" to "update")
-                nav.navigate("update")
-            } else if (!handledDeepLink && openRainClassroom) {
-                handledDeepLink = true
-                Analytics.log("notification_tapped", "kind" to "rain_classroom")
-                nav.navigate("rain_classroom")
+        // 通知点击 → 直达课程详情 / 检查更新 / 雨课堂设置页(支持冷启动与 onNewIntent 热唤醒)
+        LaunchedEffect(pendingIntentFlow) {
+            val flow = pendingIntentFlow ?: run {
+                val initIntent = context.findActivity()?.intent
+                if (initIntent != null) kotlinx.coroutines.flow.flowOf(initIntent) else kotlinx.coroutines.flow.emptyFlow()
+            }
+            flow.collect { intent ->
+                val courseId = runCatching { intent.getStringExtra(CourseNotifier.EXTRA_COURSE_ID) }.getOrNull()
+                val agendaId = runCatching { intent.getStringExtra(AgendaNotifier.EXTRA_AGENDA_ID) }.getOrNull()
+                val agendaDay = runCatching {
+                    intent.getLongExtra(AgendaNotifier.EXTRA_AGENDA_DAY, 0L)
+                }.getOrDefault(0L)
+                val openUpdate = runCatching {
+                    intent.getBooleanExtra(PushNotifier.EXTRA_OPEN_UPDATE, false)
+                }.getOrDefault(false)
+                val openRainClassroom = runCatching {
+                    intent.getBooleanExtra(PushNotifier.EXTRA_OPEN_RAIN_CLASSROOM, false)
+                }.getOrDefault(false)
+
+                if (!courseId.isNullOrBlank()) {
+                    intent.removeExtra(CourseNotifier.EXTRA_COURSE_ID)
+                    Analytics.log("reminder_tapped", "kind" to "course")
+                    nav.navigate("course_detail/$courseId")
+                } else if (!agendaId.isNullOrBlank()) {
+                    intent.removeExtra(AgendaNotifier.EXTRA_AGENDA_ID)
+                    Analytics.log("reminder_tapped", "kind" to "agenda")
+                    nav.navigate("agenda_form?eventId=$agendaId&date=$agendaDay")
+                } else if (openUpdate) {
+                    intent.removeExtra(PushNotifier.EXTRA_OPEN_UPDATE)
+                    Analytics.log("notification_tapped", "kind" to "update")
+                    nav.navigate("update")
+                } else if (openRainClassroom) {
+                    intent.removeExtra(PushNotifier.EXTRA_OPEN_RAIN_CLASSROOM)
+                    Analytics.log("notification_tapped", "kind" to "rain_classroom")
+                    nav.navigate("rain_classroom")
+                }
             }
         }
         // 纸面背景铺满全屏(含状态栏/导航栏区域),内容区再做系统栏内边距

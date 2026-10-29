@@ -61,7 +61,7 @@ object NotifyChannels {
         Channel(
             ANNOUNCEMENT,
             "课程公告",
-            NotificationManager.IMPORTANCE_DEFAULT,
+            NotificationManager.IMPORTANCE_HIGH,
             "雨课堂课程有新公告时的提示",
         ),
         Channel(

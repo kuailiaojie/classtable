@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.kxin.classtable.di.ApplicationScope
 import com.kxin.classtable.domain.Defaults
 import com.kxin.classtable.domain.Schedule
@@ -86,6 +87,7 @@ class SettingsRepository @Inject constructor(
     private val KEY_YKT_NOTIFY_NEW = booleanPreferencesKey("yuketang_notify_new")
     private val KEY_YKT_LAST_FETCH = longPreferencesKey("yuketang_last_fetch_at")
     private val KEY_YKT_ANNOUNCEMENT_PATH = stringPreferencesKey("yuketang_announcement_path")
+    private val KEY_YKT_SYNCED_CLASSROOMS = stringSetPreferencesKey("yuketang_synced_classrooms")
     /** 桌面图标(9 张角色图之一)与轮播:图标是每台设备自己的事,不进云端设置同步。 */
     private val KEY_APP_ICON = intPreferencesKey("app_icon_index")
     private val KEY_ICON_CAROUSEL = booleanPreferencesKey("icon_carousel_enabled")
@@ -362,5 +364,29 @@ class SettingsRepository @Inject constructor(
      */
     suspend fun setYuketangAnnouncementPath(path: String) {
         context.settingsDataStore.edit { it[KEY_YKT_ANNOUNCEMENT_PATH] = path.trim() }
+    }
+
+    /**
+     * 检查课堂是否已建立过公告基线（即至少被成功同步过一次）。
+     * 解决空课堂在首次同步时公告为 0，后续教师发布第一条公告时被误当成历史基线而吞掉通知的 Bug。
+     */
+    suspend fun isClassroomSynced(classroomId: String): Boolean =
+        context.settingsDataStore.data.first()[KEY_YKT_SYNCED_CLASSROOMS]?.contains(classroomId) == true
+
+    /**
+     * 标记课堂已完成基线建立。
+     */
+    suspend fun markClassroomSynced(classroomId: String) {
+        context.settingsDataStore.edit { p ->
+            val set = p[KEY_YKT_SYNCED_CLASSROOMS] ?: emptySet()
+            p[KEY_YKT_SYNCED_CLASSROOMS] = set + classroomId
+        }
+    }
+
+    /**
+     * 清空已同步的课堂基线记录（例如在退出登录雨课堂时调用）。
+     */
+    suspend fun clearSyncedClassrooms() {
+        context.settingsDataStore.edit { p -> p.remove(KEY_YKT_SYNCED_CLASSROOMS) }
     }
 }

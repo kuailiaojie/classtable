@@ -82,20 +82,21 @@ object PushNotifier {
      * 点击进入「设置 → 雨课堂」,那里能看到登录状态与逐课程的公告。
      */
     fun showNewAnnouncement(context: Context, courseName: String, title: String, count: Int) {
-        if (!NotifyChannels.canPost(context, NotifyChannels.ANNOUNCEMENT)) return
         NotifyChannels.ensure(context)
+        if (!NotifyChannels.canPost(context, NotifyChannels.ANNOUNCEMENT)) return
+        val subject = courseName.ifBlank { "雨课堂" }
+        val heading = if (count > 1) "$subject 有 $count 条新公告" else "$subject 有新公告"
+        val safeTitle = HtmlText.toPlain(title).trim().ifBlank { "点击查看详情" }
+        val notifyId = NOTIFY_ID_ANNOUNCEMENT + (courseName.hashCode().let { if (it == Int.MIN_VALUE) 0 else kotlin.math.abs(it) } % 1000)
         val contentIntent = PendingIntent.getActivity(
             context,
-            REQ_ANNOUNCEMENT_INTENT,
+            notifyId,
             Intent(context, MainActivity::class.java).apply {
                 putExtra(EXTRA_OPEN_RAIN_CLASSROOM, true)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val subject = courseName.ifBlank { "雨课堂" }
-        val heading = if (count > 1) "$subject 有 $count 条新公告" else "$subject 有新公告"
-        val safeTitle = HtmlText.toPlain(title)
         val notification = NotificationCompat.Builder(context, NotifyChannels.ANNOUNCEMENT)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(heading)
@@ -103,9 +104,10 @@ object PushNotifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(safeTitle))
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
             .build()
-        postNotification(context, NOTIFY_ID_ANNOUNCEMENT, notification)
+        postNotification(context, notifyId, notification)
     }
 }

@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.yuketang
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,12 +36,14 @@ import com.kxin.classtable.design.YohakuTextField
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.domain.model.AppSettings
+import com.kxin.classtable.notify.PushNotifier
 import com.kxin.classtable.ui.settings.DividerLine
 import com.kxin.classtable.ui.settings.SettingRow
 import com.kxin.classtable.ui.settings.SettingRowWithSubtitle
 import com.kxin.classtable.ui.settings.SettingSwitchRow
 import com.kxin.classtable.ui.settings.SettingsSection
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -53,6 +56,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RainClassroomViewModel @Inject constructor(
+    @param:ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val repository: YuketangRepository,
     courseRepository: CourseRepository,
@@ -128,14 +132,25 @@ class RainClassroomViewModel @Inject constructor(
         refreshing = false
         result.onSuccess { sync ->
             Analytics.log("yuketang_sync", "fetched" to sync.fetched, "new" to sync.newCount)
+            if (sync.newCount > 0 && settings.value.yuketangNotifyNew) {
+                val titleText = sync.latestTitle?.ifBlank { "点击查看最新公告" } ?: "点击查看最新公告"
+                PushNotifier.showNewAnnouncement(
+                    context = context,
+                    courseName = sync.latestCourseName.orEmpty(),
+                    title = titleText,
+                    count = sync.newCount,
+                )
+            }
         }
         message = result.fold(
             onSuccess = { sync ->
                 when {
                     sync.boundCourses == 0 ->
                         "还没有绑定课程:先到「课程对应关系」里加载列表并绑定"
+                    sync.newCount > 0 ->
+                        "已同步 ${sync.fetched} 条公告（含 ${sync.newCount} 条新公告并已推送通知）"
                     sync.fetched > 0 ->
-                        "已同步 ${sync.fetched} 条公告"
+                        "已同步 ${sync.fetched} 条公告（无未读新公告）"
                     sync.failedClassrooms > 0 ->
                         "公告接口没找到或服务端报错(详情见日志 tag YuketangSync);可在「高级」里手填接口路径"
                     else ->

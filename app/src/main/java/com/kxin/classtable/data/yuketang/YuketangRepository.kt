@@ -65,10 +65,11 @@ class YuketangRepository @Inject constructor(
     /** [verifyLogin] 的语义:false = 服务端明确说未登录;网络异常会抛 IOException。 */
     suspend fun verifyLogin(): Boolean = client.verify()
 
-    /** 登出:清掉会话与公告缓存。绑定保留(课程↔班级与账号无关,重新登录不必再配一遍)。 */
+    /** 登出:清掉会话、公告缓存与已同步基线。绑定保留(课程↔班级与账号无关,重新登录不必再配一遍)。 */
     suspend fun logout() {
         sessionStore.write(null)
         announcementDao.clear()
+        settingsRepository.clearSyncedClassrooms()
     }
 
     suspend fun saveSession(session: YuketangSession) {
@@ -172,11 +173,19 @@ class YuketangRepository @Inject constructor(
                 Log.w(TAG, "classroom=$classroomId 拉取失败:${e.message}")
                 continue
             }
-            if (announcements.isEmpty()) continue
+            // 首次拉取这个班级:整批当基线,不报「新」。
+            // 解决此前 empty classroom 的 bug: 若一开始班级无公告, 后续收到第一条会被误当历史基线吞掉。
+            val hadBaseline = settingsRepository.isClassroomSynced(classroomId) ||
+                announcementDao.countByClassroom(classroomId) > 0
 
-            // 首次拉取这个班级:整批当基线,不报「新」。必须在写入前、且每个班级只判一次。
-            val hadCache = announcementDao.countByClassroom(classroomId) > 0
-            if (hadCache) {
+            if (announcements.isEmpty()) {
+                if (!hadBaseline) {
+                    settingsRepository.markClassroomSynced(classroomId)
+                }
+                continue
+            }
+
+            if (hadBaseline) {
                 val fresh = announcements.filter { announcementDao.getById(it.id) == null }
                 fresh.forEach { announcement ->
                     val reminder = YuketangNoticeFilter.isClassReminder(announcement.title, announcement.content)
@@ -191,11 +200,14 @@ class YuketangRepository @Inject constructor(
                 notifyable.maxByOrNull { it.createdAtMillis }?.let { newest ->
                     if (newest.createdAtMillis >= latestAt) {
                         latestAt = newest.createdAtMillis
-                        latestTitle = newest.title
+                        latestTitle = newest.title.ifBlank { newest.content.take(30) }
                         // 通知里报哪门课:同班级绑定多门课时取第一门(它们本来就是同一门课的多条记录)
                         latestCourseName = courseNames[boundCourses.first().courseId]
                     }
                 }
+            } else {
+                // 首次拉取这个班级：整批作为基线写入，标记已建立基线
+                settingsRepository.markClassroomSynced(classroomId)
             }
 
             announcementDao.upsertAll(announcements.map { AnnouncementEntity.fromDomain(it, fetchedAt = now) })
