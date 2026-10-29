@@ -48,6 +48,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuButton
 import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
@@ -177,7 +178,7 @@ fun CoursesScreen(
                         // 悬浮导航压在内容之上(列表中途会从栏下穿过),所以只在**滚动内容末尾**
                         // 预留出栏体的高度,保证最后一门课能卷到栏上方,而不是被永久盖住。
                         // 批量操作条改为悬浮覆盖层后,不再额外往布局里塞一份高度。
-                        bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
+                        bottom = YohakuDimens.gapCard + yohakuNavReservedHeight(),
                     ),
                 ) {
                     (1..7).forEach { day ->
@@ -332,7 +333,7 @@ fun CoursesScreen(
                     .widthIn(max = YohakuDimens.maxContentWidth)
                     .fillMaxWidth()
                     .padding(horizontal = YohakuDimens.screenPadding)
-                    .padding(bottom = YohakuDimens.navReservedHeight),
+                    .padding(bottom = yohakuNavReservedHeight()),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 YohakuOutlineButton(

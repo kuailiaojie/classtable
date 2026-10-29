@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -16,6 +17,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,8 +56,11 @@ import com.kxin.classtable.data.RemoteConfig
 import com.kxin.classtable.data.RomHelper
 import com.kxin.classtable.data.RomType
 import com.kxin.classtable.data.SurveyPrompt
+import com.kxin.classtable.design.yohakuWideScreen
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuBottomNav
+import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.YohakuNavRail
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuTheme
@@ -220,6 +225,8 @@ fun ClasstableRoot(
             // 屏幕追踪:路由名即屏幕名
             LaunchedEffect(currentRoute) { currentRoute?.let { Analytics.screenView(it) } }
             val showBottomNav = currentRoute in ROOT_TABS && !assistantOpen
+            // 宽屏(折叠屏展开 / 平板)导航换成起始侧的竖向 rail;窄屏保持悬浮底栏,像素级不变
+            val railMode = showBottomNav && yohakuWideScreen()
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -229,7 +236,11 @@ fun ClasstableRoot(
                     navController = nav,
                     startDestination = "week",
                     // 转场期间两页会各自平移出屏幕;裁到内容区,别让退场页从系统栏那一侧漏出来
-                    modifier = Modifier.fillMaxSize().clipToBounds(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // rail 贴在起始侧:内容整体右移给它让出位置(而不是被它压住)
+                        .padding(start = if (railMode) YohakuDimens.navRailReservedWidth else 0.dp)
+                        .clipToBounds(),
                     enterTransition = { navEnter(initialState.destination.route, targetState.destination.route) },
                     exitTransition = { navExit(initialState.destination.route, targetState.destination.route) },
                     popEnterTransition = { navPopEnter() },
@@ -316,16 +327,27 @@ fun ClasstableRoot(
                 }
             }
             if (showBottomNav) {
-                YohakuBottomNav(
-                    current = currentRoute.orEmpty(),
-                    onNavigate = { nav.navigateToTab(it) },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        // 四周都要留白才是「悬浮」:左右由栏宽自带(只包标签、居中),
-                        // 这里补上下的浮动余量,投影才有地方落。
-                        .padding(vertical = 8.dp),
-                )
+                if (railMode) {
+                    YohakuNavRail(
+                        current = currentRoute.orEmpty(),
+                        onNavigate = { nav.navigateToTab(it) },
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .systemBarsPadding()
+                            .padding(start = 12.dp),
+                    )
+                } else {
+                    YohakuBottomNav(
+                        current = currentRoute.orEmpty(),
+                        onNavigate = { nav.navigateToTab(it) },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            // 四周都要留白才是「悬浮」:左右由栏宽自带(只包标签、居中),
+                            // 这里补上下的浮动余量,投影才有地方落。
+                            .padding(vertical = 8.dp),
+                    )
+                }
             }
             // AI 助手覆盖层:课表页头「✦ 助手」打开;打开时底部导航已隐藏,面板盖在最上层
             if (assistantOpen) {

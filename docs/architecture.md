@@ -101,7 +101,7 @@ alpha / translation / scale,同类元素统一缓动、列表与课程块按序�
 | 远端 | Firestore:`users/{uid}/courses/{courseId}` + `users/{uid}/deleted/{courseId}` | 课程云同步 |
 | 远端 | Firestore:`users/{uid}/agenda/{id}` + `users/{uid}/deleted_agenda/{id}` | 日程云同步 |
 
-同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删内容在其它设备复活。课程与日程共用 `SyncRepository.mergeById(...)` 这一套合并逻辑,只是各自走不同的集合。
+同步策略:本地优先;登录后 pull → 合并(`updatedAt` 后者胜)→ 应用墓碑 → push;删除以墓碑传播,防止已删内容在其它设备复活。**push 时每条墓碑随附对云端活文档的 delete 写**——本地删掉的课/日程在云端即时消失,不再残留(commit 写按 400 条/批分批顺序提交,Firestore 单次 commit 上限 500 写);墓碑保留 180 天后连同云端墓碑文档一起回收(所有 commit 送达后再清本地行),防止 `deleted` / `deleted_agenda` 集合无限增长。课程与日程共用 `SyncRepository.mergeById(...)` 这一套合并逻辑,只是各自走不同的集合。
 
 房间版本:**v10**(v7 → v8 新增 `agenda_events` / `deleted_agenda`;v8 → v9 课程加 `colorHue`;v9 → v10 日程加 `remindEnabled` / `remindLeadMinutes`。均为手动 `Migration`,只加列 / 加空表,无破坏性回退)。
 

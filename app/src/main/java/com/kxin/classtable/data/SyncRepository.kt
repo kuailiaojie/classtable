@@ -20,7 +20,9 @@ import javax.inject.Singleton
 /**
  * 本地优先 + Firestore 同步(经反代 REST):
  * 未登录 = 纯本地;登录后 pull 远端 → 合并(updatedAt 后者胜)→ 应用删除墓碑 → push 本地。
- * 删除通过「墓碑」传播,避免远端删除在下次 pull 时复活。
+ * 删除通过「墓碑」传播,避免远端删除在下次 pull 时复活;push 时每条墓碑随附对云端活文档的
+ * delete 写(本地删掉的课在云端即时消失,不再残留),墓碑到期(保留窗口 TOMBSTONE_TTL_MS)
+ * 后连同云端墓碑文档一起回收,防止 deleted 集合无限增长。
  *
  * 除课程外,配置(作息/学期/主题/提醒等)以 users/{uid}/settings/config 单文档随同步走 LWW:
  * 本地从未改过(updatedAt=0)且远端存在时整包应用远端,避免新设备默认值覆盖云端;
@@ -67,6 +69,25 @@ class SyncRepository @Inject constructor(
         "${docBase()}/users/$uid/deleted_agenda/${encodeSegment(id)}"
 
     private fun settingsDocName(uid: String) = "${docBase()}/users/$uid/settings/config"
+
+    private companion object {
+        /** Firestore 单次 commit 的写上限是 500;留出安全余量,超出即分批顺序提交。 */
+        const val WRITES_PER_COMMIT = 400
+
+        /** 墓碑保留窗口(180 天):窗口内墓碑用于压制已删内容复活,到期后连同云端文档一起回收。 */
+        const val TOMBSTONE_TTL_MS = 180L * 24 * 60 * 60 * 1000
+    }
+
+    /** commit 的 update 写:整份文档字段替换。 */
+    private fun updateWrite(name: String, fields: JSONObject): JSONObject =
+        JSONObject().put("update", JSONObject().put("name", name).put("fields", fields))
+
+    /** commit 的 delete 写:删除远端文档;文档不存在时是空操作,天然幂等。 */
+    private fun deleteWrite(name: String): JSONObject = JSONObject().put("delete", name)
+
+    /** 墓碑文档的 fields:只有一个 updatedAt,与 pull 端的解析约定一致。 */
+    private fun tombstoneFields(updatedAt: Long): JSONObject =
+        JSONObject().put("updatedAt", JSONObject().put("integerValue", updatedAt.toString()))
 
     /**
      * 同步入口:未登录直接返回;已登录则记录耗时(performance)与成败(analytics / crash),
@@ -115,10 +136,10 @@ class SyncRepository @Inject constructor(
 
         // 2) 合并(updatedAt 后者胜),并应用远端 + 本地墓碑
         val local = courseDao.getAll().map { it.toDomain() }
-        val localTombstones = deletedDao.getAll().associate { it.id to it.updatedAt }
+        val localCourseTombs = deletedDao.getAll().associate { it.id to it.updatedAt }
         val merged = mergeById(local, remoteCourses, { it.id }, { it.updatedAt }).filterNot { c ->
             remoteDeleted.any { t -> t.first == c.id && t.second >= c.updatedAt } ||
-                (localTombstones[c.id]?.let { it >= c.updatedAt } == true)
+                (localCourseTombs[c.id]?.let { it >= c.updatedAt } == true)
         }
 
         // 2') 日程合并(同样 updatedAt 后者胜 + 两端墓碑过滤)
@@ -140,56 +161,100 @@ class SyncRepository @Inject constructor(
         val finalAgendaIds = mergedAgenda.map { it.id }.toSet()
         agendaDao.getAll().forEach { e -> if (e.id !in finalAgendaIds) agendaDao.deleteById(e.id) }
 
-        // 4) 推远端:课程 + 墓碑(幂等,单次 commit)
-        val writes = JSONArray()
+        // 4) 推远端:课程 + 日程 + 墓碑 + 删除写。
+        //
+        // 此前这里只把墓碑 upsert 进 users/{uid}/deleted,却从不对 users/{uid}/courses 里的
+        // 活文档下发删除写 —— 本地删掉的课程在云端永远残留(控制台可见,重新登录也会再拉回来)。
+        // 现在每条墓碑都随附对云端活文档的 delete 写(文档已不存在时为空操作,幂等)。
+        val mergedIds = merged.map { it.id }.toSet()
+        val mergedAgendaIds = mergedAgenda.map { it.id }.toSet()
+
+        // 墓碑并集 = 本地行 ∪ 远端墓碑,updatedAt 取两端较新。远端墓碑可能来自尚未升级的
+        // 旧版设备(旧版只写墓碑、不删活文档),它们留下的残留要靠新版本在这里补删干净。
+        val courseTombs = HashMap<String, Long>(localCourseTombs)
+        remoteDeleted.forEach { (id, ts) -> courseTombs[id] = maxOf(courseTombs[id] ?: 0L, ts) }
+        val agendaTombs = HashMap<String, Long>(localAgendaTombs)
+        remoteDeletedAgenda.forEach { (id, ts) -> agendaTombs[id] = maxOf(agendaTombs[id] ?: 0L, ts) }
+
+        val gcBefore = System.currentTimeMillis() - TOMBSTONE_TTL_MS
+        val purgeCourseTombs = ArrayList<String>()
+        val purgeAgendaTombs = ArrayList<String>()
+
+        // Firestore 单次 commit 最多 500 个写,超限整单被拒,墓碑就永远推不上去 —— 课程/
+        // 日程/墓碑一起计数,大课表或长期未同步后必超。分批顺序提交;每批全幂等,中途失败
+        // 下次同步整体重推即可。
+        //
+        // 同一份数据的墓碑 update/delete 与活文档 delete 必须落在同一批里,否则先提交的
+        // 墓碑被本地回收后,后一批失败会让云端只剩活文档,已删课程就会复活。
+        val chunks = ArrayList<ArrayList<JSONObject>>()
+        var current = ArrayList<JSONObject>()
+        fun flush() {
+            if (current.isNotEmpty()) {
+                chunks += current
+                current = ArrayList()
+            }
+        }
+        /** 追加同一个 id 的一组写;当前批装不下时先提交旧批。 */
+        fun addIdWrites(writes: List<JSONObject>) {
+            if (current.isNotEmpty() && current.size + writes.size > WRITES_PER_COMMIT) flush()
+            current += writes
+        }
+
+        fun pushTombstones(
+            tombs: Map<String, Long>,
+            localTombs: Map<String, Long>,
+            mergedIds: Set<String>,
+            liveName: (String, String) -> String,
+            tombName: (String, String) -> String,
+            purgeList: MutableList<String>,
+        ) {
+            tombs.forEach { (id, ts) ->
+                val live = id in mergedIds // 同 id 已重建有效课程(删后又加回):活文档不删
+                val local = localTombs.containsKey(id)
+                val writes = ArrayList<JSONObject>()
+                if (ts < gcBefore) {
+                    // 到期墓碑:云端墓碑文档连同活文档一并回收;本地行等所有 commit 送达后再清,
+                    // 中途失败保留,下次同步重试
+                    if (!live) writes.add(deleteWrite(liveName(uid, id)))
+                    writes.add(deleteWrite(tombName(uid, id)))
+                    if (local) purgeList.add(id)
+                } else {
+                    // 本地行不比远端旧才覆盖(取两端较新的 ts,不会把远端墓碑往旧写)
+                    if (local && (localTombs[id] ?: 0L) >= ts) {
+                        writes.add(updateWrite(tombName(uid, id), tombstoneFields(ts)))
+                    }
+                    if (!live) writes.add(deleteWrite(liveName(uid, id)))
+                }
+                addIdWrites(writes)
+            }
+        }
+
         merged.forEach { c ->
-            writes.put(
-                JSONObject().put(
-                    "update",
-                    JSONObject()
-                        .put("name", coursesDocName(uid, c.id))
-                        .put("fields", RemoteCourse.toFields(RemoteCourse.fromDomain(c))),
-                ),
+            addIdWrites(
+                listOf(updateWrite(coursesDocName(uid, c.id), RemoteCourse.toFields(RemoteCourse.fromDomain(c)))),
             )
         }
-        deletedDao.getAll().forEach { t ->
-            writes.put(
-                JSONObject().put(
-                    "update",
-                    JSONObject()
-                        .put("name", deletedDocName(uid, t.id))
-                        .put("fields", JSONObject().put("updatedAt", JSONObject().put("integerValue", t.updatedAt.toString()))),
-                ),
-            )
-        }
+        pushTombstones(courseTombs, localCourseTombs, mergedIds, ::coursesDocName, ::deletedDocName, purgeCourseTombs)
         mergedAgenda.forEach { e ->
-            writes.put(
-                JSONObject().put(
-                    "update",
-                    JSONObject()
-                        .put("name", agendaDocName(uid, e.id))
-                        .put("fields", RemoteAgenda.toFields(RemoteAgenda.fromDomain(e))),
-                ),
+            addIdWrites(
+                listOf(updateWrite(agendaDocName(uid, e.id), RemoteAgenda.toFields(RemoteAgenda.fromDomain(e)))),
             )
         }
-        deletedAgendaDao.getAll().forEach { t ->
-            writes.put(
-                JSONObject().put(
-                    "update",
-                    JSONObject()
-                        .put("name", deletedAgendaDocName(uid, t.id))
-                        .put("fields", JSONObject().put("updatedAt", JSONObject().put("integerValue", t.updatedAt.toString()))),
-                ),
-            )
-        }
-        if (writes.length() > 0) {
+        pushTombstones(agendaTombs, localAgendaTombs, mergedAgendaIds, ::agendaDocName, ::deletedAgendaDocName, purgeAgendaTombs)
+        flush()
+
+        chunks.forEach { chunk ->
             gateway.firestore(
                 "${dbBase()}:commit",
                 "POST",
-                JSONObject().put("writes", writes),
+                JSONObject().put("writes", JSONArray(chunk)),
                 token,
             )
         }
+
+        // 云端墓碑与活文档的删除写都已随上面的 commit 送达,到这里才回收本地墓碑行
+        if (purgeCourseTombs.isNotEmpty()) deletedDao.deleteByIds(purgeCourseTombs)
+        if (purgeAgendaTombs.isNotEmpty()) deletedAgendaDao.deleteByIds(purgeAgendaTombs)
 
         Result.success(Unit)
     }
@@ -271,15 +336,7 @@ class SyncRepository @Inject constructor(
         gateway.firestore(
             "${dbBase()}:commit",
             "POST",
-            JSONObject().put(
-                "writes",
-                JSONArray().put(
-                    JSONObject().put(
-                        "update",
-                        JSONObject().put("name", settingsDocName(uid)).put("fields", fields),
-                    ),
-                ),
-            ),
+            JSONObject().put("writes", JSONArray().put(updateWrite(settingsDocName(uid), fields))),
             token,
         )
     }

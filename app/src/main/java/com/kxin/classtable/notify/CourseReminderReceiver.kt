@@ -142,10 +142,18 @@ class CourseReminderReceiver : BroadcastReceiver() {
     /**
      * 下课收尾:收掉正在展示的实时活动。只在「当前展示的确实是这节课」时才动手 ——
      * 两门课时间重叠时,先下课那门的边界闹钟不能把另一门正在上的常驻通知误收掉。
+     *
+     * 此前这里要求 `restoreLive()` 非空才继续:进程被杀后实时活动的 payload 还没恢复,
+     * 下课那一拍就直接返回,通知会一直留在通知栏(国产 ROM 清理进程后最常见)。
+     * 现在只要「没有正在展示的其它课」就收掉——payload 为空说明这节课的实时活动本来就不在,
+     * 通知却可能还在,必须清。
      */
     private fun stopLiveUpdateFor(context: Context, planner: ReminderPlanner, payload: LiveUpdate) {
-        val current = planner.restoreLive() ?: return
-        if (current.muteKey != payload.muteKey) return
+        val current = planner.restoreLive()
+        if (current != null && current.muteKey != payload.muteKey) {
+            // 正在上的是另一门课(课表重叠),不能误收
+            return
+        }
         planner.clearLive()
         LiveUpdateNotifier.cancelLiveUpdate(context)
         context.stopService(Intent(context, CourseLiveUpdateService::class.java))

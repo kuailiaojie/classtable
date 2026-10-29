@@ -30,6 +30,7 @@ import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.courseTint
@@ -157,7 +158,7 @@ internal fun DayList(
                         end = YohakuDimens.screenPadding,
                         top = YohakuDimens.gapCard,
                         // 末尾预留悬浮导航的高度:中途内容从栏下穿过,最后一节课仍能卷上来
-                        bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
+                        bottom = YohakuDimens.gapCard + yohakuNavReservedHeight(),
                     ),
                     verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapSection),
                 ) {

@@ -36,6 +36,7 @@ import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.yohakuTouchTarget
@@ -130,7 +131,7 @@ internal fun AgendaTimeline(
                     start = YohakuDimens.screenPadding,
                     end = YohakuDimens.screenPadding,
                     top = 4.dp,
-                    bottom = YohakuDimens.navReservedHeight,
+                    bottom = yohakuNavReservedHeight(),
                 ),
                 verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapTight),
             ) {

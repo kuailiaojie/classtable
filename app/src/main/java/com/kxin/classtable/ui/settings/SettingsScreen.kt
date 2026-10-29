@@ -29,6 +29,7 @@ import com.kxin.classtable.data.TimetablePrefsStore
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.domain.model.AppSettings
 import com.kxin.classtable.domain.model.CourseColorScheme
@@ -186,7 +187,7 @@ fun SettingsScreen(
 
         // 悬浮导航浮在内容之上:列表中途会从栏下穿过,末尾留出栏体高度,
         // 最后一行才不会被永久盖住。
-        Spacer(modifier = Modifier.height(YohakuDimens.navReservedHeight))
+        Spacer(modifier = Modifier.height(yohakuNavReservedHeight()))
     }
     }
 }

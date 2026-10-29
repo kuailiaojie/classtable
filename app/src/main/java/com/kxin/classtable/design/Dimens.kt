@@ -22,6 +22,18 @@ object YohakuDimens {
     /** 悬浮底部导航给内容预留的高度(栏高 + 上下浮动余量 + 投影) */
     val navReservedHeight = 64.dp
 
+    /**
+     * 宽屏阈值(窗口宽度 dp):达到后导航从底栏换成起始侧的竖向 rail。
+     * 600dp 是 Android 窗口尺寸分级里 compact / medium 与 expanded 的分界。
+     */
+    const val navWideThresholdDp = 600
+
+    /** 大屏导航栏(rail):单项宽度(比底栏窄一点,竖着排四个标签仍是同一枚胶囊) */
+    val navRailItemWidth = 60.dp
+
+    /** 大屏导航栏给内容区让出的起始侧宽度(栏宽 + 两侧浮动余量 + 与内容的间隙) */
+    val navRailReservedWidth = 92.dp
+
     val accentBarWidth = 4.dp
 
     /** 周视图网格:行高下限(实际行高 = 可用高度 ÷ 节数,放不下时整格纵向滚动) */

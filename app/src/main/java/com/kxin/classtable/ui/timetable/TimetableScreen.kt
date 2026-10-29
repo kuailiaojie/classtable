@@ -52,6 +52,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuSegmentedControl
 import com.kxin.classtable.design.YohakuTopBar
@@ -452,7 +453,7 @@ fun TimetableScreen(
                                 // 网格排在悬浮导航之上,最后一两节不会被导航栏永久压住
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(bottom = YohakuDimens.navReservedHeight),
+                                    .padding(bottom = yohakuNavReservedHeight()),
                             )
                         }
                     } else {

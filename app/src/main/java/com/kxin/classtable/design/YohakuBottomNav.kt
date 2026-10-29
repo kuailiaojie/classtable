@@ -28,8 +28,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/**
+ * 四个根标签页 —— 底栏与 rail(大屏)共用同一份,顺序即排布顺序。
+ */
+internal val YohakuRootTabs = listOf(
+    "week" to "课表",
+    "courses" to "课程",
+    "agenda" to "日程",
+    "settings" to "设置",
+)
+
+/** 是否宽屏(折叠屏展开 / 平板竖横屏):达到 [YohakuDimens.navWideThresholdDp] 就走 rail。 */
+@Composable
+fun yohakuWideScreen(): Boolean =
+    LocalConfiguration.current.screenWidthDp >= YohakuDimens.navWideThresholdDp
+
+/**
+ * 根标签页内容区需要为导航预留的高度。
+ *
+ * 窄屏是悬浮底栏的预留量;宽屏导航换成起始侧的 rail 后底部不再有栏,预留归零。
+ * 各根标签页从这里取值,而不是把 [YohakuDimens.navReservedHeight] 写死 —— 否则宽屏上
+ * 最后一屏会凭空多出一截空白。
+ */
+@Composable
+fun yohakuNavReservedHeight(): Dp =
+    if (yohakuWideScreen()) 0.dp else YohakuDimens.navReservedHeight
 
 /**
  * 悬浮底部导航。
@@ -38,7 +66,7 @@ import androidx.compose.ui.unit.dp
  * 1) **四边不贴边** —— 宽度只包住标签、水平居中,下方留出与系统手势条的间距,
  *    由调用方用 [androidx.compose.foundation.layout.Box] + `align(BottomCenter)` 摆放;
  * 2) **真的浮在内容之上** —— 用投影画出「这是一层压在最上面的平面」([YohakuDimens.navElevation]);
- * 3) **内容从它下面穿过** —— 内容区预留 [YohakuDimens.navReservedHeight],最后一屏不被压住。
+ * 3) **内容从它下面穿过** —— 内容区预留 [yohakuNavReservedHeight],最后一屏不被压住。
  *
  * 选中态:accent 文字 + 下方一个小圆点。文字颜色、小圆点、按压缩放都带缓动
  * (只动合成层),切换标签时不再硬跳。
@@ -50,12 +78,6 @@ fun YohakuBottomNav(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
-    val items = listOf(
-        "week" to "课表",
-        "courses" to "课程",
-        "agenda" to "日程",
-        "settings" to "设置",
-    )
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(percent = 50),
@@ -69,8 +91,8 @@ fun YohakuBottomNav(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items.forEach { (route, label) ->
-                NavItem(
+            YohakuRootTabs.forEach { (route, label) ->
+                YohakuNavItem(
                     label = label,
                     selected = current == route,
                     onClick = { onNavigate(route) },
@@ -80,8 +102,19 @@ fun YohakuBottomNav(
     }
 }
 
+/**
+ * 单个导航项:底栏与 [YohakuNavRail] 共用。
+ *
+ * 不绑定朝向 —— 文字 + 小圆点的竖排结构在两种栏里都一样,差别只在 [width]:
+ * 底栏用 [YohakuDimens.navItemWidth],rail 用 [YohakuDimens.navRailItemWidth]。
+ */
 @Composable
-private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun YohakuNavItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    width: Dp = YohakuDimens.navItemWidth,
+) {
     val colors = LocalYohakuColors.current
     // 切页签给一下轻触感 —— 这是全应用最常用的控件,此前一处触感都没有
     val haptics = rememberYohakuHaptics()
@@ -105,7 +138,7 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
     )
     Column(
         modifier = Modifier
-            .width(YohakuDimens.navItemWidth)
+            .width(width)
             .clip(RoundedCornerShape(percent = 50))
             .clickable(
                 interactionSource = interaction,

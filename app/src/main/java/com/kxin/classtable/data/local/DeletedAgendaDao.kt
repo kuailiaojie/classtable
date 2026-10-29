@@ -15,4 +15,8 @@ interface DeletedAgendaDao {
 
     @Query("DELETE FROM deleted_agenda WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    /** 批量清理到期墓碑(本地回收,见 SyncRepository 的墓碑 GC)。 */
+    @Query("DELETE FROM deleted_agenda WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 }

@@ -63,7 +63,12 @@ class CourseLiveUpdateService : Service() {
             NotifyChannels.canPost(this, NotifyChannels.COURSE_LIVE)
         if (!usable) {
             Log.i(TAG, "跳过实时活动:无 payload / 已下课 / 已静音 / 无通知权限")
-            planner.clearLive()
+            // 只清这节课自己的 payload:课表重叠时,正在上的可能是另一门课,
+            // 它的 payload 与通知不能跟着被清掉(否则下课那一拍找不到人收通知)
+            val stored = planner.restoreLive()
+            if (stored == null || stored.muteKey == (payload?.muteKey)) {
+                planner.clearLive()
+            }
             stopForegroundNow()
             LiveUpdateNotifier.cancelLiveUpdate(this)
             stopSelf()

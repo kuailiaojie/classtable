@@ -37,6 +37,7 @@ import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
 import com.kxin.classtable.design.YohakuDimens
+import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.yohakuTouchTarget
@@ -71,7 +72,7 @@ internal fun CountdownList(
             start = YohakuDimens.screenPadding,
             end = YohakuDimens.screenPadding,
             top = YohakuDimens.gapCard,
-            bottom = YohakuDimens.gapCard + YohakuDimens.navReservedHeight,
+            bottom = YohakuDimens.gapCard + yohakuNavReservedHeight(),
         ),
         verticalArrangement = Arrangement.spacedBy(YohakuDimens.gapCard),
     ) {
