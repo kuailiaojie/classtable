@@ -17,6 +17,8 @@ object YohakuFonts {
 
 /** 角色 + px 字阶。CJK 标题一律 Medium(500),禁合成粗体。 */
 object YohakuType {
+    val label10 = TextStyle(fontFamily = YohakuFonts.Sans, fontWeight = FontWeight.Normal, fontSize = 10.sp, lineHeight = 14.sp)
+    val label11 = TextStyle(fontFamily = YohakuFonts.Sans, fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 15.sp)
     val label12 = TextStyle(fontFamily = YohakuFonts.Sans, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 18.sp)
     val copy13 = TextStyle(fontFamily = YohakuFonts.Sans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 20.sp)
     val copy14 = TextStyle(fontFamily = YohakuFonts.Sans, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 22.sp)

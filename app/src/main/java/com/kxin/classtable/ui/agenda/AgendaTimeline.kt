@@ -88,14 +88,16 @@ internal fun AgendaTimeline(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val isToday = date == today
                     Surface(
                         shape = RoundedCornerShape(YohakuDimens.radiusChip),
-                        color = colors.neutral2,
+                        color = if (isToday) colors.accent.copy(alpha = 0.12f) else colors.neutral2,
+                        border = if (isToday) BorderStroke(1.dp, colors.accent.copy(alpha = 0.35f)) else null,
                     ) {
                         Text(
                             text = relativeDayLabel(date, today),
                             style = YohakuType.label12,
-                            color = colors.neutral7,
+                            color = if (isToday) colors.accent else colors.neutral7,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         )
                     }

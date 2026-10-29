@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,7 +104,7 @@ internal fun CalendarStrip(
             // 「今天」:回到本周并选中今天
             Surface(
                 modifier = Modifier.yohakuTouchTarget().clickable(onClick = onToday),
-                shape = RoundedCornerShape(YohakuDimens.radiusChip),
+                shape = RoundedCornerShape(YohakuDimens.radiusControl),
                 color = colors.raised,
                 border = BorderStroke(1.dp, colors.line),
             ) {
@@ -111,7 +112,7 @@ internal fun CalendarStrip(
                     text = "↩ 今天",
                     style = YohakuType.label12,
                     color = colors.accent,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
         }
@@ -156,23 +157,55 @@ private fun DayCell(
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
-    val shape = RoundedCornerShape(YohakuDimens.radiusChip)
-    // 选中 / 今天的底色与描边都带缓动(切换日期时不硬跳)
+    val cellShape = RoundedCornerShape(YohakuDimens.radiusCard)
+
+    // 严谨的选中与今天状态分级：
+    // 1. 今天且被选中：accent 实底白字，最高视觉焦点
+    // 2. 非今天被选中：neutral9 深色方块（纸面白字），明确指明当前查看日
+    // 3. 今天但未选中：accent 极淡底色 + 细描边，温和锚定“今天”，不抢夺选中焦点
+    // 4. 普通未选中日：透明背景无描边
+    val targetBg = when {
+        isToday && isSelected -> colors.accent
+        isSelected -> colors.neutral9
+        isToday -> colors.accent.copy(alpha = 0.12f)
+        else -> Color.Transparent
+    }
+    val targetOutline = when {
+        isToday && !isSelected -> colors.accent.copy(alpha = 0.45f)
+        else -> Color.Transparent
+    }
     val background by animateColorAsState(
-        targetValue = if (isToday) colors.accent else Color.Transparent,
+        targetValue = targetBg,
         animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
         label = "dayBg",
     )
     val outline by animateColorAsState(
-        targetValue = if (isSelected && !isToday) colors.accent else Color.Transparent,
+        targetValue = targetOutline,
         animationSpec = YohakuMotion.tween(YohakuMotion.durBase),
         label = "dayOutline",
     )
+
+    val dateTextColor = when {
+        isToday && isSelected -> Color.White
+        isSelected -> colors.paper
+        isToday -> colors.accent
+        else -> colors.neutral9
+    }
+    val weekdayColor = when {
+        isToday -> colors.accent
+        isSelected -> colors.neutral9
+        else -> colors.neutral6
+    }
+    val lunarColor = when {
+        isToday -> colors.accent
+        isSelected -> colors.neutral9
+        else -> colors.neutral6
+    }
     val lunar = remember(date) { LunarDate.label(date) }
 
     Column(
         modifier = modifier
-            .clip(shape)
+            .clip(RoundedCornerShape(YohakuDimens.radiusControl))
             .clickable {
                 haptics.tick()
                 onClick()
@@ -180,36 +213,53 @@ private fun DayCell(
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = Dates.weekdayChar(date.dayOfWeek.value),
-            style = YohakuType.label12,
-            color = if (isToday) colors.accent else colors.neutral6,
-        )
+        // 星期文字固定 16dp 高度，确保整行严格水平基线对齐
+        Box(
+            modifier = Modifier.height(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = Dates.weekdayChar(date.dayOfWeek.value),
+                style = YohakuType.label12,
+                color = weekdayColor,
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
+        // 日期数字方块：标准 36x36dp 正方块，几何严谨居中排布，彻底告别扁平拉伸
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(34.dp)
-                .padding(horizontal = 2.dp)
-                .clip(shape)
+                .size(36.dp)
+                .clip(cellShape)
                 .background(background)
-                .then(if (outline != Color.Transparent) Modifier.border(1.dp, outline, shape) else Modifier),
+                .then(
+                    if (outline != Color.Transparent) {
+                        Modifier.border(1.dp, outline, cellShape)
+                    } else {
+                        Modifier
+                    }
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = date.dayOfMonth.toString(),
                 style = YohakuType.copy15,
-                color = if (isToday) Color.White else colors.neutral9,
+                color = dateTextColor,
                 textAlign = TextAlign.Center,
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = lunar,
-            style = YohakuType.gridDate,
-            color = if (isToday) colors.accent else colors.neutral6,
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-        )
+        // 农历文字固定 14dp 高度，杜绝因字高或换行导致的像素抖动
+        Box(
+            modifier = Modifier.height(14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = lunar,
+                style = YohakuType.gridDate,
+                color = lunarColor,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

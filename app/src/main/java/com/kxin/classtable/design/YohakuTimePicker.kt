@@ -96,15 +96,16 @@ fun YohakuTimePicker(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 listOf(-45 to "−45 分", -5 to "−5 分", 5 to "＋5 分", 45 to "＋45 分").forEach { (d, label) ->
                     QuickAdjust(
                         text = label,
                         enabled = minutes != null,
                         onClick = { shift(d) },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -178,21 +179,28 @@ private fun StepperKey(glyph: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun QuickAdjust(text: String, enabled: Boolean, onClick: () -> Unit) {
+private fun QuickAdjust(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalYohakuColors.current
     val shape = RoundedCornerShape(YohakuDimens.radiusChip)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(shape)
             .background(colors.neutral2)
             .border(1.dp, colors.line, shape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
             style = YohakuType.label12,
             color = if (enabled) colors.neutral7 else colors.neutral5,
+            textAlign = TextAlign.Center,
         )
     }
 }

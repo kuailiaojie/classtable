@@ -312,7 +312,7 @@ private fun CountdownBadge(
             }
             val bottom = when {
                 ongoing -> event.category.label
-                daysToStart <= 0L -> "今天"
+                daysToStart <= 0L -> "到期"
                 else -> "天"
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

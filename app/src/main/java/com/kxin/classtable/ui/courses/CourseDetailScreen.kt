@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import com.kxin.classtable.data.AgendaRepository
 import com.kxin.classtable.domain.model.AgendaEvent
@@ -227,20 +228,30 @@ fun CourseDetailScreen(
                         color = colors.neutral7,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        scheduleDates.forEach { (date, weekNo) ->
-                            val active = c.isActiveOnWeek(weekNo)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (active) colors.accent else colors.neutral3)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    val today = remember { LocalDate.now() }
+                    val columns = 4
+                    val rows = remember(scheduleDates) { scheduleDates.chunked(columns) }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        rows.forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                Text(
-                                    text = Dates.slashWeek(date),
-                                    style = YohakuType.label12,
-                                    color = if (active) androidx.compose.ui.graphics.Color.White else colors.neutral7,
-                                )
+                                rowItems.forEach { (date, weekNo) ->
+                                    ScheduleDateCard(
+                                        date = date,
+                                        weekNo = weekNo,
+                                        isToday = date == today,
+                                        isPast = date < today,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                repeat(columns - rowItems.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -434,6 +445,69 @@ private fun courseDates(course: Course, semesterStartDay: Long, weekCount: Int):
     }
 }
 
+
+@Composable
+private fun ScheduleDateCard(
+    date: LocalDate,
+    weekNo: Int,
+    isToday: Boolean,
+    isPast: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalYohakuColors.current
+    val shape = RoundedCornerShape(YohakuDimens.radiusControl)
+
+    // 排期方块三级状态分工：
+    // 1. 今天课次：accent 实底白字，醒目标识「今天有课」
+    // 2. 过去课次：半透明 neutral2 浅底，表示已完结
+    // 3. 未来课次：标准 raised 纸面 + 细描边，整齐待上
+    val bg = when {
+        isToday -> colors.accent
+        isPast -> colors.neutral2.copy(alpha = 0.5f)
+        else -> colors.raised
+    }
+    val borderModifier = when {
+        isToday -> Modifier
+        isPast -> Modifier.border(1.dp, colors.line.copy(alpha = 0.5f), shape)
+        else -> Modifier.border(1.dp, colors.line, shape)
+    }
+    val weekColor = when {
+        isToday -> Color.White.copy(alpha = 0.85f)
+        isPast -> colors.neutral5
+        else -> colors.neutral6
+    }
+    val dateColor = when {
+        isToday -> Color.White
+        isPast -> colors.neutral6
+        else -> colors.neutral10
+    }
+
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(bg)
+            .then(borderModifier)
+            .padding(vertical = 7.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "第${weekNo}周",
+            style = YohakuType.label10,
+            color = weekColor,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = Dates.slashWeek(date),
+            style = YohakuType.label11,
+            color = dateColor,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
 
 @Composable
 private fun CourseAgendaCard(
