@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -425,17 +426,25 @@ private fun CourseBlock(
         else -> Modifier
     }
 
+    // 重构已结课逻辑:采用实体不透明颜色淡化(compositeOver),彻底拔除任何alpha透明度修饰,
+    // 保证背景纯实心、轮廓实体闭合、文字清晰可读,从根本上杜绝「看起来消失」
+    val cardBg = if (isPast) {
+        if (tinted) {
+            courseTint(course).copy(alpha = 0.45f).compositeOver(colors.raised)
+        } else {
+            colors.neutral2
+        }
+    } else {
+        if (tinted) courseTint(course) else colors.raised
+    }
+
     Box(
         modifier = Modifier
-            .graphicsLayer {
-                // 已结课程适度淡化(78% 不透明度),绝不隐藏,杜绝因动效初始0f导致课程看不见
-                alpha = if (isPast) 0.78f else 1f
-            }
             .offset(x = x, y = rowH * top)
             .width(width)
             .height((blockH - YohakuDimens.gridCellGap).coerceAtLeast(12.dp))
             .clip(shape)
-            .background(if (tinted) courseTint(course) else colors.raised)
+            .background(cardBg)
             .then(borderModifier)
             .combinedClickable(
                 onClick = { onClick(course) },

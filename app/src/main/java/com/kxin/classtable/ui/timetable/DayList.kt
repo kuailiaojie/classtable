@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -354,16 +355,20 @@ internal fun DayList(
                                     is DayTimelineItem.CourseItem -> {
                                         val isCurrent = isToday && Schedule.isCourseOngoing(item.course, periods)
                                         val isPast = isToday && (item.endMinute < nowMinute)
+                                        val cardBg = if (isPast) {
+                                            courseTint(item.course).copy(alpha = 0.45f).compositeOver(colors.raised)
+                                        } else {
+                                            courseTint(item.course)
+                                        }
                                         YohakuCard(
                                             accentBar = isCurrent,
-                                            containerColor = courseTint(item.course),
+                                            containerColor = cardBg,
                                             onClick = { onCourseClick(item.course) },
                                             onLongClick = {
                                                 haptics.tick()
                                                 val targetDay = teaching?.second ?: date.dayOfWeek.value
                                                 onAddCourse?.invoke(targetDay, item.course.startPeriod)
                                             },
-                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.85f } else Modifier,
                                         ) {
                                             Row(verticalAlignment = Alignment.Top) {
                                                 Text(

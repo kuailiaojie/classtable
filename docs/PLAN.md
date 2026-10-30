@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.4 / 98)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.5 / 99)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -78,6 +78,10 @@
 - [x] **Phase 16: Netlify CI 构建脚本路径修复与视觉纯粹性回归 (Netlify Build Fix & Yohaku Purism)**
   - 目标：修复 `tools/build-netlify.mjs` 中找不到适配脚本目录的 ENOENT 致命异常，优先采用 `warehouse/resources/` 源码目录保证 CI 100% 成功生成 `bundle.json`；移除浮夸不自然的 AI 概念图，回归真实纯正的真机截图展台与纯正 UI 对话卡片，保持克制、高级的余白质感。
   - 状态：✅ 已完成 (3.13.4 / 98 - Commit: 8d84ef7)
+
+- [x] **Phase 17: 已结课渲染逻辑彻底重构：废除透明度，回归纯实心色彩淡化 (Zero-Alpha Solid Color Fading Overhaul)**
+  - 目标：彻底废止周/日视图课程块中任何 `graphicsLayer { alpha = ... }` 半透明减淡方案，消除透光与看不清；重构为基于 `compositeOver` 的纯实心浅淡莫兰迪底色生成算法，保留实体 `1dp` 精致微边框与高清晰深色文字，使已结课程真正做到“颜色变淡但轮廓分明、清晰可见、绝不消失”。
+  - 状态：✅ 已完成 (3.13.5 / 99)
 
 ---
 
