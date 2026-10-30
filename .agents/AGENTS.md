@@ -139,3 +139,8 @@ Rules for AI agents working with DevRelay installed.
   When drafting or referencing posts on DEV, use `{% agent_session <id_or_slug> %}` Liquid
   tags to embed sessions. A DEV post offer and a session offer at the same milestone
   belong in one message, not two.
+
+# Project Release & Versioning Rules
+
+- **每次提交/推送必须更新版本号 (Mandatory Version Bump on Every Release/Commit)**:
+  每次提交新功能、交互优化、Bug修复或发布推送时，必须在 `app/build.gradle.kts` 中递增 `versionCode`（如 `93` -> `94`）并相应升级 `versionName`（如 `"3.13.0"`），同时在 `CHANGELOG.md` 中记录版本更新点，并在 `docs/PLAN.md` 中同步阶段状态与版本号。客户端与设备端严格依赖 `versionCode` 与 `versionName` 的自增来检测并接收最新应用更新。
