@@ -53,7 +53,7 @@
 
 - [x] **Phase 10: 安全防护、云同步一致性、后台可靠性与架构工程化加固 (Security, Sync Consistency & Architectural Hardening)**
   - 目标：AI API 密钥 Keystore AES-GCM 隔离存储与备份排除、SecurePrefs 坏密钥自愈重试、Netlify 反代白名单与防重放、Firestore 安全规则最小权限收紧、调休安排与多学期表云同步与离线灾备全覆盖、ReminderPlanner Mutex 并发互斥与排程事件防过度触发、桌面图标后台安全延迟切换、WakeLock 10s 延展、SemVer 2.0 预发布版本比较重构、教务导入 WebView 多层弹窗支持与静态调用优化、统一 FirestoreFields/HttpUtils 工具库、Room exportSchema 快照、纯 Kotlin 核心领域逻辑 JVM 单元测试全覆盖。
-  - 状态：✅ 已完成 (3.11.0 / 92)
+  - 状态：✅ 已完成 (3.11.0 / 92 - Commit: 054fb1f)
 
 ---
 
