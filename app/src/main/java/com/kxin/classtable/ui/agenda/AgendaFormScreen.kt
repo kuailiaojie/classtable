@@ -71,7 +71,7 @@ import java.util.UUID
  * 新建 / 编辑日程与倒计时:整页表单。
  *
  * 针对「日程」与「倒计时」两种心智深度区分：
- * - 顶部胶囊提供直观的「📅 日程」与「⏳ 倒计时」模式切换
+ * - 顶部胶囊提供直观的「日程」与「倒计时」模式切换
  * - 「日程」心智：安排时段，聚焦具体起止时刻与日程时长
  * - 「倒计时」心智：锚定目标，聚焦截止日期、实时剩余天数预览与备考提醒
  */
@@ -258,7 +258,7 @@ private fun AgendaFormBody(
 
             // 1. 顶层类型分段：清晰表达「日程」与「倒计时」
             YohakuSegmentedControl(
-                options = listOf("📅 日程", "⏳ 倒计时"),
+                options = listOf("日程", "倒计时"),
                 selectedIndex = if (isCountdown) 1 else 0,
                 onSelect = { index ->
                     val newKind = if (index == 0) AgendaKind.SCHEDULE else AgendaKind.COUNTDOWN
@@ -379,7 +379,7 @@ private fun AgendaFormBody(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "🎯 倒计时目标日 · ${dateText(startDate)}",
+                                text = "倒计时目标日 · ${dateText(startDate)}",
                                 style = YohakuType.label12,
                                 color = colors.neutral7,
                             )
