@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const srcDir = path.join(root, 'app/src/main/assets/warehouse');
+// 适配脚本源码在 warehouse/resources(git 追踪的源头);app/src/main/assets/warehouse/resources 是 gradle 构建期生成的副本(不入库)
+const resDir = fs.existsSync(path.join(root, 'warehouse/resources'))
+  ? path.join(root, 'warehouse/resources')
+  : path.join(srcDir, 'resources');
 const outDir = path.join(root, 'netlify/static/warehouse');
 
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -27,7 +31,7 @@ function walk(dir, rel) {
     }
   }
 }
-walk(path.join(srcDir, 'resources'), '');
+walk(resDir, '');
 
 const bundle = {
   schema: 1,

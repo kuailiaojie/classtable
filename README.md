@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="docs/assets/hero-banner.jpg" alt="余课 · Yohaku" width="100%" style="border-radius: 12px; max-width: 960px;" />
-
 # 余课 · Yohaku
 
 <p align="center">
@@ -103,14 +101,15 @@
 
 ## ✦ AI 课表助手 · 自然语言调度
 
-<div align="center">
-  <img src="docs/assets/feature-ai.jpg" alt="AI Timetable Assistant" width="100%" style="border-radius: 12px; max-width: 900px;" />
-</div>
+> **🗣️ 对话演示**  
+> **同学**：“帮我查查这周五下午有没有课？另外提醒我下周二考离散数学。”  
+> **余课助手**：“✦ 课表已检索完毕。周五下午 14:00 - 15:35 为【大学物理实验】（实验楼 302），之后暂无课程安排。已为你新建考试倒计时【离散数学期末考】，设为下周二并开启提前 1 天提醒。”  
+> *(动作需本地自检通过，用户点击确认后方落库写入数据库)*
 
 课表页头常驻「✦ 助手」面板，用日常语言即可自如操控课表与日程：
 
 - 💬 **自然语言即时对话**：「这周五下午哪节最空？」、「把第 3-5 周的高数换到周二第二大节」、「提醒我下周二考离散数学」。
-- 🛡️ **先查再改，多轮工具调用**：智能体通过严格的只读工具检索当前课表，杜绝凭空凭据的错误编造。
+- 🛡️ **先查再改，多轮工具调用**：智能体通过严格的只读工具检索当前课表，杜绝凭空编造。
 - 📋 **先预览、再落库**：动作会以清晰的对比卡片（`改前 → 改后`）呈现，用户亲手点击「确认执行」才写入数据库。
 - ⚙️ **开放模型生态**：自由配置 Google Gemini 或任意 OpenAI 兼容服务（DeepSeek、Kimi、通义千问、智谱 GLM 等），密钥仅保存在本机。
 - 🤖 **系统级智能体互联（AppFunctions，Android 16+）**：课表能力标准化开放给系统端侧智能体调用。
@@ -118,10 +117,6 @@
 ---
 
 ## 🎨 设计哲学：东方「余白（Yohaku）」
-
-<div align="center">
-  <img src="docs/assets/feature-widgets.jpg" alt="Zen Study Lifestyle" width="100%" style="border-radius: 12px; max-width: 900px;" />
-</div>
 
 应用遵循 **Yohaku（余白）** 的设计取向 —— **把课表当纸看，不把界面当装饰**：
 

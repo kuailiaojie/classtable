@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.3 / 97)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.4 / 98)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -74,6 +74,10 @@
 - [x] **Phase 15: 官网与 README 视觉艺术化升级与概念图体系 (Artistic Landing Page & README Yohaku Overhaul)**
   - 目标：将余白（Yohaku）美学、东方纸感与和色设计哲学全面融入官方网站与 README；生成并装配 3 张宽屏高清艺术概念图（宽屏晨光意境横幅、AI 智能助手概念图、和风书桌与小组件生活化场景）；重构 README 视觉层次（特性矩阵、和色罗盘、实机展台）；官网新增 AI 助手交互卡片展示、灵动胶囊动态模拟、和色调色盘实时切换全站强调色交互；更新 FAQ 补全课程改色、AI 密钥与胶囊配置指引。
   - 状态：✅ 已完成 (3.13.3 / 97 - Commit: e9217ef)
+
+- [x] **Phase 16: Netlify CI 构建脚本路径修复与视觉纯粹性回归 (Netlify Build Fix & Yohaku Purism)**
+  - 目标：修复 `tools/build-netlify.mjs` 中找不到适配脚本目录的 ENOENT 致命异常，优先采用 `warehouse/resources/` 源码目录保证 CI 100% 成功生成 `bundle.json`；移除浮夸不自然的 AI 概念图，回归真实纯正的真机截图展台与纯正 UI 对话卡片，保持克制、高级的余白质感。
+  - 状态：✅ 已完成 (3.13.4 / 98 - Commit: 8d84ef7)
 
 ---
 

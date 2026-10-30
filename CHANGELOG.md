@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.13.4 (2026-10-30)
+
+本次 3.13.4 版本紧急修复 Netlify 部署脚本中因路径硬编码导致的构建失败问题，并全面净化官网与 README 视觉展示：
+
+### Netlify 构建脚本与视觉展示净化修复
+- **彻底根治 Netlify 构建路径错误（ENOENT）**：
+  - 修复 `tools/build-netlify.mjs` 中对 `app/src/main/assets/warehouse/resources`（本地 gitignored 目录）的强依赖；
+  - 自动路由至真实源码目录 `warehouse/resources/`，保证无论本地还是 Netlify CI 环境均能稳定打包 `bundle.json`（271 所高校、300 个适配器、289 个脚本无损生成）。
+- **去除违和概念图，回归真实纯粹的余白（Yohaku）美学**：
+  - 彻底移除夸张浮夸的 AI 概念图；
+  - 官网与 README 全面回归真机实机截图（`week.jpg` 等真机长图）与原生卡片式排版；
+  - ✦ AI 助手交互演示改用纯正系统级 UI 对话卡片（包含对比 diff 预览与端侧自检守护状态），保持极简克制与质感。
+
 ## 3.13.3 (2026-10-30)
 
 本次 3.13.3 版本聚焦官方网站（Landing Page）与项目 README 的东方余白（Yohaku）美学艺术化重构与视觉展示体系升级：
