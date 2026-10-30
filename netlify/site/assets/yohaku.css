@@ -1167,6 +1167,203 @@ b {
   }
 }
 
+/* ============================================================
+   17 · 艺术横幅与视觉聚焦展示
+   ============================================================ */
+
+.banner-section {
+  padding-bottom: 48px;
+}
+
+.showcase-banner {
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--color-neutral-2);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
+  margin: 0;
+}
+
+.showcase-banner img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+.banner-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--color-neutral-1);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-neutral-7);
+}
+
+.banner-quote {
+  font-family: var(--font-serif);
+  color: var(--color-neutral-9);
+  font-style: normal;
+}
+
+/* AI 助手展示 */
+.ai-showcase-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+
+@media (max-width: 820px) {
+  .ai-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-card-frame {
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--color-neutral-2);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
+}
+
+.ai-card-frame img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-dialog-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  background: var(--color-neutral-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.ai-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-bubble-user {
+  justify-self: end;
+  background: var(--color-neutral-3);
+  color: var(--color-neutral-10);
+  padding: 10px 14px;
+  border-radius: 12px 12px 2px 12px;
+  max-width: 85%;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-bubble-bot {
+  justify-self: start;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  color: var(--color-neutral-9);
+  padding: 14px 16px;
+  border-radius: 12px 12px 12px 2px;
+  max-width: 95%;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-diff-box {
+  background: var(--color-neutral-1);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ai-diff-title {
+  color: var(--color-neutral-10);
+  font-weight: 500;
+}
+
+.ai-diff-desc {
+  color: var(--color-neutral-7);
+}
+
+/* 灵动胶囊展示 */
+.capsule-demo-box {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  text-align: center;
+  padding: 32px 20px;
+  background: var(--color-neutral-2);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+}
+
+.capsule-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-neutral-10);
+  color: var(--color-neutral-1);
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] .capsule-pill {
+  background: #202020;
+  color: #f5f5f5;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.capsule-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+/* 色盘交互 */
+.swatch {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-neutral-5);
+}
+
+.swatch[aria-current='true'] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.icons img {
+  transition: transform 0.15s ease;
+}
+
+.icons img:hover {
+  transform: translateY(-2px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

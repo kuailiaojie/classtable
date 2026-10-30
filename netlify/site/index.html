@@ -10,12 +10,12 @@
 <link rel="canonical" href="https://classtablek.netlify.app/" />
 <link rel="icon" href="assets/img/app_icon_02.png" />
 <link rel="apple-touch-icon" href="assets/img/app_icon_02.png" />
-<link rel="stylesheet" href="assets/yohaku.css?v=3" />
+<link rel="stylesheet" href="assets/yohaku.css?v=4" />
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="余课 · 极简课程表" />
 <meta property="og:description" content="该留白的地方,就留白。给国内大学生用的 Android 课程表。" />
-<meta property="og:image" content="assets/img/week.jpg" />
+<meta property="og:image" content="assets/img/hero-banner.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
 
 <script>
@@ -58,6 +58,9 @@
     <nav class="site-nav" aria-label="页面导航">
       <a href="#shots">界面</a>
       <a href="#features">功能</a>
+      <a href="#ai">AI 助手</a>
+      <a href="#capsule">实时活动</a>
+      <a href="#appearance">外观与小组件</a>
       <a href="#import">导入</a>
       <a href="#design">设计</a>
       <a href="#install">安装</a>
@@ -118,6 +121,17 @@
         <img src="assets/img/week.jpg" width="640" height="1381" alt="余课周视图:七列一周,纵向按节次等分" fetchpriority="high" />
       </div>
       <figcaption class="hero-note text-label-12">周视图 · 一屏看全一周</figcaption>
+    </figure>
+  </section>
+
+  <!-- 留白意境横幅 -->
+  <section class="container banner-section" data-reveal>
+    <figure class="showcase-banner">
+      <img src="assets/img/hero-banner.jpg" width="1280" height="720" alt="余课·晨光与纸感" loading="lazy" />
+      <figcaption class="banner-caption text-label-12">
+        <span>晨光书桌 · 极简纸感 · 留白本心</span>
+        <span class="banner-quote">「桌前清茶，窗畔晨光。没有开屏广告与繁杂红点，只留此刻该上的那一堂课。」</span>
+      </figcaption>
     </figure>
   </section>
 
@@ -184,7 +198,7 @@
         <p class="eyebrow">它能帮上什么</p>
         <h2 class="text-title-28 font-medium text-neutral-10">课表本该一眼看完</h2>
         <p class="lede text-copy-15">
-          课表 App 大多喜欢把功能堆在脸上。
+          去掉开屏广告、横向时间轴与花哨社交。只留必要的骨架，让日常步调清晰可循。
         </p>
       </div>
 
@@ -193,74 +207,157 @@
           <p class="card-index">01</p>
           <h3 class="text-copy-15">一屏看全一周</h3>
           <p class="text-copy-13">
-            周一到周日七列,当天所有节次竖着排,不用来回翻页。左右滑动换周,「今天」回到本周。
-            行高按屏幕高度算,一屏装不下就整格上下滚。
+            周一到周日七列,当天所有节次竖着排,不用来回翻页。右上角一切换就是日视图,卡片流转、每 30 秒更新倒数;表头常驻当前气温与天气。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">02</p>
-          <h3 class="text-copy-15">四种导入方式</h3>
+          <h3 class="text-copy-15">✦ AI 智能课表助手</h3>
           <p class="text-copy-13">
-            教务系统导入、手填一门课、粘贴表格或选 Excel 文件、拍张截图交给 AI 认,
-            四种都在周视图右上角的「添加」里,挑顺手的用。
+            页头「✦ 助手」一句话查课、调课、查空堂、调日程或记住偏好。先查再改,对比卡片预览确认后才落库,绝不让幻觉污染课表。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">03</p>
-          <h3 class="text-copy-15">提醒准点,但不吵</h3>
+          <h3 class="text-copy-15">实时活动与灵动胶囊</h3>
           <p class="text-copy-13">
-            每节课开始前提醒,提前量从准点到 60 分钟任选。开着「实时活动」的话,
-            它会从课前一直跟到下课,按分钟告诉你还剩多久。
+            原生支持国产手机状态栏胶囊与锁屏实时活动。课前提前量开始常驻一条通知,按分钟推进「还有 N 分钟 → 上课中 → 下课」,下课自动收起。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">04</p>
-          <h3 class="text-copy-15">一眼认出是哪门课</h3>
+          <h3 class="text-copy-15">日程分轨与倒计时</h3>
           <p class="text-copy-13">
-            每门课有一层很淡的专属色,扫一眼就知道是什么课;正在上的那节另外标出来。
-            颜色跟着课名走,同一门课哪天都是同一个色。
+            日程页签管有时间的事(待办/活动),铺日历周条与全天时间线;倒计时页签管等着倒数的目标(考试/作业),按还剩几天排,到点精准提醒。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">05</p>
-          <h3 class="text-copy-15">桌面小组件</h3>
+          <h3 class="text-copy-15">四种全能导入方式</h3>
           <p class="text-copy-13">
-            今日课表、明日课程、下节课三块,尺寸分别是 4×2、2×2、1×1,放在桌面上,
-            不打开应用也看得见。显示时刻还是节次、列出几门课、行距和底色都能改,改完立刻刷新。
+            全国主流高校教务系统一键同步、手填单门课、粘贴表格/Excel、拍张截图交给 AI 识别。单双周与自定义周次自动归类。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">06</p>
-          <h3 class="text-copy-15">雨课堂公告</h3>
+          <h3 class="text-copy-15">一眼认出是哪门课</h3>
           <p class="text-copy-13">
-            登录雨课堂,课程详情页按时间倒序列出这门课的全部公告,课前提醒里带上最新一条,
-            新公告另外通知一次。雨课堂自己发的「上课提醒」「开始签到」不转推,
-            课表本来就有课前提醒,喊两遍没意义。
+            每门课自动赋予一层极淡专属色,扫一眼就知道;此刻正在上的课标有强调色。支持自选配色方案档位或在课程编辑页自定义和色。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">07</p>
-          <h3 class="text-copy-15">9 张图标任选</h3>
+          <h3 class="text-copy-15">4 款桌面小组件</h3>
           <p class="text-copy-13">
-            桌面上那个蓝发角色有 9 种表情,喜欢哪张点哪张,图标立刻跟着换。
-            也可以打开轮播,让它每次打开、每小时或者每天自己换一张。
+            今日课表(4×2)、明日课程(2×2)、下节课(1×1)、日程倒计时(4×2)。不打开应用也能看清安排,显示内容与底色自由配置。
           </p>
         </article>
 
         <article class="card" data-reveal>
           <p class="card-index">08</p>
-          <h3 class="text-copy-15">不注册也能用</h3>
+          <h3 class="text-copy-15">雨课堂公告联动</h3>
           <p class="text-copy-13">
-            课表默认只存在你自己手机上,不注册也挺完整。要换机或者备份了,再登录账号同步;
-            删掉的课跟着删,不会在别的设备上冒出来。
+            登录雨课堂后自动关联班级课程。详情页按时间轴列出公告,课前提醒附带最新一条通知。上课提醒不重复转发,告别消息轰炸。
           </p>
         </article>
+
+        <article class="card" data-reveal>
+          <p class="card-index">09</p>
+          <h3 class="text-copy-15">9 款角色图标与轮播</h3>
+          <p class="text-copy-13">
+            桌面上那个蓝发角色有 9 种生动表情,点一张立刻换。也可以打开轮播,让它按每次打开、每小时或者每天自动更换表情。
+          </p>
+        </article>
+
+        <article class="card" data-reveal>
+          <p class="card-index">10</p>
+          <h3 class="text-copy-15">纯粹私密,设备优先</h3>
+          <p class="text-copy-13">
+            零广告、零促销、零第三方追踪 SDK。课表默认只存在你自己手机上,不注册也能用。需要换机或备份时再登录账号安全同步。
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI 助手专区 -->
+  <section class="section" id="ai">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">✦ 智能排课</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">动口不动手，课表自己调</h2>
+        <p class="lede text-copy-15">
+          课表页头的「✦ 助手」随时待命。一句话查课、调课、查空堂、调日程或记住偏好。
+          严格遵循「先查再改」与本地自检原则,绝不让模型幻觉污染课表。
+        </p>
+      </div>
+
+      <div class="ai-showcase-grid">
+        <figure class="ai-card-frame" data-reveal>
+          <img src="assets/img/feature-ai.jpg" width="1280" height="720" alt="余课 AI 助手概念艺术" loading="lazy" />
+        </figure>
+
+        <div class="ai-dialog-card" data-reveal>
+          <div class="ai-chat-header">
+            <span class="text-label-12 font-medium text-neutral-10">✦ 余课助手 · 真实对话演示</span>
+            <span class="chip" data-kind="stable">
+              <span class="chip-dot" aria-hidden="true"></span>
+              <span>端侧自检守护</span>
+            </span>
+          </div>
+
+          <div class="ai-bubble-user">
+            帮我查查这周五下午有没有课？另外提醒我下周二考离散数学。
+          </div>
+
+          <div class="ai-bubble-bot">
+            <p>✦ 课表已检索完毕。周五下午 14:00 - 15:35 为【大学物理实验】（实验楼 302），之后暂无课程安排。</p>
+            <div class="ai-diff-box">
+              <span class="ai-diff-title">待确认执行动作：新建考试倒计时</span>
+              <span class="ai-diff-desc">· 目标：离散数学期末考<br/>· 日期：下周二 (11月03日) · 提醒：提前 1 天响铃</span>
+            </div>
+            <p class="text-label-12 text-neutral-7">动作已校验就绪，点击「确认执行」写入数据库。</p>
+          </div>
+
+          <div class="hero-meta text-label-12">
+            <span>Gemini / OpenAI API / DeepSeek</span>
+            <span>只改部分周</span>
+            <span>长期记忆偏好</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实时活动与灵动胶囊专区 -->
+  <section class="section" id="capsule">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="eyebrow">灵动提醒</p>
+        <h2 class="text-title-28 font-medium text-neutral-10">该上课时准点见，下课自动隐去</h2>
+        <p class="lede text-copy-15">
+          课前提醒不只是一声响。在支持胶囊的手机上,它化身状态栏灵动胶囊与锁屏实时活动,
+          原地按分钟步进,绝不反复发通知打扰。
+        </p>
+      </div>
+
+      <div class="capsule-demo-box" data-reveal>
+        <div class="capsule-pill">
+          <span class="capsule-indicator" aria-hidden="true"></span>
+          <span>距《现代操作系统》上课还有 12 分钟</span>
+          <span style="opacity: 0.5;">|</span>
+          <span>教学东楼 402</span>
+        </div>
+        <p class="text-copy-13 text-neutral-7" style="max-width: 52ch; margin: 0 auto;">
+          原生适配荣耀灵动胶囊、小米超级岛、OPPO 实况通知等国产胶囊。
+          一节课只排一个闹钟,从提前量到下课全程安静相伴,通知上可直接取消本节课提醒。
+        </p>
       </div>
     </div>
   </section>
@@ -377,9 +474,20 @@
   <section class="section" id="appearance">
     <div class="container">
       <div class="section-head" data-reveal>
-        <p class="eyebrow">外观</p>
+        <p class="eyebrow">外观与日常</p>
         <h2 class="text-title-28 font-medium text-neutral-10">和色、图标与小组件</h2>
+        <p class="lede text-copy-15">
+          在桌面与锁屏之间，构建最轻盈无感的课表陪伴。
+        </p>
       </div>
+
+      <figure class="showcase-banner" style="margin-bottom: 24px;" data-reveal>
+        <img src="assets/img/feature-widgets.jpg" width="1280" height="720" alt="余课和风书桌与小组件" loading="lazy" />
+        <figcaption class="banner-caption text-label-12">
+          <span>和风书桌 · 极简常伴 · 晨昏有序</span>
+          <span class="banner-quote">「小组件静卧于桌面，无需点开 App，一瞥便知当下步调。」</span>
+        </figcaption>
+      </figure>
 
       <div class="grid grid-2">
         <article class="card" data-reveal>
@@ -393,29 +501,29 @@
 
         <article class="card" data-reveal>
           <h3 class="text-copy-15">强调色</h3>
-          <p class="text-copy-13">六个和色任选,克制的,不开放自由取色。</p>
+          <p class="text-copy-13">六个经典和色任选。点击下方色块可<b>实时预览全站强调色切换</b>：</p>
           <div class="swatches mt-2">
-            <span class="swatch sw-ume" aria-current="true">
+            <span class="swatch sw-ume" aria-current="true" title="梅色 (Ume)">
               <i></i>
               <span>梅</span>
             </span>
-            <span class="swatch sw-hanada">
+            <span class="swatch sw-hanada" title="縹色 (Hanada)">
               <i></i>
               <span>縹</span>
             </span>
-            <span class="swatch sw-wakatake">
+            <span class="swatch sw-wakatake" title="若竹 (Wakatake)">
               <i></i>
               <span>若竹</span>
             </span>
-            <span class="swatch sw-kuchiba">
+            <span class="swatch sw-kuchiba" title="朽葉 (Kuchiba)">
               <i></i>
               <span>朽葉</span>
             </span>
-            <span class="swatch sw-suoh">
+            <span class="swatch sw-suoh" title="蘇芳 (Suoh)">
               <i></i>
               <span>蘇芳</span>
             </span>
-            <span class="swatch sw-sorairo">
+            <span class="swatch sw-sorairo" title="空色 (Sorairo)">
               <i></i>
               <span>空色</span>
             </span>
@@ -455,6 +563,11 @@
         <article class="card" data-reveal>
           <h3 class="text-copy-15">下节课 · 1×1</h3>
           <p class="text-copy-13">下一节课叫什么、几点、在哪。调休的停课补课也照实显示。</p>
+        </article>
+
+        <article class="card" data-reveal>
+          <h3 class="text-copy-15">日程看板 · 4×2</h3>
+          <p class="text-copy-13">待办事项与考试倒计时混合时间线,直观标出剩余天数,不漏掉任何大考与作业。</p>
         </article>
       </div>
     </div>
@@ -673,7 +786,21 @@
         <details data-reveal>
           <summary class="text-copy-15">课程的颜色可以自己改吗?</summary>
           <p class="faq-body text-copy-14">
-            目前不开放。颜色按课名自动分配,同一门课哪天都是同一个色,不用你手动维护。
+            完全支持！课表自动分配低饱和色彩，确保同课同色且互不冲突。如果想自己调整，可在「设置 → 课表 → 课表显示 → 配色方案」切换柔和/标准/丰富档位，也能在单门课的编辑页从 20 个东方和色预设里挑选，或直接输入十六进制色值（#RRGGBB）。
+          </p>
+        </details>
+
+        <details data-reveal>
+          <summary class="text-copy-15">AI 助手需要自己配置密钥吗？</summary>
+          <p class="faq-body text-copy-14">
+            是的。为了保护隐私并坚持纯粹开源，余课不设中转服务器收集数据。你可以在应用内「设置 → AI 设置」填入自己的 Google Gemini API 密钥或任意 OpenAI 兼容服务（DeepSeek、Kimi、通义千问等）的密钥与端点。密钥加密保存在本地，识别图片与对话直接由设备连向服务商。
+          </p>
+        </details>
+
+        <details data-reveal>
+          <summary class="text-copy-15">状态栏灵动胶囊怎么开启？</summary>
+          <p class="faq-body text-copy-14">
+            在「设置 → 提醒 → 课程提醒」里打开「实时活动胶囊」。支持荣耀灵动胶囊、小米超级岛、OPPO 实况通知等系统级胶囊展示。胶囊不显示时，可前往「设置 → 提醒 → 提醒可靠性」检查系统的实时活动总开关。
           </p>
         </details>
 
@@ -767,7 +894,7 @@
 <!-- ?v= 是缓存破冰:`_headers` 给 /assets/* 定了 immutable 的一年缓存,
      改了样式或脚本必须换 URL,否则回访用户一年内仍跑旧版。
      动过 assets/ 下任一文件,就把这里和 <head> 里 yohaku.css 的数字一起加一。 -->
-<script src="assets/site.js?v=3" defer></script>
+<script src="assets/site.js?v=4" defer></script>
 
 <!-- 动效:vendor/ 下是随站分发的 GSAP(见 vendor/LICENSE-gsap.txt),motion.js 是本站的动效代码。
      不引任何 CDN —— 大陆也要放得出来。顺序不能换:核心 → 插件 → 自家的。 -->

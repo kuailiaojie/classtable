@@ -52,7 +52,40 @@
       const text = btn.querySelector('[data-theme-label]');
       if (text) text.textContent = theme === 'system' ? '跟随' : theme === 'dark' ? '深色' : '浅色';
     }
+
+    const activeSwatch = document.querySelector('.swatch[aria-current="true"]');
+    if (activeSwatch && window.__yohakuSwatches) {
+      const cls = [...activeSwatch.classList].find((c) => window.__yohakuSwatches[c]);
+      if (cls) {
+        root.style.setProperty('--color-accent', dark ? window.__yohakuSwatches[cls].dark : window.__yohakuSwatches[cls].light);
+      }
+    }
   }
+
+  /* 和色色盘交互支持 */
+  const SWATCH_ACCENTS = {
+    'sw-ume': { light: '#c56473', dark: '#e095a4' },
+    'sw-hanada': { light: '#3d6896', dark: '#6e93c0' },
+    'sw-wakatake': { light: '#5e9f7e', dark: '#7fb79a' },
+    'sw-kuchiba': { light: '#a87a3d', dark: '#c39a63' },
+    'sw-suoh': { light: '#a64953', dark: '#c4777f' },
+    'sw-sorairo': { light: '#6a96c7', dark: '#8fb4dd' },
+  };
+  window.__yohakuSwatches = SWATCH_ACCENTS;
+
+  document.addEventListener('click', (e) => {
+    const swatch = e.target.closest('.swatch');
+    if (!swatch) return;
+    const cls = [...swatch.classList].find((c) => SWATCH_ACCENTS[c]);
+    if (!cls) return;
+
+    document.querySelectorAll('.swatch').forEach((s) => s.removeAttribute('aria-current'));
+    swatch.setAttribute('aria-current', 'true');
+
+    const dark = root.dataset.theme === 'dark';
+    const color = dark ? SWATCH_ACCENTS[cls].dark : SWATCH_ACCENTS[cls].light;
+    root.style.setProperty('--color-accent', color);
+  });
 
   applyTheme(stored() || 'system', false);
 
