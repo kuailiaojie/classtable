@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.1 / 95)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.2 / 96)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -65,7 +65,11 @@
 
 - [x] **Phase 13: 周视图已结课程隐形缺陷根治与动效生命周期加固 (WeekGrid Slot Reuse & Past Course Visibility Fix)**
   - 目标：彻底修复周视图 Compose 槽位复用导致 `appear.value` 永久卡在 0f（100% 透明隐形但能被点击）的 Bug；入场动效绑定 `course.id` Key 并引入 `snapTo(1f)` 安全兜底；已结课程统一增加实体精致微边框 `Modifier.border(1.dp, colors.line, shape)` 并微调透明度至 85%，确保轮廓分明、清晰可见。
-  - 状态：✅ 已完成 (3.13.1 / 95)
+  - 状态：✅ 已完成 (3.13.1 / 95 - Commit: 18ecae7)
+
+- [x] **Phase 14: 移除周网格课程块 0f 透明度入场动效与复合 Key 升级 (Eliminate Animatable(0f) Trap & Multi-day Key Fix)**
+  - 目标：从源头彻底拔除周视图课程块中的 `Animatable(0f)` 入场动效，直接赋予确定透明度（未结课 1.0f / 已结课 0.78f），物理消除任何因协程取消导致的透明度卡在 0f 的隐形 Bug；课程块 Key 升级为 `(day, course.id, top)` 复合唯一键，解决同一课程在周内多天复用时的键碰撞。
+  - 状态：✅ 已完成 (3.13.2 / 96)
 
 ---
 

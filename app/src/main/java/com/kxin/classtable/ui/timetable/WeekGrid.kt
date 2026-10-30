@@ -284,7 +284,7 @@ internal fun WeekGrid(
                     val used = laneCount.coerceAtMost(3)
                     val laneW = colW / used
                     blocks.forEachIndexed { blockIdx, block ->
-                        key(block.course.id, block.top) {
+                        key(day, block.course.id, block.top) {
                             val courseEndMin = block.course.customEndMinute
                                 ?: periods.getOrNull(block.course.endPeriod - 1)?.end
                                 ?: 0
@@ -303,8 +303,6 @@ internal fun WeekGrid(
                                 isPast = isPast,
                                 prefs = prefs,
                                 periods = periods,
-                                staggerIndex = colIdx + blockIdx,
-                                entrance = entrance,
                                 onClick = onCourseClick,
                                 onLongClick = { c ->
                                     val targetDay = teachingDays.getOrNull(day - 1)?.second ?: day
@@ -373,8 +371,6 @@ private fun CourseBlock(
     isPast: Boolean = false,
     prefs: TimetablePrefs,
     periods: List<Schedule.Period>,
-    staggerIndex: Int,
-    entrance: EntranceTracker,
     onClick: (Course) -> Unit,
     onLongClick: ((Course) -> Unit)? = null,
 ) {
@@ -388,29 +384,6 @@ private fun CourseBlock(
     val shape = RoundedCornerShape(cornerRadius(prefs.corner))
     val tinted = prefs.showTint
 
-    // 入场:淡入 + 轻微放大,按序号错峰(GSAP stagger 的 Compose 版)。
-    // 同一门课在本屏只演一次:翻页回收后回头不再重播(EntranceTracker)。
-    val animateIn = entrance.shouldAnimate(course.id)
-    val appear = remember(course.id) { Animatable(if (animateIn) 0f else 1f) }
-    LaunchedEffect(course.id) {
-        if (animateIn) {
-            try {
-                appear.animateTo(
-                    targetValue = 1f,
-                    animationSpec = YohakuMotion.tween(
-                        durationMs = YohakuMotion.durBase,
-                        easing = YohakuMotion.easeExpoOut,
-                        delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
-                    ),
-                )
-            } finally {
-                appear.snapTo(1f)
-                entrance.markSeen(course.id)
-            }
-        } else {
-            appear.snapTo(1f)
-        }
-    }
     // 「正在上」的 accent 条呼吸:真实的脉冲(此前在 1f↔0.98f 之间摆,肉眼等于没动)。
     // 只有当前课才起这条无限动画;初值取 1f,系统「移除动画」时无限动画停在初值 ——
     // 停在满亮,而不是半亮的残缺态(不做残缺动画)。
@@ -455,10 +428,8 @@ private fun CourseBlock(
     Box(
         modifier = Modifier
             .graphicsLayer {
-                alpha = appear.value * if (isPast) 0.85f else 1f
-                val s = 0.9f + 0.1f * appear.value
-                scaleX = s
-                scaleY = s
+                // 已结课程适度淡化(78% 不透明度),绝不隐藏,杜绝因动效初始0f导致课程看不见
+                alpha = if (isPast) 0.78f else 1f
             }
             .offset(x = x, y = rowH * top)
             .width(width)

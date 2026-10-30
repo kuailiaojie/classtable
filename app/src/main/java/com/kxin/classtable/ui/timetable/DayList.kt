@@ -332,7 +332,9 @@ internal fun DayList(
                                             ),
                                         )
                                     } finally {
-                                        appear.snapTo(1f)
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                                            appear.snapTo(1f)
+                                        }
                                         entrance.markSeen(item.key)
                                     }
                                 } else {
