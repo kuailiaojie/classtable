@@ -322,15 +322,21 @@ internal fun DayList(
                             val appear = remember(item.key) { Animatable(if (animate) 0f else 1f) }
                             LaunchedEffect(item.key) {
                                 if (animate) {
-                                    appear.animateTo(
-                                        targetValue = 1f,
-                                        animationSpec = YohakuMotion.tween(
-                                            durationMs = YohakuMotion.durBase,
-                                            easing = YohakuMotion.easeOut,
-                                            delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
-                                        ),
-                                    )
-                                    entrance.markSeen(item.key)
+                                    try {
+                                        appear.animateTo(
+                                            targetValue = 1f,
+                                            animationSpec = YohakuMotion.tween(
+                                                durationMs = YohakuMotion.durBase,
+                                                easing = YohakuMotion.easeOut,
+                                                delayMs = YohakuMotion.staggerDelay(index.coerceAtMost(7), YohakuMotion.stagger),
+                                            ),
+                                        )
+                                    } finally {
+                                        appear.snapTo(1f)
+                                        entrance.markSeen(item.key)
+                                    }
+                                } else {
+                                    appear.snapTo(1f)
                                 }
                             }
 
@@ -355,20 +361,20 @@ internal fun DayList(
                                                 val targetDay = teaching?.second ?: date.dayOfWeek.value
                                                 onAddCourse?.invoke(targetDay, item.course.startPeriod)
                                             },
-                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.72f } else Modifier,
+                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.85f } else Modifier,
                                         ) {
                                             Row(verticalAlignment = Alignment.Top) {
                                                 Text(
                                                     text = Schedule.courseTimeText(item.course, periods),
                                                     style = YohakuType.timeMono,
-                                                    color = colors.neutral7,
+                                                    color = if (isPast) colors.neutral6 else colors.neutral7,
                                                     modifier = Modifier.width(100.dp),
                                                 )
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         text = item.course.name,
                                                         style = YohakuType.copy16,
-                                                        color = colors.neutral10,
+                                                        color = if (isPast) colors.neutral8 else colors.neutral10,
                                                     )
                                                     val meta = listOf(item.course.location, item.course.teacher)
                                                         .filter { it.isNotEmpty() }

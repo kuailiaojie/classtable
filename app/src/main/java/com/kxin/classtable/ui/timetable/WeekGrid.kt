@@ -34,6 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -283,32 +284,34 @@ internal fun WeekGrid(
                     val used = laneCount.coerceAtMost(3)
                     val laneW = colW / used
                     blocks.forEachIndexed { blockIdx, block ->
-                        val courseEndMin = block.course.customEndMinute
-                            ?: periods.getOrNull(block.course.endPeriod - 1)?.end
-                            ?: 0
-                        val isPast = showNowLine && day == today && courseEndMin < nowMinute
-                        CourseBlock(
-                            course = block.course,
-                            rowH = rowH,
-                            top = block.top,
-                            height = block.height,
-                            x = YohakuDimens.gridPadding + gutter + colW * colIdx + laneW * block.lane.coerceAtMost(used - 1),
-                            width = laneW,
-                            // 「正在上」只在**真实当前周**的今天那一列标出:翻到别的周时,
-                            // 时间点虽然对得上(只看时刻),但那一天并不是今天,不该再标。
-                            isCurrent = showNowLine && day == today &&
-                                Schedule.isCourseOngoing(block.course, periods),
-                            isPast = isPast,
-                            prefs = prefs,
-                            periods = periods,
-                            staggerIndex = colIdx + blockIdx,
-                            entrance = entrance,
-                            onClick = onCourseClick,
-                            onLongClick = { c ->
-                                val targetDay = teachingDays.getOrNull(day - 1)?.second ?: day
-                                onGridLongClick?.invoke(targetDay, c.startPeriod)
-                            },
-                        )
+                        key(block.course.id, block.top) {
+                            val courseEndMin = block.course.customEndMinute
+                                ?: periods.getOrNull(block.course.endPeriod - 1)?.end
+                                ?: 0
+                            val isPast = showNowLine && day == today && courseEndMin < nowMinute
+                            CourseBlock(
+                                course = block.course,
+                                rowH = rowH,
+                                top = block.top,
+                                height = block.height,
+                                x = YohakuDimens.gridPadding + gutter + colW * colIdx + laneW * block.lane.coerceAtMost(used - 1),
+                                width = laneW,
+                                // 「正在上」只在**真实当前周**的今天那一列标出:翻到别的周时,
+                                // 时间点虽然对得上(只看时刻),但那一天并不是今天,不该再标。
+                                isCurrent = showNowLine && day == today &&
+                                    Schedule.isCourseOngoing(block.course, periods),
+                                isPast = isPast,
+                                prefs = prefs,
+                                periods = periods,
+                                staggerIndex = colIdx + blockIdx,
+                                entrance = entrance,
+                                onClick = onCourseClick,
+                                onLongClick = { c ->
+                                    val targetDay = teachingDays.getOrNull(day - 1)?.second ?: day
+                                    onGridLongClick?.invoke(targetDay, c.startPeriod)
+                                },
+                            )
+                        }
                     }
                 }
 
@@ -388,18 +391,24 @@ private fun CourseBlock(
     // 入场:淡入 + 轻微放大,按序号错峰(GSAP stagger 的 Compose 版)。
     // 同一门课在本屏只演一次:翻页回收后回头不再重播(EntranceTracker)。
     val animateIn = entrance.shouldAnimate(course.id)
-    val appear = remember { Animatable(if (animateIn) 0f else 1f) }
-    LaunchedEffect(Unit) {
+    val appear = remember(course.id) { Animatable(if (animateIn) 0f else 1f) }
+    LaunchedEffect(course.id) {
         if (animateIn) {
-            appear.animateTo(
-                targetValue = 1f,
-                animationSpec = YohakuMotion.tween(
-                    durationMs = YohakuMotion.durBase,
-                    easing = YohakuMotion.easeExpoOut,
-                    delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
-                ),
-            )
-            entrance.markSeen(course.id)
+            try {
+                appear.animateTo(
+                    targetValue = 1f,
+                    animationSpec = YohakuMotion.tween(
+                        durationMs = YohakuMotion.durBase,
+                        easing = YohakuMotion.easeExpoOut,
+                        delayMs = YohakuMotion.staggerDelay(staggerIndex, YohakuMotion.staggerTight),
+                    ),
+                )
+            } finally {
+                appear.snapTo(1f)
+                entrance.markSeen(course.id)
+            }
+        } else {
+            appear.snapTo(1f)
         }
     }
     // 「正在上」的 accent 条呼吸:真实的脉冲(此前在 1f↔0.98f 之间摆,肉眼等于没动)。
@@ -436,10 +445,17 @@ private fun CourseBlock(
     }
     val metaCount = if (blockH >= 64.dp && isWideCol) 3 else if (spacious) 2 else if (roomy) 1 else 0
 
+    // 已结课程保持实体微边框,防止低彩度在列背景上丧失边界造成「消失」错觉
+    val borderModifier = when {
+        isPast -> Modifier.border(1.dp, colors.line, shape)
+        !tinted -> Modifier.border(1.dp, colors.line, shape)
+        else -> Modifier
+    }
+
     Box(
         modifier = Modifier
             .graphicsLayer {
-                alpha = appear.value * if (isPast) 0.72f else 1f
+                alpha = appear.value * if (isPast) 0.85f else 1f
                 val s = 0.9f + 0.1f * appear.value
                 scaleX = s
                 scaleY = s
@@ -449,7 +465,7 @@ private fun CourseBlock(
             .height((blockH - YohakuDimens.gridCellGap).coerceAtLeast(12.dp))
             .clip(shape)
             .background(if (tinted) courseTint(course) else colors.raised)
-            .then(if (tinted) Modifier else Modifier.border(1.dp, colors.line, shape))
+            .then(borderModifier)
             .combinedClickable(
                 onClick = { onClick(course) },
                 onLongClick = onLongClick?.let {
@@ -478,7 +494,7 @@ private fun CourseBlock(
                 Text(
                     text = course.name,
                     style = nameStyle(prefs.nameSize),
-                    color = colors.neutral10,
+                    color = if (isPast) colors.neutral8 else colors.neutral10,
                     maxLines = if (roomy) prefs.nameLines else 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -486,7 +502,7 @@ private fun CourseBlock(
                     Text(
                         text = meta,
                         style = YohakuType.gridMeta,
-                        color = colors.neutral7,
+                        color = if (isPast) colors.neutral6 else colors.neutral7,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

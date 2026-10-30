@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.13.1 (2026-10-30)
+
+本次 3.13.1 版本紧急修复课表周视图中当天已结课课程异常透明隐形（点击仍能响应详情弹窗）的缺陷，并重构历史课程视觉容器与动效生命周期保护：
+
+### 课表周视图已结课程显示与槽位复用 Bug 彻底修复
+- **Compose 槽位复用与动效生命周期加固**：
+  - 为周视图课程块列表遍历补充 `key(block.course.id, block.top)` 唯一样本键，彻底消除在跨周翻页、冷启动学期补正重排或实时时序刷新时因无 Key 位置槽位复用导致旧 `Animatable` 残留状态污染的隐患。
+  - `CourseBlock` 内部入场动效将 `remember` 与 `LaunchedEffect` 全面绑定 `course.id` 作为 Key，并在协程执行中引入 `try { appear.animateTo(...) } finally { appear.snapTo(1f); entrance.markSeen(course.id) }` 强保障；若无需播放动画则直接 `appear.snapTo(1f)`，从物理上杜绝 `appear.value` 因动画取消或未触发而永久停留在 `0f`（100% 透明度）的极端隐形异常。
+- **实体物理微边框与层次对比度重构**：
+  - 已结束课程无论是否开启淡彩背景，均统一增加精细实体描边 `Modifier.border(1.dp, colors.line, shape)`，使课程卡片在当日高亮列（`neutral1`）底色上保持坚实的几何矩形轮廓，与日视图 `YohakuCard` 视觉语言对齐。
+  - 已结束课程透明度微调至优雅温和的 $85\%$，同时课程名称保留高识别度的 `colors.neutral8`，元信息使用 `colors.neutral6`，真正兑现“颜色变淡表示已结课，而非消失看不清”。
+
 ## 3.13.0 (2026-10-30)
 
 本次 3.13.0 版本重点聚焦课表周/日视图长按交互、艺术长图排版引擎重构、日程视觉主题对齐及全应用无 Emoji 极简美学打磨：
