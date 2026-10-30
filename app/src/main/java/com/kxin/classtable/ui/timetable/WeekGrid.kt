@@ -6,11 +6,15 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -172,8 +176,10 @@ internal fun WeekGrid(
     onCourseClick: (Course) -> Unit,
     modifier: Modifier = Modifier,
     visibleDays: List<Int> = (1..7).toList(),
+    onGridLongClick: ((day: Int, period: Int) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val rowCount = periods.size.coerceAtLeast(1)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // 行高:优先铺满可用高度;低于下限(小屏或节次特别多)时整格纵向滚动。
@@ -205,7 +211,28 @@ internal fun WeekGrid(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(gridHeight),
+                    .height(gridHeight)
+                    .pointerInput(visibleDays, periods, colW, rowH) {
+                        detectTapGestures(
+                            onLongPress = { offset ->
+                                if (onGridLongClick != null) {
+                                    haptics.tick()
+                                    val startX = (YohakuDimens.gridPadding + gutter).toPx()
+                                    val colIdx = if (colW.toPx() > 0) {
+                                        ((offset.x - startX) / colW.toPx()).toInt()
+                                    } else 0
+                                    val day = visibleDays.getOrNull(colIdx.coerceIn(0, visibleDays.size - 1))
+                                        ?: (colIdx + 1).coerceIn(1, 7)
+                                    val targetDay = teachingDays.getOrNull(day - 1)?.second ?: day
+                                    val periodIdx = if (rowH.toPx() > 0) {
+                                        (offset.y / rowH.toPx()).toInt()
+                                    } else 0
+                                    val period = (periodIdx + 1).coerceIn(1, rowCount)
+                                    onGridLongClick(targetDay, period)
+                                }
+                            },
+                        )
+                    },
             ) {
                 // 今天整列淡淡的底色(只做方位提示,不喧哗)
                 val todayVisibleIdx = visibleDays.indexOf(today)
@@ -277,6 +304,10 @@ internal fun WeekGrid(
                             staggerIndex = colIdx + blockIdx,
                             entrance = entrance,
                             onClick = onCourseClick,
+                            onLongClick = { c ->
+                                val targetDay = teachingDays.getOrNull(day - 1)?.second ?: day
+                                onGridLongClick?.invoke(targetDay, c.startPeriod)
+                            },
                         )
                     }
                 }
@@ -326,6 +357,7 @@ internal fun WeekGrid(
 }
 
 /** 网格中的一个课程块:可配淡彩底 / 圆角 / 显示内容 / 字号,入场带错峰动画。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CourseBlock(
     course: Course,
@@ -341,8 +373,10 @@ private fun CourseBlock(
     staggerIndex: Int,
     entrance: EntranceTracker,
     onClick: (Course) -> Unit,
+    onLongClick: ((Course) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     val blockH = rowH * height
     val isWideCol = width >= 70.dp
     // 够高才放第二行(元信息);只够一行时让课程名独占。宽列时(折叠屏展开态通常 >= 70dp)判定条件适当放宽
@@ -405,7 +439,7 @@ private fun CourseBlock(
     Box(
         modifier = Modifier
             .graphicsLayer {
-                alpha = appear.value * if (isPast) 0.52f else 1f
+                alpha = appear.value * if (isPast) 0.72f else 1f
                 val s = 0.9f + 0.1f * appear.value
                 scaleX = s
                 scaleY = s
@@ -416,7 +450,15 @@ private fun CourseBlock(
             .clip(shape)
             .background(if (tinted) courseTint(course) else colors.raised)
             .then(if (tinted) Modifier else Modifier.border(1.dp, colors.line, shape))
-            .clickable { onClick(course) },
+            .combinedClickable(
+                onClick = { onClick(course) },
+                onLongClick = onLongClick?.let {
+                    {
+                        haptics.tick()
+                        it(course)
+                    }
+                },
+            ),
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             if (isCurrent) {

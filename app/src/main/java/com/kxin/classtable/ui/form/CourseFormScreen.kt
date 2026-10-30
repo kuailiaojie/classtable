@@ -141,6 +141,9 @@ class CourseFormViewModel @Inject constructor(
 fun CourseFormScreen(
     nav: NavHostController,
     courseId: String?,
+    initialWeekday: Int? = null,
+    initialStartPeriod: Int? = null,
+    initialEndPeriod: Int? = null,
     viewModel: CourseFormViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -152,13 +155,21 @@ fun CourseFormScreen(
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val weekCount = settings.semesterWeekCount.coerceAtLeast(1)
 
+    val defaultMask = if (initialWeekday != null && initialWeekday in 1..7) {
+        1 shl (initialWeekday - 1)
+    } else {
+        1
+    }
+    val defaultStart = initialStartPeriod?.coerceAtLeast(1) ?: 1
+    val defaultEnd = initialEndPeriod?.coerceAtLeast(defaultStart) ?: defaultStart
+
     var name by rememberSaveable { mutableStateOf("") }
     var teacher by rememberSaveable { mutableStateOf("") }
     var location by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
-    var weekdaysMask by rememberSaveable { mutableIntStateOf(1) }   // 位掩码:bit(day-1)=1
-    var periodStart by rememberSaveable { mutableIntStateOf(1) }   // 节次区间起
-    var periodEnd by rememberSaveable { mutableIntStateOf(1) }     // 节次区间止
+    var weekdaysMask by rememberSaveable { mutableIntStateOf(defaultMask) }   // 位掩码:bit(day-1)=1
+    var periodStart by rememberSaveable { mutableIntStateOf(defaultStart) }   // 节次区间起
+    var periodEnd by rememberSaveable { mutableIntStateOf(defaultEnd) }     // 节次区间止
     var pickingEnd by rememberSaveable { mutableStateOf(false) }   // 是否正在选结束节
     var weekTypeIdx by rememberSaveable { mutableIntStateOf(0) }
     /** 单/双周的起止周。结束周留空 = 到学期末。 */
@@ -783,7 +794,7 @@ fun CourseFormScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "⚠️ 时间冲突提示",
+                        text = "时间冲突提示",
                         style = YohakuType.label12,
                         color = colors.warning,
                     )

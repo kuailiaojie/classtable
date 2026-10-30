@@ -1,8 +1,10 @@
 package com.kxin.classtable.design
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,17 +28,27 @@ import androidx.compose.ui.unit.dp
  * [onClick] 非空时整张卡片可点(吃掉全局的纸面按压反馈)。日视图的课程卡片此前完全
  * 不可点,与周视图课块「点开课程速览」的行为对不上——这里补的就是那处一致性。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun YohakuCard(
     modifier: Modifier = Modifier,
     accentBar: Boolean = false,
     containerColor: Color? = null,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalYohakuColors.current
+    val clickableModifier = if (onClick != null || onLongClick != null) {
+        modifier.combinedClickable(
+            onClick = { onClick?.invoke() },
+            onLongClick = onLongClick,
+        )
+    } else {
+        modifier
+    }
     Surface(
-        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
+        modifier = clickableModifier,
         shape = RoundedCornerShape(YohakuDimens.radiusCard),
         color = containerColor ?: colors.raised,
         border = BorderStroke(1.dp, colors.line),

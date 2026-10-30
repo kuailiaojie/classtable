@@ -334,7 +334,7 @@ private fun AssistantBubble(
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(
-                        text = if (message.failed) "⚠ 出错了" else "✦ 助手",
+                        text = if (message.failed) "出错了" else "助手",
                         style = YohakuType.label12,
                         color = if (message.failed) colors.error else colors.neutral7,
                     )
@@ -421,7 +421,7 @@ private fun TypingIndicator() {
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "✦ 助手", style = YohakuType.label12, color = colors.neutral7)
+                Text(text = "助手", style = YohakuType.label12, color = colors.neutral7)
                 Spacer(modifier = Modifier.width(YohakuDimens.gapTight))
                 repeat(3) { index ->
                     val dotAlpha by transition.animateFloat(

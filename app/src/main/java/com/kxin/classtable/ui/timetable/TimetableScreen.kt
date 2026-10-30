@@ -170,6 +170,8 @@ fun TimetableScreen(
     var isDayMode by rememberSaveable { mutableStateOf(false) }
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
+    var newCourseWeekday by remember { mutableStateOf<Int?>(null) }
+    var newCoursePeriod by remember { mutableStateOf<Int?>(null) }
     var showWeather by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
     var showExportImage by remember { mutableStateOf(false) }
@@ -212,11 +214,27 @@ fun TimetableScreen(
     }
 
     if (showAdd) {
+        val prefillDay = newCourseWeekday
+        val prefillPeriod = newCoursePeriod
         AddDialog(
-            onDismiss = { showAdd = false },
+            targetWeekday = prefillDay,
+            targetPeriod = prefillPeriod,
+            onDismiss = {
+                showAdd = false
+                newCourseWeekday = null
+                newCoursePeriod = null
+            },
             onPick = { route ->
                 showAdd = false
-                nav.navigate(route)
+                val finalRoute = if (route == "course_form" && prefillDay != null) {
+                    val p = prefillPeriod ?: 1
+                    "course_form?weekday=$prefillDay&startPeriod=$p&endPeriod=$p"
+                } else {
+                    route
+                }
+                newCourseWeekday = null
+                newCoursePeriod = null
+                nav.navigate(finalRoute)
             },
         )
     }
@@ -344,9 +362,13 @@ fun TimetableScreen(
             )
             // 动作簇:与导航簇之间留一道更宽的缝,靠留白分组(不画分隔线)
             Spacer(modifier = Modifier.width(14.dp))
-            HeaderTextAction(text = "添加", color = colors.accent) { showAdd = true }
+            HeaderTextAction(text = "添加", color = colors.accent) {
+                newCourseWeekday = null
+                newCoursePeriod = null
+                showAdd = true
+            }
             // AI 助手:页头里的可见入口;点击后助手从屏幕底部升起
-            HeaderTextAction(text = "✦ 助手", color = colors.accent) {
+            HeaderTextAction(text = "助手", color = colors.accent) {
                 haptics.tick()
                 onOpenAssistant()
             }
@@ -460,10 +482,9 @@ fun TimetableScreen(
                             }
                         }
 
-                        // 方案 A:在第 N 周大标题行右侧，放置克制典雅的「⤓ 导出长图」微操作
+                        // 方案 A:在第 N 周大标题行右侧，放置克制典雅的「导出」微操作
                         Surface(
                             modifier = Modifier
-                                .yohakuTouchTarget()
                                 .clip(RoundedCornerShape(YohakuDimens.radiusControl))
                                 .clickable {
                                     haptics.tick()
@@ -474,10 +495,10 @@ fun TimetableScreen(
                             border = BorderStroke(1.dp, colors.line),
                         ) {
                             Text(
-                                text = "⤓ 导出长图",
+                                text = "导出",
                                 style = YohakuType.label12,
                                 color = colors.accent,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp),
                             )
                         }
                     }
@@ -565,6 +586,11 @@ fun TimetableScreen(
                                 prefs = prefs,
                                 entrance = entrance,
                                 onCourseClick = { detailCourse = it },
+                                onGridLongClick = { d, p ->
+                                    newCourseWeekday = d
+                                    newCoursePeriod = p
+                                    showAdd = true
+                                },
                                 // 网格排在悬浮导航之上,最后一两节不会被导航栏永久压住
                                 modifier = Modifier
                                     .weight(1f)
@@ -600,6 +626,11 @@ fun TimetableScreen(
                             onAddAgenda = { startMin, endMin ->
                                 nav.navigate("agenda_form?date=${date.toEpochDay()}&startMinute=$startMin&endMinute=$endMin")
                             },
+                            onAddCourse = { d, p ->
+                                newCourseWeekday = d
+                                newCoursePeriod = p
+                                showAdd = true
+                            },
                         )
                     }
                 }
@@ -619,19 +650,36 @@ private fun dayDate(semesterStartDay: Long, week: Int, weekday: Int, todayWeekda
     return thisMonday.plusDays(((week - 1) * 7 + (weekday - 1)).toLong())
 }
 
-/** 「添加」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入。 */
+/** 「添加 / 新建课程」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入。 */
 @Composable
-private fun AddDialog(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+private fun AddDialog(
+    targetWeekday: Int? = null,
+    targetPeriod: Int? = null,
+    onDismiss: () -> Unit,
+    onPick: (String) -> Unit,
+) {
     val colors = LocalYohakuColors.current
+    val title = if (targetWeekday != null && targetPeriod != null) {
+        "新建课程 · ${Dates.weekdayChar(targetWeekday)} 第 $targetPeriod 节"
+    } else if (targetWeekday != null) {
+        "新建课程 · ${Dates.weekdayChar(targetWeekday)}"
+    } else {
+        "添加"
+    }
+    val manualDesc = if (targetWeekday != null && targetPeriod != null) {
+        "在 ${Dates.weekdayChar(targetWeekday)} 第 $targetPeriod 节自己填一门课"
+    } else {
+        "自己填一门课"
+    }
     val options = listOf(
+        Triple("手动添加", manualDesc, "course_form"),
         Triple("教务导入", "3 步导入,选学校识别方案", "import"),
-        Triple("手动添加", "自己填一门课", "course_form"),
         Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
         Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
     )
     YohakuDialog(
         onDismissRequest = onDismiss,
-        title = "添加",
+        title = title,
         actions = { YohakuDialogAction(text = "取消", onClick = onDismiss) },
     ) {
         options.forEachIndexed { index, (label, desc, route) ->

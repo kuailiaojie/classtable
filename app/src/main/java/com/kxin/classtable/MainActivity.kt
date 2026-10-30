@@ -272,15 +272,38 @@ fun ClasstableRoot(
                 ) {
                 composable("week") { TimetableScreen(nav, onOpenAssistant = { assistantOpen = true }) }
                 composable(
-                    route = "course_form?courseId={courseId}",
+                    route = "course_form?courseId={courseId}&weekday={weekday}&startPeriod={startPeriod}&endPeriod={endPeriod}",
                     arguments = listOf(
                         navArgument("courseId") {
                             type = NavType.StringType
                             nullable = true
                             defaultValue = null
                         },
+                        navArgument("weekday") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        },
+                        navArgument("startPeriod") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        },
+                        navArgument("endPeriod") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        },
                     ),
-                ) { entry -> CourseFormScreen(nav, entry.arguments?.getString("courseId")) }
+                ) { entry ->
+                    val weekday = entry.arguments?.getInt("weekday")?.takeIf { it > 0 }
+                    val startPeriod = entry.arguments?.getInt("startPeriod")?.takeIf { it > 0 }
+                    val endPeriod = entry.arguments?.getInt("endPeriod")?.takeIf { it > 0 }
+                    CourseFormScreen(
+                        nav = nav,
+                        courseId = entry.arguments?.getString("courseId"),
+                        initialWeekday = weekday,
+                        initialStartPeriod = startPeriod,
+                        initialEndPeriod = endPeriod,
+                    )
+                }
                 composable("import") { ImportScreen(nav) }
                 composable("import_manual") { ManualImportScreen(nav) }
                 composable("import_ai") { AiImportScreen(nav) }

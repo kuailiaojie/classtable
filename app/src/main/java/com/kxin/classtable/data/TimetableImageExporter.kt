@@ -70,6 +70,7 @@ class TimetableImageExporter @Inject constructor(
             ?: Typeface.SERIF
         val monoTypeface = ResourcesCompat.getFont(context, R.font.jetbrains_mono_regular)
             ?: Typeface.MONOSPACE
+        val sansTypeface = Typeface.create("sans-serif", Typeface.NORMAL)
 
         // 解析该周的实际上课情况
         val teachingDays = (1..7).map { d ->
@@ -143,8 +144,8 @@ class TimetableImageExporter @Inject constructor(
         // 顶栏眉线
         val eyebrowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = android.graphics.Color.parseColor("#7E7A71")
-            textSize = 25f
-            typeface = monoTypeface
+            textSize = 24f
+            typeface = sansTypeface
             letterSpacing = 0.16f
         }
         canvas.drawText("—  Y O H A K U   ·   学 期 课 程 历  —", marginH, 106f, eyebrowPaint)
@@ -152,9 +153,8 @@ class TimetableImageExporter @Inject constructor(
         // 主标题
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = android.graphics.Color.parseColor("#141311")
-            textSize = 76f
+            textSize = 72f
             typeface = serifTypeface
-            isFakeBoldText = true
         }
         canvas.drawText("第 $week 周 课程表", marginH, 192f, titlePaint)
 
@@ -236,9 +236,8 @@ class TimetableImageExporter @Inject constructor(
         val colWidth = (canvasWidth - 2 * marginH - gutterWidth) / visibleDays.size
         val weekdayNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = android.graphics.Color.parseColor("#151412")
-            textSize = 42f
+            textSize = 38f
             typeface = serifTypeface
-            isFakeBoldText = true
             textAlign = Paint.Align.CENTER
         }
         val weekdayEnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
@@ -358,20 +357,19 @@ class TimetableImageExporter @Inject constructor(
 
         // 5. 课程卡片真实色彩与艺术排版渲染
         val courseTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#12110F")
+            color = android.graphics.Color.parseColor("#1A1816")
             typeface = serifTypeface
-            isFakeBoldText = true
         }
         val courseMetaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#2E2C27")
-            typeface = serifTypeface
+            color = android.graphics.Color.parseColor("#454139")
+            typeface = sansTypeface
         }
         val courseTeacherPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#48443D")
-            typeface = serifTypeface
+            color = android.graphics.Color.parseColor("#5C574E")
+            typeface = sansTypeface
         }
         val courseTimePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#6C675E")
+            color = android.graphics.Color.parseColor("#757067")
             typeface = monoTypeface
         }
 
@@ -460,33 +458,39 @@ class TimetableImageExporter @Inject constructor(
                     3f, 3f, barPaint,
                 )
 
-                // 卡片内部文字排版 (自适应高清字号排版)
+                // 卡片内部文字排版 (自适应留白与精致字阶排版)
                 canvas.save()
                 canvas.clipRect(blockRect)
 
-                val contentLeft = blockRect.left + 22f
-                val contentRight = blockRect.right - 10f
-                val contentWidth = (contentRight - contentLeft).toInt().coerceAtLeast(35)
-                var currentY = blockRect.top + 18f
+                val contentLeft = blockRect.left + if (laneCount > 1) 14f else 20f
+                val contentRight = blockRect.right - if (laneCount > 1) 8f else 12f
+                val contentWidth = (contentRight - contentLeft).toInt().coerceAtLeast(30)
+                var currentY = blockRect.top + if (bh < 260f) 14f else 18f
 
                 val hasLocation = c.location.isNotBlank()
                 val hasTeacher = c.teacher.isNotBlank()
 
-                // 1. 课程名称排版 (大字号清晰可辨)
+                // 1. 课程名称排版 (与列宽相得益彰的黄金字号，杜绝字号过大撑爆与单字生硬折行)
                 val nameSize = when {
-                    laneCount > 1 -> 28f
-                    bh < 260f -> 36f
-                    bh < 380f -> 44f
-                    else -> 50f
+                    laneCount >= 3 -> 16f
+                    laneCount == 2 -> 20f
+                    contentWidth >= 220 -> if (bh >= 380f) 34f else 30f // 5天视图 (列宽较宽)
+                    bh < 260f -> 27f                                      // 1节课单节紧凑
+                    bh < 380f -> 30f                                      // 1.5-2节适中
+                    else -> 32f                                           // 大课 (>=2节)
                 }
                 courseTitlePaint.textSize = nameSize
-                val titleMaxLines = if (bh < 340f) 2 else 3
+                val titleMaxLines = when {
+                    bh < 220f -> 1
+                    bh < 360f -> 2
+                    else -> 3
+                }
 
                 val titleLayout = StaticLayout.Builder.obtain(
                     c.name, 0, c.name.length, courseTitlePaint, contentWidth,
                 ).setMaxLines(titleMaxLines)
                     .setEllipsize(TextUtils.TruncateAt.END)
-                    .setLineSpacing(3f, 1f)
+                    .setLineSpacing(5f, 1.15f)
                     .build()
 
                 canvas.save()
@@ -494,63 +498,68 @@ class TimetableImageExporter @Inject constructor(
                 titleLayout.draw(canvas)
                 canvas.restore()
 
-                currentY += titleLayout.height + 10f
+                currentY += titleLayout.height + if (bh < 260f) 6f else 10f
 
-                // 2. 地点与教师排版 (大字号保障清晰度)
-                val remH = blockRect.bottom - 8f - currentY
+                // 2. 地点、教师与时间排版 (使用 Sans-serif 清秀字体 + TextUtils.ellipsize 精确防溢出)
+                val remH = blockRect.bottom - 10f - currentY
 
-                if (bh >= 300f) {
-                    // 大块课程（>=2节）：独立行排布，舒展留白
-                    if (hasLocation) {
-                        val locSize = if (laneCount > 1) 22f else 28f
-                        courseMetaPaint.textSize = locSize
-                        val locText = if (c.location.length > 10) c.location.take(9) + "…" else c.location
-                        canvas.drawText("📍 $locText", contentLeft, currentY + locSize * 0.9f, courseMetaPaint)
-                        currentY += locSize + 14f
+                val locSize = if (laneCount > 1) 17f else 21f
+                val teacherSize = if (laneCount > 1) 16f else 19f
+                val timeSize = if (laneCount > 1) 15f else 18f
+
+                courseMetaPaint.textSize = locSize
+                courseTeacherPaint.textSize = teacherSize
+                courseTimePaint.textSize = timeSize
+
+                if (bh >= 360f) {
+                    // 宽裕大课（>=2节）：地点与教师分行独立呈现
+                    if (hasLocation && remH >= 24f) {
+                        val locText = TextUtils.ellipsize(c.location, courseMetaPaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                        val fm = courseMetaPaint.fontMetrics
+                        canvas.drawText(locText, contentLeft, currentY - fm.ascent, courseMetaPaint)
+                        currentY += (fm.descent - fm.ascent) + 6f
                     }
-                    if (hasTeacher) {
-                        val teacherSize = if (laneCount > 1) 20f else 26f
-                        courseTeacherPaint.textSize = teacherSize
-                        val teacherText = if (c.teacher.length > 8) c.teacher.take(7) + "…" else c.teacher
-                        canvas.drawText("👤 $teacherText", contentLeft, currentY + teacherSize * 0.9f, courseTeacherPaint)
-                        currentY += teacherSize + 14f
+                    if (hasTeacher && blockRect.bottom - 10f - currentY >= 22f) {
+                        val teacherText = TextUtils.ellipsize(c.teacher, courseTeacherPaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                        val fm = courseTeacherPaint.fontMetrics
+                        canvas.drawText(teacherText, contentLeft, currentY - fm.ascent, courseTeacherPaint)
+                        currentY += (fm.descent - fm.ascent) + 6f
                     }
-                    if (bh >= 480f) {
-                        val timeSize = if (laneCount > 1) 19f else 23f
-                        courseTimePaint.textSize = timeSize
+                    if (bh >= 480f && blockRect.bottom - 10f - currentY >= 20f) {
                         val timeDesc = if (c.hasCustomTime()) {
                             Schedule.courseTimeText(c, periods)
                         } else {
                             "${c.startPeriod}-${c.endPeriod}节"
                         }
-                        canvas.drawText(timeDesc, contentLeft, currentY + timeSize * 0.9f, courseTimePaint)
+                        val timeText = TextUtils.ellipsize(timeDesc, courseTimePaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                        val fm = courseTimePaint.fontMetrics
+                        canvas.drawText(timeText, contentLeft, currentY - fm.ascent, courseTimePaint)
                     }
                 } else {
-                    // 单节课或紧凑块
-                    if (remH >= 54f) {
-                        if (hasLocation) {
-                            val locSize = if (laneCount > 1) 20f else 25f
-                            courseMetaPaint.textSize = locSize
-                            val locText = if (c.location.length > 9) c.location.take(8) + "…" else c.location
-                            canvas.drawText("📍 $locText", contentLeft, currentY + locSize * 0.9f, courseMetaPaint)
-                            currentY += locSize + 10f
-                        }
-                        if (hasTeacher) {
-                            val teacherSize = if (laneCount > 1) 18f else 23f
-                            courseTeacherPaint.textSize = teacherSize
-                            val teacherText = if (c.teacher.length > 7) c.teacher.take(6) + "…" else c.teacher
-                            canvas.drawText("👤 $teacherText", contentLeft, currentY + teacherSize * 0.9f, courseTeacherPaint)
-                        }
-                    } else {
-                        val combinedMeta = when {
-                            hasLocation && hasTeacher -> "📍 ${c.location.take(5)} · ${c.teacher.take(4)}"
-                            hasLocation -> "📍 ${c.location}"
-                            hasTeacher -> "👤 ${c.teacher}"
+                    // 紧凑或单节课程：优先在一至两行内妥善排布地点与教师
+                    val metaLineHeight = courseMetaPaint.fontMetrics.let { it.descent - it.ascent }
+                    val canFitTwoLines = remH >= (metaLineHeight * 2 + 6f)
+
+                    if (canFitTwoLines && hasLocation && hasTeacher) {
+                        val locText = TextUtils.ellipsize(c.location, courseMetaPaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                        val fmLoc = courseMetaPaint.fontMetrics
+                        canvas.drawText(locText, contentLeft, currentY - fmLoc.ascent, courseMetaPaint)
+                        currentY += (fmLoc.descent - fmLoc.ascent) + 4f
+
+                        val teacherText = TextUtils.ellipsize(c.teacher, courseTeacherPaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                        val fmTeacher = courseTeacherPaint.fontMetrics
+                        canvas.drawText(teacherText, contentLeft, currentY - fmTeacher.ascent, courseTeacherPaint)
+                    } else if (remH >= metaLineHeight) {
+                        val combined = when {
+                            hasLocation && hasTeacher -> "${c.location} · ${c.teacher}"
+                            hasLocation -> c.location
+                            hasTeacher -> c.teacher
                             else -> null
                         }
-                        if (combinedMeta != null) {
-                            courseMetaPaint.textSize = if (laneCount > 1) 18f else 22f
-                            canvas.drawText(combinedMeta, contentLeft, currentY + 18f, courseMetaPaint)
+                        if (combined != null) {
+                            val text = TextUtils.ellipsize(combined, courseMetaPaint, contentWidth.toFloat(), TextUtils.TruncateAt.END).toString()
+                            val fm = courseMetaPaint.fontMetrics
+                            canvas.drawText(text, contentLeft, currentY - fm.ascent, courseMetaPaint)
                         }
                     }
                 }
@@ -586,7 +595,7 @@ class TimetableImageExporter @Inject constructor(
             typeface = serifTypeface
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("❖   学 习 与 生 活 的 留 白 艺 术   ❖", canvasWidth / 2f, footerLineY + 84f, footerMottoPaint)
+        canvas.drawText("·   学 习 与 生 活 的 留 白 艺 术   ·", canvasWidth / 2f, footerLineY + 84f, footerMottoPaint)
 
         // 右侧导出日期与周次题跋
         val dateNow = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))

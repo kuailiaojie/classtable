@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,6 +118,7 @@ internal fun DayList(
     onToggleAgenda: ((String, Boolean) -> Unit)? = null,
     onAgendaClick: ((AgendaEvent) -> Unit)? = null,
     onAddAgenda: ((startMinute: Int, endMinute: Int) -> Unit)? = null,
+    onAddCourse: ((weekday: Int, period: Int?) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -261,7 +264,20 @@ internal fun DayList(
 
             Box(modifier = Modifier.weight(1f)) {
                 if (dayCourses.isEmpty() && dayAgendas.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(date) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        haptics.tick()
+                                        val targetDay = teaching?.second ?: date.dayOfWeek.value
+                                        onAddCourse?.invoke(targetDay, null)
+                                    },
+                                )
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Text(
                             text = if (plan.rest) "停课(调休)" else "没有课程与日程安排 · 适宜自由阅读",
                             style = YohakuType.copy14,
@@ -332,9 +348,14 @@ internal fun DayList(
                                         val isPast = isToday && (item.endMinute < nowMinute)
                                         YohakuCard(
                                             accentBar = isCurrent,
-                                            containerColor = if (isPast) colors.neutral2 else courseTint(item.course),
+                                            containerColor = courseTint(item.course),
                                             onClick = { onCourseClick(item.course) },
-                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.58f } else Modifier,
+                                            onLongClick = {
+                                                haptics.tick()
+                                                val targetDay = teaching?.second ?: date.dayOfWeek.value
+                                                onAddCourse?.invoke(targetDay, item.course.startPeriod)
+                                            },
+                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.72f } else Modifier,
                                         ) {
                                             Row(verticalAlignment = Alignment.Top) {
                                                 Text(
@@ -430,7 +451,7 @@ internal fun DayList(
                                                 val m = item.durationMinutes % 60
                                                 val durationStr = if (h > 0 && m > 0) "${h}小时${m}分" else if (h > 0) "${h}小时" else "${m}分钟"
                                                 Text(
-                                                    text = "☕ 课间空堂 $durationStr · 适宜自习与整理",
+                                                    text = "课间空堂 $durationStr · 适宜自习与整理",
                                                     style = YohakuType.label12,
                                                     color = colors.neutral7,
                                                     modifier = Modifier.weight(1f),

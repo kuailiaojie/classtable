@@ -39,7 +39,6 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberYohakuHaptics
-import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.LunarDate
 import java.time.LocalDate
@@ -63,6 +62,7 @@ internal fun CalendarStrip(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
     // 以进入时的周为锚:页码与「周」一一对应,拖动才有一页一周的稳定映射
     val anchorEpoch = remember { monday.toEpochDay() }
     val targetPage = WeekPageCenter + weeksBetween(anchorEpoch, monday.toEpochDay())
@@ -113,8 +113,11 @@ internal fun CalendarStrip(
             ) {
                 Surface(
                     modifier = Modifier
-                        .yohakuTouchTarget()
-                        .clickable(onClick = onToday),
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .clickable {
+                            haptics.tick()
+                            onToday()
+                        },
                     shape = RoundedCornerShape(YohakuDimens.radiusControl),
                     color = colors.raised,
                     border = BorderStroke(1.dp, colors.line),
@@ -123,7 +126,7 @@ internal fun CalendarStrip(
                         text = "今天",
                         style = YohakuType.label12,
                         color = colors.accent,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp),
                     )
                 }
             }
@@ -171,14 +174,12 @@ private fun DayCell(
     val haptics = rememberYohakuHaptics()
     val cellShape = RoundedCornerShape(YohakuDimens.radiusCard)
 
-    // 严谨的选中与今天状态分级：
-    // 1. 今天且被选中：accent 实底白字，最高视觉焦点
-    // 2. 非今天被选中：neutral9 深色方块（纸面白字），明确指明当前查看日
-    // 3. 今天但未选中：accent 极淡底色 + 细描边，温和锚定“今天”，不抢夺选中焦点
-    // 4. 普通未选中日：透明背景无描边
+    // 严谨的选中与今天状态分级（跟随当前主题色彩）：
+    // 1. 当前选中日：accent 实底白字，与当前主题主色一致
+    // 2. 今天但未选中：accent 极淡底色 + 细描边，温和锚定“今天”
+    // 3. 普通未选中日：透明背景无描边
     val targetBg = when {
-        isToday && isSelected -> colors.accent
-        isSelected -> colors.neutral9
+        isSelected -> colors.accent
         isToday -> colors.accent.copy(alpha = 0.12f)
         else -> Color.Transparent
     }
@@ -198,19 +199,18 @@ private fun DayCell(
     )
 
     val dateTextColor = when {
-        isToday && isSelected -> Color.White
-        isSelected -> colors.paper
+        isSelected -> Color.White
         isToday -> colors.accent
         else -> colors.neutral9
     }
     val weekdayColor = when {
+        isSelected -> colors.accent
         isToday -> colors.accent
-        isSelected -> colors.neutral9
         else -> colors.neutral6
     }
     val lunarColor = when {
+        isSelected -> colors.accent
         isToday -> colors.accent
-        isSelected -> colors.neutral9
         else -> colors.neutral6
     }
     val lunar = remember(date) { LunarDate.label(date) }
