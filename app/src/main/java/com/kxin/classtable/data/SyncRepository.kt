@@ -320,19 +320,21 @@ class SyncRepository @Inject constructor(
     }
 
     private suspend fun pushSettings(uid: String, token: String, s: AppSettings, updatedAt: Long) {
-        val fields = JSONObject()
-            .put("themeMode", JSONObject().put("stringValue", s.themeMode.name))
-            .put("accentHex", JSONObject().put("stringValue", s.accentHex))
-            .put("currentWeek", JSONObject().put("integerValue", s.currentWeek.toString()))
-            .put("periodTimes", JSONObject().put("stringValue", s.periodTimes))
-            .put("semesterStartDay", JSONObject().put("integerValue", s.semesterStartDay.toString()))
-            .put("semesterWeekCount", JSONObject().put("integerValue", s.semesterWeekCount.toString()))
-            .put("aiProvider", JSONObject().put("stringValue", s.aiProvider))
-            .put("aiBaseUrl", JSONObject().put("stringValue", s.aiBaseUrl))
-            .put("aiModel", JSONObject().put("stringValue", s.aiModel))
-            .put("notificationsEnabled", JSONObject().put("booleanValue", s.notificationsEnabled))
-            .put("notifyLeadMinutes", JSONObject().put("integerValue", s.notifyLeadMinutes.toString()))
-            .put("updatedAt", JSONObject().put("integerValue", updatedAt.toString()))
+        val fields = JSONObject().apply {
+            FirestoreFields.putString(this, "themeMode", s.themeMode.name)
+            FirestoreFields.putString(this, "accentHex", s.accentHex)
+            FirestoreFields.putInt(this, "currentWeek", s.currentWeek)
+            FirestoreFields.putString(this, "periodTimes", s.periodTimes)
+            FirestoreFields.putLong(this, "semesterStartDay", s.semesterStartDay)
+            FirestoreFields.putInt(this, "semesterWeekCount", s.semesterWeekCount)
+            FirestoreFields.putString(this, "aiProvider", s.aiProvider)
+            FirestoreFields.putString(this, "aiBaseUrl", s.aiBaseUrl)
+            FirestoreFields.putString(this, "aiModel", s.aiModel)
+            FirestoreFields.putBoolean(this, "notificationsEnabled", s.notificationsEnabled)
+            FirestoreFields.putInt(this, "notifyLeadMinutes", s.notifyLeadMinutes)
+            FirestoreFields.putString(this, "scheduleAdjustments", s.scheduleAdjustments)
+            FirestoreFields.putLong(this, "updatedAt", updatedAt)
+        }
         gateway.firestore(
             "${dbBase()}:commit",
             "POST",
@@ -341,27 +343,25 @@ class SyncRepository @Inject constructor(
         )
     }
 
-    /** 解析配置文档;字段缺失/损坏时回退默认值,保证部分文档也能安全合并。 */
+    /** 解析配置文档;字段缺失/损坏时回退默认值,保证部分文档也能安全合并。包含调休安排的云端同步。 */
     private fun parseSettingsDoc(doc: JSONObject): RemoteSettings {
         val f = doc.optJSONObject("fields")
             ?: return RemoteSettings(AppSettings(), 0L)
-        fun str(key: String) = f.optJSONObject(key)?.optString("stringValue").orEmpty()
-        fun int(key: String) = f.optJSONObject(key)?.optString("integerValue")?.toLongOrNull() ?: 0L
-        fun bool(key: String) = f.optJSONObject(key)?.optBoolean("booleanValue") ?: false
         val settings = AppSettings(
-            themeMode = enumOrDefault(str("themeMode"), ThemeMode.SYSTEM),
-            accentHex = str("accentHex").ifBlank { Defaults.ACCENT_HEX },
-            currentWeek = int("currentWeek").toInt().coerceAtLeast(1),
-            periodTimes = str("periodTimes").ifBlank { Schedule.DEFAULT_PERIODS },
-            semesterStartDay = int("semesterStartDay"),
-            semesterWeekCount = int("semesterWeekCount").toInt().coerceAtLeast(1),
-            aiProvider = str("aiProvider").ifBlank { AiProvider.GEMINI.name },
-            aiBaseUrl = str("aiBaseUrl"),
-            aiModel = str("aiModel"),
-            notificationsEnabled = bool("notificationsEnabled"),
-            notifyLeadMinutes = int("notifyLeadMinutes").toInt().coerceIn(0, 180),
+            themeMode = enumOrDefault(FirestoreFields.getString(f, "themeMode"), ThemeMode.SYSTEM),
+            accentHex = FirestoreFields.getString(f, "accentHex").ifBlank { Defaults.ACCENT_HEX },
+            currentWeek = FirestoreFields.getInt(f, "currentWeek", 1).coerceAtLeast(1),
+            periodTimes = FirestoreFields.getString(f, "periodTimes").ifBlank { Schedule.DEFAULT_PERIODS },
+            semesterStartDay = FirestoreFields.getLong(f, "semesterStartDay", 0L),
+            semesterWeekCount = FirestoreFields.getInt(f, "semesterWeekCount", 20).coerceAtLeast(1),
+            aiProvider = FirestoreFields.getString(f, "aiProvider").ifBlank { AiProvider.GEMINI.name },
+            aiBaseUrl = FirestoreFields.getString(f, "aiBaseUrl"),
+            aiModel = FirestoreFields.getString(f, "aiModel"),
+            notificationsEnabled = FirestoreFields.getBoolean(f, "notificationsEnabled"),
+            notifyLeadMinutes = FirestoreFields.getInt(f, "notifyLeadMinutes", 10).coerceIn(0, 180),
+            scheduleAdjustments = FirestoreFields.getString(f, "scheduleAdjustments"),
         )
-        return RemoteSettings(settings, int("updatedAt"))
+        return RemoteSettings(settings, FirestoreFields.getLong(f, "updatedAt", 0L))
     }
 
     private data class RemoteSettings(val settings: AppSettings, val updatedAt: Long)

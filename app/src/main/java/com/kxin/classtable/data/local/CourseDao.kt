@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CourseDao {
-    @Query("SELECT * FROM courses ORDER BY weekday, startPeriod")
+    @Query("SELECT * FROM courses")
     fun observeAll(): Flow<List<CourseEntity>>
 
-    @Query("SELECT * FROM courses WHERE (weekdays & :mask) != 0 ORDER BY startPeriod")
+    @Query("SELECT * FROM courses WHERE (weekdays & :mask) != 0")
     fun observeByWeekday(mask: Int): Flow<List<CourseEntity>>
 
     @Query("SELECT * FROM courses WHERE id = :id")
@@ -28,4 +28,7 @@ interface CourseDao {
 
     @Query("DELETE FROM courses WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM courses")
+    suspend fun deleteAll()
 }

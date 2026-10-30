@@ -31,4 +31,7 @@ interface AgendaDao {
 
     @Query("DELETE FROM agenda_events WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM agenda_events")
+    suspend fun deleteAll()
 }

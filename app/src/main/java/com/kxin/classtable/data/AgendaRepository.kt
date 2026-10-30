@@ -55,6 +55,17 @@ class AgendaRepository @Inject constructor(
         postChangeSideEffects()
     }
 
+    suspend fun restoreAll(events: List<AgendaEvent>, replace: Boolean = true) {
+        if (replace) {
+            dao.deleteAll()
+        }
+        if (events.isNotEmpty()) {
+            dao.upsertAll(events.map { AgendaEntity.fromDomain(it) })
+        }
+        scope.launch { runCatching { sync.syncNow() } }
+        postChangeSideEffects()
+    }
+
     suspend fun save(event: AgendaEvent) {
         val stamped = event.copy(updatedAt = System.currentTimeMillis())
         dao.upsert(AgendaEntity.fromDomain(stamped))

@@ -79,58 +79,49 @@ data class RemoteCourse(
         // ---- Firestore REST 字段编解码(org.json,零依赖) ----
 
         /** fields → RemoteCourse;缺失字段回退到 data class 默认值(与原 toObject 行为一致)。 */
-        fun fromFields(fields: JSONObject): RemoteCourse {
-            fun s(n: String) = fields.optJSONObject(n)?.optString("stringValue").orEmpty()
-            fun i(n: String, def: Int) = fields.optJSONObject(n)?.optString("integerValue")?.toIntOrNull() ?: def
-            fun l(n: String) = fields.optJSONObject(n)?.optString("integerValue")?.toLongOrNull() ?: 0L
-            fun iOpt(n: String) = fields.optJSONObject(n)?.optString("integerValue")?.toIntOrNull()
-            return RemoteCourse(
-                id = s("id"),
-                name = s("name"),
-                teacher = s("teacher"),
-                location = s("location"),
-                weekday = i("weekday", 1),
-                startPeriod = i("startPeriod", 1),
-                endPeriod = i("endPeriod", 1),
-                weekType = s("weekType").ifBlank { "EVERY_WEEK" },
-                weekStart = i("weekStart", 1),
-                weekEnd = i("weekEnd", 16),
-                weeks = s("weeks"),
-                semesterId = s("semesterId").ifBlank { "default" },
-                updatedAt = l("updatedAt"),
-                customStartMinute = iOpt("customStartMinute"),
-                customEndMinute = iOpt("customEndMinute"),
-                weekdays = i("weekdays", 0),
-                note = s("note"),
-                colorHex = s("colorHex"),
-                colorHue = iOpt("colorHue"),
-            )
-        }
+        fun fromFields(fields: JSONObject): RemoteCourse = RemoteCourse(
+            id = FirestoreFields.getString(fields, "id"),
+            name = FirestoreFields.getString(fields, "name"),
+            teacher = FirestoreFields.getString(fields, "teacher"),
+            location = FirestoreFields.getString(fields, "location"),
+            weekday = FirestoreFields.getInt(fields, "weekday", 1),
+            startPeriod = FirestoreFields.getInt(fields, "startPeriod", 1),
+            endPeriod = FirestoreFields.getInt(fields, "endPeriod", 1),
+            weekType = FirestoreFields.getString(fields, "weekType", "EVERY_WEEK"),
+            weekStart = FirestoreFields.getInt(fields, "weekStart", 1),
+            weekEnd = FirestoreFields.getInt(fields, "weekEnd", 16),
+            weeks = FirestoreFields.getString(fields, "weeks"),
+            semesterId = FirestoreFields.getString(fields, "semesterId", "default"),
+            updatedAt = FirestoreFields.getLong(fields, "updatedAt"),
+            customStartMinute = FirestoreFields.getIntOrNull(fields, "customStartMinute"),
+            customEndMinute = FirestoreFields.getIntOrNull(fields, "customEndMinute"),
+            weekdays = FirestoreFields.getInt(fields, "weekdays", 0),
+            note = FirestoreFields.getString(fields, "note"),
+            colorHex = FirestoreFields.getString(fields, "colorHex"),
+            colorHue = FirestoreFields.getIntOrNull(fields, "colorHue"),
+        )
 
         /** RemoteCourse → fields;null 字段省略(等于文档中不存在,与 SDK 写 null 语义兼容)。 */
         fun toFields(c: RemoteCourse): JSONObject = JSONObject().apply {
-            fun str(n: String, v: String) = put(n, JSONObject().put("stringValue", v))
-            fun int(n: String, v: Int) = put(n, JSONObject().put("integerValue", v.toString()))
-            fun long(n: String, v: Long) = put(n, JSONObject().put("integerValue", v.toString()))
-            str("id", c.id)
-            str("name", c.name)
-            str("teacher", c.teacher)
-            str("location", c.location)
-            int("weekday", c.weekday)
-            int("startPeriod", c.startPeriod)
-            int("endPeriod", c.endPeriod)
-            str("weekType", c.weekType)
-            int("weekStart", c.weekStart)
-            int("weekEnd", c.weekEnd)
-            str("weeks", c.weeks)
-            str("semesterId", c.semesterId)
-            long("updatedAt", c.updatedAt)
-            c.customStartMinute?.let { int("customStartMinute", it) }
-            c.customEndMinute?.let { int("customEndMinute", it) }
-            int("weekdays", c.weekdays)
-            str("note", c.note)
-            str("colorHex", c.colorHex)
-            c.colorHue?.let { int("colorHue", it) }
+            FirestoreFields.putString(this, "id", c.id)
+            FirestoreFields.putString(this, "name", c.name)
+            FirestoreFields.putString(this, "teacher", c.teacher)
+            FirestoreFields.putString(this, "location", c.location)
+            FirestoreFields.putInt(this, "weekday", c.weekday)
+            FirestoreFields.putInt(this, "startPeriod", c.startPeriod)
+            FirestoreFields.putInt(this, "endPeriod", c.endPeriod)
+            FirestoreFields.putString(this, "weekType", c.weekType)
+            FirestoreFields.putInt(this, "weekStart", c.weekStart)
+            FirestoreFields.putInt(this, "weekEnd", c.weekEnd)
+            FirestoreFields.putString(this, "weeks", c.weeks)
+            FirestoreFields.putString(this, "semesterId", c.semesterId)
+            FirestoreFields.putLong(this, "updatedAt", c.updatedAt)
+            c.customStartMinute?.let { FirestoreFields.putInt(this, "customStartMinute", it) }
+            c.customEndMinute?.let { FirestoreFields.putInt(this, "customEndMinute", it) }
+            FirestoreFields.putInt(this, "weekdays", c.weekdays)
+            FirestoreFields.putString(this, "note", c.note)
+            FirestoreFields.putString(this, "colorHex", c.colorHex)
+            c.colorHue?.let { FirestoreFields.putInt(this, "colorHue", it) }
         }
     }
 }

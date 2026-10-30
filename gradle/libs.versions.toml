@@ -19,6 +19,7 @@ datastore = "1.2.1"
 work = "2.12.0"
 lunar = "1.7.7"
 appfunctions = "1.0.0-alpha13"
+junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -53,6 +54,7 @@ lunar = { group = "cn.6tail", name = "lunar", version.ref = "lunar" }
 # AppFunctions(Android 16+):把 App 能力以函数形式暴露给设备端智能体(设备端 MCP)。实验性。
 androidx-appfunctions = { group = "androidx.appfunctions", name = "appfunctions", version.ref = "appfunctions" }
 androidx-appfunctions-compiler = { group = "androidx.appfunctions", name = "appfunctions-compiler", version.ref = "appfunctions" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

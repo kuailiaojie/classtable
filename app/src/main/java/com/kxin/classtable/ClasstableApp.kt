@@ -1,6 +1,10 @@
 package com.kxin.classtable
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
+import android.webkit.WebView
+import com.kxin.classtable.domain.model.NotifyMode
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -72,6 +76,9 @@ class ClasstableApp : Application() {
     @ApplicationScope
     lateinit var scope: CoroutineScope
 
+    private var startedActivityCount = 0
+    private var pendingAppIconIndex: Int? = null
+
     /**
      * 上报推送标识。FCM 已从「注册令牌」转向 Firebase Installation ID(FID):旧的
      * `getToken()` / `onNewToken()` 都已废弃,改用 FID;FID 可直接当作定向投递的令牌用。
@@ -84,6 +91,29 @@ class ClasstableApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 调试包开放 WebView 远程调试(全局静态生效一次,避免在 WebView 创建时重复调用)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {
+                startedActivityCount++
+            }
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {
+                startedActivityCount = (startedActivityCount - 1).coerceAtLeast(0)
+                // 退至后台时,若有待生效的图标切换,此时执行 alias 切换不会打断前台任务或引起桌面异常退出
+                if (startedActivityCount == 0 && pendingAppIconIndex != null) {
+                    val target = pendingAppIconIndex!!
+                    pendingAppIconIndex = null
+                    applyAppIcon(this@ClasstableApp, AppIcon.of(target))
+                }
+            }
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+
         // App Check 必须先于任何 Firebase 调用安装 provider(给反代请求附 attestation)
         AppCheck.init(this)
         Analytics.init(this)
@@ -174,24 +204,48 @@ class ClasstableApp : Application() {
         })
 
         // 课程 / 日程 / 设置(作息/学期/通知开关/提前量/提醒模式)变化 → 重排提醒。
-        // 排程按「签名」幂等:内容没变时直接返回,不再每次发射都全量取消+重排。
+        // 排程按「签名」幂等,且仅监听与排程相关的配置子集,过滤无关设置(如检查更新、图标、雨课堂拉取时间戳等)的高频触发。
+        val scheduleSettingsFlow = settingsRepository.settings
+            .map { s ->
+                ScheduleRelevantSettings(
+                    semesterStartDay = s.semesterStartDay,
+                    semesterWeekCount = s.semesterWeekCount,
+                    periodTimes = s.periodTimes,
+                    scheduleAdjustments = s.scheduleAdjustments,
+                    notificationsEnabled = s.notificationsEnabled,
+                    notifyLeadMinutes = s.notifyLeadMinutes,
+                    notifyMode = s.notifyMode,
+                    tomorrowReminderEnabled = s.tomorrowReminderEnabled,
+                    tomorrowReminderTime = s.tomorrowReminderTime,
+                    agendaReminderEnabled = s.agendaReminderEnabled,
+                    agendaAllDayRemindTime = s.agendaAllDayRemindTime,
+                )
+            }
+            .distinctUntilChanged()
+
         scope.launch {
             combine(
                 courseRepository.observeAll(),
                 agendaRepository.observeAll(),
-                settingsRepository.settings,
+                scheduleSettingsFlow,
             ) { _, _, _ -> Unit }.collect {
                 reminderPlanner.rescheduleAll()
             }
         }
 
-        // 桌面图标:选中的那张(或轮播换到的那张)一变,就把启用的 activity-alias 切过去。
-        // 启动时也会跑一次 —— 等于把 alias 与设置对齐,升级 / 重装后仍然一致。
+        // 桌面图标:前台切换 activity-alias 在部分 ROM 上会导致应用闪退回桌面。
+        // 若当前有 Activity 在前台,暂存目标索引,延迟至应用退入后台(onActivityStopped 计数归零)时再切换。
         scope.launch {
             settingsRepository.settings
                 .map { it.appIconIndex }
                 .distinctUntilChanged()
-                .collect { applyAppIcon(this@ClasstableApp, AppIcon.of(it)) }
+                .collect { newIndex ->
+                    if (startedActivityCount == 0) {
+                        applyAppIcon(this@ClasstableApp, AppIcon.of(newIndex))
+                    } else {
+                        pendingAppIconIndex = newIndex
+                    }
+                }
         }
     }
 
@@ -204,3 +258,19 @@ class ClasstableApp : Application() {
         }
     }
 }
+
+
+/** 仅提取与课程及日程提醒相关的配置子集,避免无关设置字段变动引发重复数据库全量重查。 */
+private data class ScheduleRelevantSettings(
+    val semesterStartDay: Long,
+    val semesterWeekCount: Int,
+    val periodTimes: String,
+    val scheduleAdjustments: String,
+    val notificationsEnabled: Boolean,
+    val notifyLeadMinutes: Int,
+    val notifyMode: String,
+    val tomorrowReminderEnabled: Boolean,
+    val tomorrowReminderTime: String,
+    val agendaReminderEnabled: Boolean,
+    val agendaAllDayRemindTime: String,
+)

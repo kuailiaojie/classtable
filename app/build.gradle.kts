@@ -19,6 +19,10 @@ plugins {
     alias(libs.plugins.firebase.perf)
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 /**
  * uapis.cn 天气接口的 key(日视图顶部的当前天气)。
  *
@@ -45,8 +49,8 @@ android {
         applicationId = "com.kxin.classtable"
         minSdk = 26
         targetSdk = 36
-        versionCode = 91
-        versionName = "3.10.0"
+        versionCode = 92
+        versionName = "3.11.0"
 
         // Firebase 反代地址(大陆访问入口)。换部署站点时只改这一行。
         buildConfigField(
@@ -77,6 +81,10 @@ android {
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     buildTypes {
@@ -186,6 +194,9 @@ dependencies {
     // 运行时是可选能力 —— 不支持的系统上库自身会跳过,不影响应用其余部分。
     implementation(libs.androidx.appfunctions)
     ksp(libs.androidx.appfunctions.compiler)
+
+    testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)

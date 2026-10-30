@@ -408,35 +408,73 @@ class UpdateRepository @Inject constructor(
      * 预发布要单独处理,否则 `0.3.0-rc1` 与 `0.3.0` 会被当成同一个版本 —— 发过 RC 之后
      * RC 用户永远收不到正式版。规则:正式版 > 同号预发布版;同为预发布版则比编号(rc2 > rc1)。
      */
-    private fun isNewer(current: String, latest: String): Boolean {
+    companion object {
+    internal fun isNewer(current: String, latest: String): Boolean {
         val a = parseVersion(current)
         val b = parseVersion(latest)
-        for (i in 0 until maxOf(a.numbers.size, b.numbers.size)) {
-            val cur = a.numbers.getOrElse(i) { 0 }
-            val lat = b.numbers.getOrElse(i) { 0 }
-            if (lat != cur) return lat > cur
-        }
-        return when {
-            b.pre == null -> a.pre != null
-            a.pre == null -> false
-            else -> b.pre > a.pre
+        return b > a
+    }
+
+    /** [preRelease] 为 null 表示正式版。遵循 SemVer 2.0 规范。 */
+    internal data class ParsedVersion(
+        val numbers: List<Int>,
+        val preRelease: List<String>?,
+    ) : Comparable<ParsedVersion> {
+        override fun compareTo(other: ParsedVersion): Int {
+            for (i in 0 until maxOf(numbers.size, other.numbers.size)) {
+                val cur = numbers.getOrElse(i) { 0 }
+                val oth = other.numbers.getOrElse(i) { 0 }
+                if (cur != oth) return cur.compareTo(oth)
+            }
+            if (preRelease == null && other.preRelease == null) return 0
+            if (preRelease == null) return 1
+            if (other.preRelease == null) return -1
+
+            val len = maxOf(preRelease.size, other.preRelease.size)
+            for (i in 0 until len) {
+                if (i >= preRelease.size) return -1
+                if (i >= other.preRelease.size) return 1
+                val p1 = preRelease[i]
+                val p2 = other.preRelease[i]
+                val n1 = p1.toIntOrNull()
+                val n2 = p2.toIntOrNull()
+                val cmp = when {
+                    n1 != null && n2 != null -> n1.compareTo(n2)
+                    n1 != null -> -1
+                    n2 != null -> 1
+                    else -> p1.compareTo(p2)
+                }
+                if (cmp != 0) return cmp
+            }
+            return 0
         }
     }
 
-    /** [pre] 为 null 表示正式版;"0.3.0-rc1" → numbers=[0,3,0], pre=1。 */
-    private data class ParsedVersion(val numbers: List<Int>, val pre: Int?)
-
-    private fun parseVersion(version: String): ParsedVersion {
-        val text = version.trim().removePrefix("v")
+    internal fun parseVersion(version: String): ParsedVersion {
+        val text = version.trim().removePrefix("v").substringBefore('+')
         val core = text.substringBefore('-')
-        val suffix = text.substringAfter('-', "")
-        return ParsedVersion(
-            numbers = core.split('.').map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 },
-            pre = if (suffix.isEmpty()) null else suffix.filter { it.isDigit() }.toIntOrNull() ?: 0,
-        )
+        val suffix = if (text.contains('-')) text.substringAfter('-') else ""
+        val numbers = core.split('.').map { part ->
+            part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
+        }
+        val preRelease = if (suffix.isEmpty()) {
+            null
+        } else {
+            // 分割形如 alpha.2 或 rc-1，并拆分带数字连写的标识 (例如 rc1 -> ["rc", "1"])
+            suffix.split('.', '-').flatMap { segment ->
+                val letters = segment.takeWhile { !it.isDigit() }
+                val digits = segment.dropWhile { !it.isDigit() }
+                if (letters.isNotEmpty() && digits.isNotEmpty()) {
+                    listOf(letters, digits)
+                } else {
+                    listOf(segment)
+                }
+            }.map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        return ParsedVersion(numbers, preRelease)
     }
 
-    private companion object {
+
         const val DAY_MS = 24L * 60 * 60 * 1000
         const val APK_NAME = "app-update.apk"
 

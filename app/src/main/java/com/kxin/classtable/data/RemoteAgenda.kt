@@ -61,50 +61,40 @@ data class RemoteAgenda(
         // ---- Firestore REST 字段编解码(org.json,零依赖) ----
 
         fun fromFields(fields: JSONObject): RemoteAgenda {
-            fun s(n: String) = fields.optJSONObject(n)?.optString("stringValue").orEmpty()
-            fun l(n: String) = fields.optJSONObject(n)?.optString("integerValue")?.toLongOrNull() ?: 0L
-            fun b(n: String) = fields.optJSONObject(n)?.optBoolean("booleanValue") ?: false
-            // 整数要区分「字段不存在」与「值为 0」:提前量 0 = 准点,不能和缺省混为一谈
-            fun i(n: String, default: Int) =
-                fields.optJSONObject(n)?.optString("integerValue")?.toIntOrNull() ?: default
-            val rawCourseId = s("courseId")
+            val rawCourseId = FirestoreFields.getString(fields, "courseId")
             return RemoteAgenda(
-                id = s("id"),
-                title = s("title"),
-                category = s("category").ifBlank { "TODO" },
-                startAt = l("startAt"),
-                endAt = l("endAt"),
-                allDay = b("allDay"),
-                location = s("location"),
-                note = s("note"),
-                priority = s("priority").ifBlank { "NONE" },
-                // 老文档没有这两个字段:缺省即「不提醒」,与本机迁移的默认值一致
-                remindEnabled = b("remindEnabled"),
-                remindLeadMinutes = i("remindLeadMinutes", 10),
-                updatedAt = l("updatedAt"),
+                id = FirestoreFields.getString(fields, "id"),
+                title = FirestoreFields.getString(fields, "title"),
+                category = FirestoreFields.getString(fields, "category", "TODO"),
+                startAt = FirestoreFields.getLong(fields, "startAt"),
+                endAt = FirestoreFields.getLong(fields, "endAt"),
+                allDay = FirestoreFields.getBoolean(fields, "allDay"),
+                location = FirestoreFields.getString(fields, "location"),
+                note = FirestoreFields.getString(fields, "note"),
+                priority = FirestoreFields.getString(fields, "priority", "NONE"),
+                remindEnabled = FirestoreFields.getBoolean(fields, "remindEnabled"),
+                remindLeadMinutes = FirestoreFields.getInt(fields, "remindLeadMinutes", 10),
+                updatedAt = FirestoreFields.getLong(fields, "updatedAt"),
                 courseId = rawCourseId.ifBlank { null },
-                completed = b("completed"),
+                completed = FirestoreFields.getBoolean(fields, "completed"),
             )
         }
 
         fun toFields(e: RemoteAgenda): JSONObject = JSONObject().apply {
-            fun str(n: String, v: String) = put(n, JSONObject().put("stringValue", v))
-            fun long(n: String, v: Long) = put(n, JSONObject().put("integerValue", v.toString()))
-            fun bool(n: String, v: Boolean) = put(n, JSONObject().put("booleanValue", v))
-            str("id", e.id)
-            str("title", e.title)
-            str("category", e.category)
-            long("startAt", e.startAt)
-            long("endAt", e.endAt)
-            bool("allDay", e.allDay)
-            str("location", e.location)
-            str("note", e.note)
-            str("priority", e.priority)
-            bool("remindEnabled", e.remindEnabled)
-            long("remindLeadMinutes", e.remindLeadMinutes.toLong())
-            long("updatedAt", e.updatedAt)
-            e.courseId?.let { str("courseId", it) }
-            bool("completed", e.completed)
+            FirestoreFields.putString(this, "id", e.id)
+            FirestoreFields.putString(this, "title", e.title)
+            FirestoreFields.putString(this, "category", e.category)
+            FirestoreFields.putLong(this, "startAt", e.startAt)
+            FirestoreFields.putLong(this, "endAt", e.endAt)
+            FirestoreFields.putBoolean(this, "allDay", e.allDay)
+            FirestoreFields.putString(this, "location", e.location)
+            FirestoreFields.putString(this, "note", e.note)
+            FirestoreFields.putString(this, "priority", e.priority)
+            FirestoreFields.putBoolean(this, "remindEnabled", e.remindEnabled)
+            FirestoreFields.putInt(this, "remindLeadMinutes", e.remindLeadMinutes)
+            FirestoreFields.putLong(this, "updatedAt", e.updatedAt)
+            e.courseId?.let { FirestoreFields.putString(this, "courseId", it) }
+            FirestoreFields.putBoolean(this, "completed", e.completed)
         }
     }
 }

@@ -1,9 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 每个用户只能读写自己的 users/{uid} 子树
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidSize(maxFields) {
+      return request.resource.data.keys().size() <= maxFields;
+    }
+
+    // 仅允许登录用户在其自身的 users/{userId} 作用域下读写白名单子集合
+    match /users/{userId} {
+      match /courses/{courseId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(30);
+      }
+      match /deleted/{courseId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(10);
+      }
+      match /agenda/{agendaId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(30);
+      }
+      match /deleted_agenda/{agendaId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(10);
+      }
+      match /settings/{docId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && docId == 'config' && isValidSize(30);
+      }
+      match /devices/{deviceId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(10);
+      }
+      match /semesters/{semesterId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(15);
+      }
+      match /deleted_semesters/{semesterId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize(10);
+      }
     }
   }
 }

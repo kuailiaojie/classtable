@@ -26,7 +26,8 @@ internal class SecurePrefs(context: Context, fileName: String) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(fileName, Context.MODE_PRIVATE)
 
-    private val secretKey: SecretKey by lazy { loadOrCreateKey() }
+    @Volatile
+    private var cachedKey: SecretKey? = null
 
     fun getString(key: String): String? {
         val stored = prefs.getString(key, null) ?: return null
@@ -34,7 +35,8 @@ internal class SecurePrefs(context: Context, fileName: String) {
     }
 
     fun putString(key: String, value: String) {
-        prefs.edit().putString(key, encrypt(value)).apply()
+        val encrypted = encrypt(value) ?: return
+        prefs.edit().putString(key, encrypted).apply()
     }
 
     fun getLong(key: String, default: Long): Long = getString(key)?.toLongOrNull() ?: default
@@ -45,9 +47,18 @@ internal class SecurePrefs(context: Context, fileName: String) {
         prefs.edit().clear().apply()
     }
 
-    private fun encrypt(plain: String): String {
+    private fun encrypt(plain: String): String? {
+        return runCatching {
+            performEncrypt(plain, getSecretKey())
+        }.recoverCatching {
+            // 捕获 KeyPermanentlyInvalidatedException / KeyStoreException,重新生成密钥并重试一次自愈
+            performEncrypt(plain, getSecretKey(forceRecreate = true))
+        }.getOrNull()
+    }
+
+    private fun performEncrypt(plain: String, key: SecretKey): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        cipher.init(Cipher.ENCRYPT_MODE, key)
         val ciphertext = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         // `iv:密文` —— IV 每次由 Cipher 随机生成,必须与密文一起存下来才能解。
         return Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" +
@@ -60,14 +71,26 @@ internal class SecurePrefs(context: Context, fileName: String) {
         val iv = Base64.decode(stored.substring(0, separator), Base64.NO_WRAP)
         val ciphertext = Base64.decode(stored.substring(separator + 1), Base64.NO_WRAP)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_BITS, iv))
+        cipher.init(Cipher.DECRYPT_MODE, getSecretKey(), GCMParameterSpec(TAG_BITS, iv))
         String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }.getOrNull()
 
-    /** 取 Keystore 里的密钥;没有就用 AES-256-GCM 生成一把(别名固定,全应用共用)。 */
-    private fun loadOrCreateKey(): SecretKey {
+    /** 取 Keystore 里的密钥;没有或损坏时用 AES-256-GCM 重新生成(别名固定,全应用共用)。 */
+    @Synchronized
+    private fun getSecretKey(forceRecreate: Boolean = false): SecretKey {
+        if (!forceRecreate && cachedKey != null) {
+            return cachedKey!!
+        }
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
-        (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        if (forceRecreate && keyStore.containsAlias(KEY_ALIAS)) {
+            runCatching { keyStore.deleteEntry(KEY_ALIAS) }
+        }
+        if (!forceRecreate && keyStore.containsAlias(KEY_ALIAS)) {
+            (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let {
+                cachedKey = it.secretKey
+                return it.secretKey
+            }
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
         generator.init(
             KeyGenParameterSpec.Builder(
@@ -79,7 +102,9 @@ internal class SecurePrefs(context: Context, fileName: String) {
                 .setKeySize(256)
                 .build(),
         )
-        return generator.generateKey()
+        val newKey = generator.generateKey()
+        cachedKey = newKey
+        return newKey
     }
 
     private companion object {

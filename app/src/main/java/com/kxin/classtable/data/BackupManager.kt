@@ -1,11 +1,15 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.data.local.SemesterDao
+import com.kxin.classtable.data.local.SemesterEntity
 import com.kxin.classtable.domain.WeekSpec
 import com.kxin.classtable.domain.enumOrDefault
 import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaPriority
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.domain.model.NotifyMode
+import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.model.WeekType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -21,7 +25,7 @@ import javax.inject.Singleton
 /**
  * 本地全量数据离线备份与恢复管理器。
  *
- * 支持将全部课程、日程待办与基础学期设置序列化为独立的 `.classtable.json` 文件，
+ * 支持将全部课程、日程待办、多学期配置与核心偏好设置序列化为独立的 `.classtable.json` 文件，
  * 满足无账号、无网络或隐私敏感用户的安全导出与设备间无缝还原。
  */
 @Singleton
@@ -29,6 +33,7 @@ class BackupManager @Inject constructor(
     private val courseRepository: CourseRepository,
     private val agendaRepository: AgendaRepository,
     private val settingsRepository: SettingsRepository,
+    private val semesterDao: SemesterDao,
 ) {
     data class BackupSummary(
         val courseCount: Int,
@@ -42,22 +47,21 @@ class BackupManager @Inject constructor(
     suspend fun createBackupJson(): String = withContext(Dispatchers.IO) {
         val courses = courseRepository.getAll()
         val agenda = agendaRepository.getAll()
+        val semesters = semesterDao.getAll()
         val settings = settingsRepository.settings.first()
 
         val root = JSONObject()
-        root.put("app", "YohakuClasstable")
         root.put("version", 1)
         root.put("exportedAt", System.currentTimeMillis())
 
         val coursesArray = JSONArray()
-        for (c in courses) {
+        courses.forEach { c ->
             val o = JSONObject()
             o.put("id", c.id)
             o.put("name", c.name)
             o.put("teacher", c.teacher)
             o.put("location", c.location)
             o.put("weekday", c.weekday)
-            o.put("weekdays", c.weekdays)
             o.put("startPeriod", c.startPeriod)
             o.put("endPeriod", c.endPeriod)
             o.put("weekType", c.weekType.name)
@@ -65,18 +69,19 @@ class BackupManager @Inject constructor(
             o.put("weekEnd", c.weekEnd)
             o.put("weeks", WeekSpec.encode(c.weeks))
             o.put("semesterId", c.semesterId)
+            o.put("updatedAt", c.updatedAt)
             o.put("customStartMinute", c.customStartMinute ?: JSONObject.NULL)
             o.put("customEndMinute", c.customEndMinute ?: JSONObject.NULL)
+            o.put("weekdays", c.weekdays)
             o.put("note", c.note)
             o.put("colorHex", c.colorHex)
             o.put("colorHue", c.colorHue ?: JSONObject.NULL)
-            o.put("updatedAt", c.updatedAt)
             coursesArray.put(o)
         }
         root.put("courses", coursesArray)
 
         val agendaArray = JSONArray()
-        for (a in agenda) {
+        agenda.forEach { a ->
             val o = JSONObject()
             o.put("id", a.id)
             o.put("title", a.title)
@@ -96,11 +101,31 @@ class BackupManager @Inject constructor(
         }
         root.put("agenda", agendaArray)
 
+        val semestersArray = JSONArray()
+        semesters.forEach { s ->
+            val o = JSONObject()
+            o.put("id", s.id)
+            o.put("name", s.name)
+            o.put("weekCount", s.weekCount)
+            o.put("startDay", s.startDay)
+            semestersArray.put(o)
+        }
+        root.put("semesters", semestersArray)
+
         val settingsObj = JSONObject()
         settingsObj.put("semesterStartDay", settings.semesterStartDay)
         settingsObj.put("semesterWeekCount", settings.semesterWeekCount)
         settingsObj.put("periodTimes", settings.periodTimes)
         settingsObj.put("scheduleAdjustments", settings.scheduleAdjustments)
+        settingsObj.put("themeMode", settings.themeMode.name)
+        settingsObj.put("accentHex", settings.accentHex)
+        settingsObj.put("notificationsEnabled", settings.notificationsEnabled)
+        settingsObj.put("notifyLeadMinutes", settings.notifyLeadMinutes)
+        settingsObj.put("notifyMode", settings.notifyMode)
+        settingsObj.put("tomorrowReminderEnabled", settings.tomorrowReminderEnabled)
+        settingsObj.put("tomorrowReminderTime", settings.tomorrowReminderTime)
+        settingsObj.put("agendaReminderEnabled", settings.agendaReminderEnabled)
+        settingsObj.put("agendaAllDayRemindTime", settings.agendaAllDayRemindTime)
         root.put("settings", settingsObj)
 
         root.toString(2)
@@ -121,7 +146,7 @@ class BackupManager @Inject constructor(
         runCatching {
             val text = inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             val root = JSONObject(text)
-            if (!root.has("courses") && !root.has("agenda")) {
+            if (!root.has("courses") && !root.has("agenda") && !root.has("settings")) {
                 throw IllegalArgumentException("所选文件格式不正确，未检测到余课备份数据")
             }
 
@@ -185,6 +210,22 @@ class BackupManager @Inject constructor(
                 }
             }
 
+            val semestersList = mutableListOf<SemesterEntity>()
+            val semestersArray = root.optJSONArray("semesters")
+            if (semestersArray != null) {
+                for (i in 0 until semestersArray.length()) {
+                    val o = semestersArray.getJSONObject(i)
+                    semestersList.add(
+                        SemesterEntity(
+                            id = o.optString("id"),
+                            name = o.optString("name"),
+                            weekCount = o.optInt("weekCount", 20),
+                            startDay = o.optLong("startDay", 0L),
+                        )
+                    )
+                }
+            }
+
             val settingsObj = root.optJSONObject("settings")
             if (settingsObj != null) {
                 val startDay = settingsObj.optLong("semesterStartDay", 0L)
@@ -200,13 +241,42 @@ class BackupManager @Inject constructor(
                 if (adj.isNotBlank()) {
                     settingsRepository.setScheduleAdjustments(adj)
                 }
+                settingsObj.optString("themeMode").takeIf { it.isNotBlank() }?.let {
+                    settingsRepository.setThemeMode(enumOrDefault(it, ThemeMode.SYSTEM))
+                }
+                settingsObj.optString("accentHex").takeIf { it.isNotBlank() }?.let {
+                    settingsRepository.setAccent(it)
+                }
+                if (settingsObj.has("notificationsEnabled")) {
+                    settingsRepository.setNotificationsEnabled(settingsObj.optBoolean("notificationsEnabled"))
+                }
+                if (settingsObj.has("notifyLeadMinutes")) {
+                    settingsRepository.setNotifyLeadMinutes(settingsObj.optInt("notifyLeadMinutes"))
+                }
+                settingsObj.optString("notifyMode").takeIf { it.isNotBlank() }?.let {
+                    settingsRepository.setNotifyMode(enumOrDefault(it, NotifyMode.LIVE))
+                }
+                if (settingsObj.has("tomorrowReminderEnabled") || settingsObj.has("tomorrowReminderTime")) {
+                    val enabled = settingsObj.optBoolean("tomorrowReminderEnabled", true)
+                    val time = settingsObj.optString("tomorrowReminderTime", "21:30")
+                    settingsRepository.setTomorrowReminder(enabled, time)
+                }
+                if (settingsObj.has("agendaReminderEnabled") || settingsObj.has("agendaAllDayRemindTime")) {
+                    val enabled = settingsObj.optBoolean("agendaReminderEnabled", true)
+                    val time = settingsObj.optString("agendaAllDayRemindTime", "09:00")
+                    settingsRepository.setAgendaReminder(enabled, time)
+                }
             }
 
-            if (courses.isNotEmpty()) {
-                courseRepository.restoreAll(courses)
+            if (root.has("courses")) {
+                courseRepository.restoreAll(courses, replace = true)
             }
-            if (agendaList.isNotEmpty()) {
-                agendaRepository.importAll(agendaList)
+            if (root.has("agenda")) {
+                agendaRepository.restoreAll(agendaList, replace = true)
+            }
+            if (root.has("semesters")) {
+                semesterDao.deleteAll()
+                semesterDao.insertAll(semestersList)
             }
 
             BackupSummary(

@@ -70,7 +70,7 @@ object WeekSpec {
 
         // 去掉文字标记,剩下的应该只有数字与分隔符
         var rest = t
-        for (mark in listOf("每周", "全周", "单双周", "单周", "双周", "单", "双", "周")) {
+        for (mark in listOf("每周", "全周", "单双周", "单周", "双周", "单", "双", "周", "(", ")", "（", "）", "[", "]", "【", "】")) {
             rest = rest.replace(mark, "")
         }
         rest = rest.trim(',', '、', '-', '–', '—', '~', '至').trim()

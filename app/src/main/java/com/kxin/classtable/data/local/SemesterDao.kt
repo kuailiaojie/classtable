@@ -14,6 +14,15 @@ interface SemesterDao {
     @Query("SELECT * FROM semesters ORDER BY startDay DESC")
     fun observeAll(): Flow<List<SemesterEntity>>
 
+    @Query("SELECT * FROM semesters ORDER BY startDay DESC")
+    suspend fun getAll(): List<SemesterEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(semester: SemesterEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(semesters: List<SemesterEntity>)
+
+    @Query("DELETE FROM semesters")
+    suspend fun deleteAll()
 }

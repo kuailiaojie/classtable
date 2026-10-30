@@ -94,7 +94,8 @@ private class ProxyAppCheckProvider(private val context: Context) : AppCheckProv
                 val request = JSONObject()
                     .put("signingSha256", signingSha256(context))
                     .put("package", context.packageName)
-                val resp = postJson("${BuildConfig.FIREBASE_PROXY_URL}/appcheck/token", request)
+                    .put("timestamp", System.currentTimeMillis())
+                val resp = HttpUtils.postJson("${BuildConfig.FIREBASE_PROXY_URL}/appcheck/token", request)
                 ProxyAppCheckToken(
                     resp.getString("token"),
                     resp.optLong("expireTimeMillis", System.currentTimeMillis() + 30 * 60 * 1000L),
@@ -102,25 +103,6 @@ private class ProxyAppCheckProvider(private val context: Context) : AppCheckProv
             }.onSuccess(source::setResult).onFailure { source.setException(it as? Exception ?: RuntimeException(it)) }
         }
         return source.task
-    }
-
-    private fun postJson(url: String, body: JSONObject): JSONObject {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 20_000
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            val status = conn.responseCode
-            val stream = if (status in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) throw IOException("appcheck token HTTP $status")
-            return JSONObject(text)
-        } finally {
-            conn.disconnect()
-        }
     }
 }
 

@@ -54,9 +54,13 @@ class CourseRepository @Inject constructor(
 
     suspend fun getAll(): List<Course> = dao.getAll().map { it.toDomain() }
 
-    suspend fun restoreAll(courses: List<Course>) {
-        if (courses.isEmpty()) return
-        dao.upsertAll(courses.map { CourseEntity.fromDomain(it) })
+    suspend fun restoreAll(courses: List<Course>, replace: Boolean = true) {
+        if (replace) {
+            dao.deleteAll()
+        }
+        if (courses.isNotEmpty()) {
+            dao.upsertAll(courses.map { CourseEntity.fromDomain(it) })
+        }
         postChangeSideEffects()
         scope.launch { runCatching { sync.syncNow() } }
     }

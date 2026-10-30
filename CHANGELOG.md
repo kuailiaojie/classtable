@@ -1,6 +1,32 @@
 # Changelog
 
-## 3.10.0 (2026-10-29)
+## 3.11.0 (2026-10-30)
+
+本次 3.11.0 版本针对系统安全防护、云端与离线数据一致性、提醒排程后台可靠性、WebView 兼容性以及自动化单元测试进行了系统级加固：
+
+### 安全性与隐私保护加固
+- **用户 AI API Key 加密存储与防备份外泄**：将用户在设置中配置的 AI 密钥从 DataStore 明文迁移至基于 Android Keystore AES-256-GCM 加密的 `SecurePrefs` (`ai_session.xml`)，并在 `backup_rules.xml` 与 `data_extraction_rules.xml` 中严格排除，防止随系统自动备份或跨机云同步泄露；旧版密钥无缝静默迁移并清空明文。
+- **Keystore 坏密钥自愈与健壮性**：`SecurePrefs` 加密路径增加异常拦截，捕获系统升级或锁屏重置引发的 `KeyPermanentlyInvalidatedException` / `KeyStoreException`，自动删除失效别名并重新生成密钥重试，彻底消除 ROM 升级导致的启动崩溃。
+- **反代 API 严格白名单与防滥用门槛**：Netlify 反代函数增加基于方法与路径的严格白名单（仅允许特定 Auth 端点与自身 `/users/{uid}/...` 节点），App Check 颁发接口增加包名校验与 $\pm 5$ 分钟时间戳滑窗防重放。
+- **Firestore 规则最小权限收紧**：将通配符 `{document=**}` 收紧为具体子集合白名单（`courses`、`deleted`、`agenda`、`deleted_agenda`、`settings/config`、`devices`、`semesters`），并约束单文档最大字段数。
+
+### 云同步与离线备份数据一致性
+- **调休课表纳入云端同步**：`scheduleAdjustments` 补全 `KEY_SETTINGS_UPDATED_AT` 时间戳与 Firestore 字段读写，换机或重装后调休安排自动随账号恢复。
+- **离线全量备份覆盖与空表清空修复**：离线 `.classtable.json` 导出完整支持多学期表（`semesters`）及全套偏好设置（主题、通知提前量、提醒模式等）；修复恢复空课程或空日程备份时因逻辑短路导致旧数据残留的问题。
+
+### 提醒排程、桌面图标与后台可靠性
+- **提醒排程并发互斥与防过度触发**：`ReminderPlanner` 核心排程方法加入 `Mutex` 互斥保护，消除多个接收器或 Worker 触发时的竞态；在应用入口通过 `distinctUntilChanged` 提取排程相关配置子集，后台检查更新或雨课堂拉取不再频繁触发全库扫描。
+- **桌面图标安全延迟切换**：通过 `ActivityLifecycleCallbacks` 感知前台栈，应用处于前台时暂存图标切换，延迟至退入后台时执行 `activity-alias` 状态变更，彻底避免 Android 10+ 及厂商系统因前台根任务被杀退回桌面。
+- **WakeLock 超时放宽**：广播接收器短时唤醒锁超时时间放宽至 10 秒，保障低端机冷启动与深 Doze 唤醒下 AlarmManager 排程完整执行。
+
+### 版本对比、WebView 与网络层重构
+- **SemVer 2.0 预发布版本对比**：彻底重构 `UpdateRepository.parseVersion` 与 `isNewer` 比较逻辑，严格遵循 SemVer 2.0 规范按段比对预发布标识符（alpha < beta < rc, rc.1 < rc.2），消除版本对比逻辑倒挂。
+- **教务导入多层弹窗支持**：教务导入 WebView 内部二次弹窗直接在当前弹窗承载，解决高校 CAS 单点登录二次跳转无响应问题；全局调试开关收拢至 `ClasstableApp.onCreate` 调用一次。
+- **统一 FirestoreFields 与 HttpUtils 工具库**：抽象封装通用 Firestore REST 字段编解码与轻量级 HTTP 客户端，统一超时、编码与错误解析，消除多处冗余样板代码。
+
+### 数据库演进与工程化测试
+- **Room exportSchema 开启与 Schema 快照落地**：开启 `exportSchema = true` 并自动在 `app/schemas` 下生成 Room v12 数据库 Schema 快照。
+- **核心领域逻辑 JVM 单元测试覆盖**：新增 JUnit 自动化单元测试，秒级运行覆盖周次解析（`WeekSpecTest`）、作息日期计算（`ScheduleTest`）、调休冲抵（`AdjustmentsTest`）、雨课堂匹配（`YuketangMatcherTest`）与语义化版本对比（`SemVerTest`）。
 
 本次 3.10.0 版本带来美学长图全面屏重构、雨课堂通知闭环、日程倒计时独立心智模型与全屏网格规范化：
 

@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DeletedAgendaEntity::class,
     ],
     version = 12,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao

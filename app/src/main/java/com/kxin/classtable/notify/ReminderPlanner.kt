@@ -19,6 +19,8 @@ import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.NotifyMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
@@ -49,6 +51,7 @@ class ReminderPlanner @Inject constructor(
     private val agendaDao: AgendaDao,
     private val settingsRepository: SettingsRepository,
 ) {
+    private val mutex = Mutex()
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val prefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
@@ -59,7 +62,7 @@ class ReminderPlanner @Inject constructor(
      * 会让调用线程一直阻塞到读完 —— 现在由调用方在其协程里直接挂起等待。所有调用点都在协程中
      * (App / 仓库 / 接收器 / Worker),不再有谁需要同步返回。
      */
-    suspend fun rescheduleAll(force: Boolean = false) {
+    suspend fun rescheduleAll(force: Boolean = false) = mutex.withLock {
         val settings = settingsRepository.settings.first()
         val courses = dao.getAll().map { it.toDomain() }
         val agenda = agendaDao.getAll().map { it.toDomain() }
@@ -67,13 +70,14 @@ class ReminderPlanner @Inject constructor(
         val signature = signature(courses, agenda, settings, today)
         val unchanged = !force && prefs.getString(KEY_SIGNATURE, null) == signature
         if (unchanged) {
-            return
+            return@withLock
         }
         scheduleWindow(courses, agenda, settings, today)
         prefs.edit().putString(KEY_SIGNATURE, signature).apply()
     }
 
     /** 取消某课程已排的全部提醒(课程被删除时调用)。 */
+    @Synchronized
     fun cancelCourse(courseId: String) {
         val kept = mutableListOf<String>()
         ledger().forEach { entry ->
@@ -87,6 +91,7 @@ class ReminderPlanner @Inject constructor(
     }
 
     /** 取消某条日程已排的提醒(日程被删除时调用)。 */
+    @Synchronized
     fun cancelAgenda(eventId: String) {
         val key = agendaKey(eventId)
         val kept = mutableListOf<String>()
@@ -553,7 +558,7 @@ class ReminderPlanner @Inject constructor(
         suspend fun withShortWakeLock(context: Context, tag: String, block: suspend () -> Unit) {
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val lock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "classtable:$tag")
-            runCatching { lock?.acquire(5_000L) }
+            runCatching { lock?.acquire(10_000L) }
             try {
                 block()
             } finally {

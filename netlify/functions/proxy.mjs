@@ -111,6 +111,14 @@ async function handleAppCheck(req) {
   if (!sha || !allowed.includes(sha)) {
     return json(403, { error: { code: 403, message: "unrecognized app signature" } });
   }
+  if (body.package !== "com.kxin.classtable") {
+    return json(403, { error: { code: 403, message: "unrecognized package name" } });
+  }
+  const now = Date.now();
+  const reqTime = Number(body.timestamp || 0);
+  if (!reqTime || Math.abs(now - reqTime) > 5 * 60 * 1000) {
+    return json(400, { error: { code: 400, message: "timestamp expired or missing" } });
+  }
   try {
     const app = await getAdmin();
     const { token, ttlMillis } = await app.appCheck().createToken(APP_CHECK_APP_ID);
@@ -298,9 +306,26 @@ export default async (req) => {
 
   let upstream = null;
   if (rest.startsWith("/auth/")) {
-    upstream = AUTH_UPSTREAM + rest.slice("/auth".length);
+    const authSub = rest.slice("/auth".length);
+    const ALLOWED_AUTH = [
+      "/v1/accounts:signUp",
+      "/v1/accounts:signInWithPassword",
+      "/v1/accounts:sendOobCode",
+      "/v1/token",
+      "/v1/accounts:delete",
+      "/v1/accounts:lookup"
+    ];
+    if (!ALLOWED_AUTH.some((p) => authSub.startsWith(p))) {
+      return json(403, { error: { code: 403, message: "auth endpoint not allowed" } });
+    }
+    upstream = AUTH_UPSTREAM + authSub;
   } else if (rest.startsWith("/firestore/")) {
-    upstream = FIRESTORE_UPSTREAM + rest.slice("/firestore".length);
+    const fsSub = rest.slice("/firestore".length);
+    const isDocAccess = /^\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents(\/users\/[^/]+.*|:commit|:batchGet)$/.test(fsSub);
+    if (!isDocAccess) {
+      return json(403, { error: { code: 403, message: "firestore path not allowed" } });
+    }
+    upstream = FIRESTORE_UPSTREAM + fsSub;
   }
 
   if (!upstream) {

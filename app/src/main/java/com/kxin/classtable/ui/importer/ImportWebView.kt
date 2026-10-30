@@ -54,9 +54,7 @@ internal fun configureImportWebView(
         ViewGroup.LayoutParams.MATCH_PARENT,
     )
     webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-    // 仅调试包开放远程调试:这是用户输入教务账号密码的页面,release 里必须关掉,
-    // 否则任何连着 USB 的电脑都能通过 Chrome DevTools 读到页面与控制台。
-    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+    // 远程调试开关已移至 ClasstableApp.onCreate 进程全局配置
     webView.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
@@ -190,7 +188,13 @@ internal fun configureImportWebView(
             isUserGesture: Boolean,
             resultMsg: Message?,
         ): Boolean {
-            if (isPopup) return false
+            if (isPopup) {
+                // 二层弹窗:不阻断,直接在当前弹窗 WebView 中承载目标页面,解决高校 CAS 二次跳转无响应问题
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                transport.webView = view
+                resultMsg.sendToTarget()
+                return true
+            }
             val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
             val child = WebView(context)
             configureImportWebView(

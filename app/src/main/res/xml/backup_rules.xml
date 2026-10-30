@@ -8,4 +8,5 @@
     <exclude domain="file" path="warehouse" />
     <exclude domain="sharedpref" path="auth_session.xml" />
     <exclude domain="sharedpref" path="yuketang_session.xml" />
+    <exclude domain="sharedpref" path="ai_session.xml" />
 </full-backup-content>

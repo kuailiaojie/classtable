@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.10.0 / 91)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.11.0 / 92)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -50,6 +50,10 @@
 - [x] **Phase 9: 美学排版优化、日程倒计时独立、雨课堂通知闭环与长图全面屏重构 (Aesthetics & Notification & Wallpaper Exporter Refinements)**
   - 目标：1800×3900 高清 9:19.5 现代竖屏手机全面屏长图引擎、地点与教师自适应排版保障 100% 呈现、长图解耦 ICS 导出二选一、雨课堂新公告空班级基线修复与前台即时高优先级推送、日程与倒计时独立表单与实时倒数预览、日程周条 36×36dp 与课程排期 4 列方块等宽几何规整、周次选择网格去除「今」角标。
   - 状态：✅ 已完成 (3.10.0 / 91 - Commit: 5d162fb)
+
+- [x] **Phase 10: 安全防护、云同步一致性、后台可靠性与架构工程化加固 (Security, Sync Consistency & Architectural Hardening)**
+  - 目标：AI API 密钥 Keystore AES-GCM 隔离存储与备份排除、SecurePrefs 坏密钥自愈重试、Netlify 反代白名单与防重放、Firestore 安全规则最小权限收紧、调休安排与多学期表云同步与离线灾备全覆盖、ReminderPlanner Mutex 并发互斥与排程事件防过度触发、桌面图标后台安全延迟切换、WakeLock 10s 延展、SemVer 2.0 预发布版本比较重构、教务导入 WebView 多层弹窗支持与静态调用优化、统一 FirestoreFields/HttpUtils 工具库、Room exportSchema 快照、纯 Kotlin 核心领域逻辑 JVM 单元测试全覆盖。
+  - 状态：✅ 已完成 (3.11.0 / 92)
 
 ---
 

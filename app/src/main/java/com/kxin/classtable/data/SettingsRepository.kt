@@ -22,11 +22,14 @@ import com.kxin.classtable.icon.AppIcon
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -95,55 +98,78 @@ class SettingsRepository @Inject constructor(
     /** 上课自动免打扰开关。 */
     private val KEY_CLASS_DND = booleanPreferencesKey("class_dnd_enabled")
 
+    /** AI 密钥加密保存在独立文件(ai_session.xml)中,不随 Auto Backup 备份,支持 Keystore 自愈。 */
+    private val securePrefs = SecurePrefs(context, "ai_session.xml")
+    private val aiKeyFlow = MutableStateFlow(securePrefs.getString("ai_api_key") ?: "")
+
     /**
      * 全局设置流。约十个 ViewModel/服务各自消费它,所以这里做两件事:
      * - `distinctUntilChanged`:40 多个键的映射结果一样时不再向下游发(避免无谓重组);
      * - `shareIn`:全应用共享同一份上游,只映射一次,而不是每个订阅者各跑一遍 40 键映射。
      */
-    val settings: Flow<AppSettings> = context.settingsDataStore.data
-        .map { p ->
-            AppSettings(
-                themeMode = enumOrDefault(p[KEY_THEME], ThemeMode.SYSTEM),
-                accentHex = p[KEY_ACCENT] ?: Defaults.ACCENT_HEX,
-                currentWeek = p[KEY_WEEK] ?: 1,
-                // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
-                // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。
-                periodTimes = (p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS).let {
-                    if (it == Schedule.LEGACY_DEFAULT_PERIODS) Schedule.DEFAULT_PERIODS else it
-                },
-                semesterStartDay = p[KEY_SEMESTER_START] ?: 0L,
-                semesterWeekCount = p[KEY_SEMESTER_WEEKS] ?: 20,
-                aiProvider = p[KEY_AI_PROVIDER] ?: AiProvider.GEMINI.name,
-                aiApiKey = p[KEY_AI_KEY] ?: p[KEY_GEMINI] ?: "",
-                aiBaseUrl = p[KEY_AI_BASE_URL] ?: "",
-                aiModel = p[KEY_AI_MODEL] ?: "",
-                notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
-                notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
-                notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.LIVE.name,
-                tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: true,
-                tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
-                agendaReminderEnabled = p[KEY_AGENDA_REMIND_ENABLED] ?: true,
-                agendaAllDayRemindTime = p[KEY_AGENDA_ALLDAY_TIME] ?: "09:00",
-                autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
-                includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
-                updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
-                lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
-                dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
-                onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
-                introSeenVersion = p[KEY_INTRO_SEEN_VERSION] ?: "",
-                yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
-                yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
-                yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
-                yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
-                yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
-                yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
-                scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
-                appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
-                iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
-                iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
-                classDndEnabled = p[KEY_CLASS_DND] ?: true,
-            )
+    val settings: Flow<AppSettings> = combine(
+        context.settingsDataStore.data,
+        aiKeyFlow,
+    ) { p, secureAiKey ->
+        // 平滑兼容迁移:旧版明文保存在 DataStore 中的密钥,自动迁入 SecurePrefs 并清除明文
+        val resolvedAiKey = if (secureAiKey.isNotBlank()) {
+            secureAiKey
+        } else {
+            val legacy = p[KEY_AI_KEY] ?: p[KEY_GEMINI] ?: ""
+            if (legacy.isNotBlank()) {
+                securePrefs.putString("ai_api_key", legacy)
+                aiKeyFlow.value = legacy
+                settingsScope.launch {
+                    context.settingsDataStore.edit {
+                        it.remove(KEY_AI_KEY)
+                        it.remove(KEY_GEMINI)
+                    }
+                }
+            }
+            legacy
         }
+        AppSettings(
+            themeMode = enumOrDefault(p[KEY_THEME], ThemeMode.SYSTEM),
+            accentHex = p[KEY_ACCENT] ?: Defaults.ACCENT_HEX,
+            currentWeek = p[KEY_WEEK] ?: 1,
+            // 旧默认表(0.1.16 及更早)本身就是错的(第4节 11:00–14:00 跨午饭等),命中即视为
+            // 「没设置过」换用新表;学校导入保存过的真实作息不受影响。
+            periodTimes = (p[KEY_PERIODS] ?: Schedule.DEFAULT_PERIODS).let {
+                if (it == Schedule.LEGACY_DEFAULT_PERIODS) Schedule.DEFAULT_PERIODS else it
+            },
+            semesterStartDay = p[KEY_SEMESTER_START] ?: 0L,
+            semesterWeekCount = p[KEY_SEMESTER_WEEKS] ?: 20,
+            aiProvider = p[KEY_AI_PROVIDER] ?: AiProvider.GEMINI.name,
+            aiApiKey = resolvedAiKey,
+            aiBaseUrl = p[KEY_AI_BASE_URL] ?: "",
+            aiModel = p[KEY_AI_MODEL] ?: "",
+            notificationsEnabled = p[KEY_NOTIFY_ENABLED] ?: true,
+            notifyLeadMinutes = p[KEY_NOTIFY_LEAD] ?: 10,
+            notifyMode = p[KEY_NOTIFY_MODE] ?: NotifyMode.LIVE.name,
+            tomorrowReminderEnabled = p[KEY_TOMORROW_ENABLED] ?: true,
+            tomorrowReminderTime = p[KEY_TOMORROW_TIME] ?: "21:30",
+            agendaReminderEnabled = p[KEY_AGENDA_REMIND_ENABLED] ?: true,
+            agendaAllDayRemindTime = p[KEY_AGENDA_ALLDAY_TIME] ?: "09:00",
+            autoCheckUpdate = p[KEY_AUTO_CHECK_UPDATE] ?: true,
+            includePrerelease = p[KEY_INCLUDE_PRERELEASE] ?: false,
+            updateCheckIntervalDays = p[KEY_UPDATE_INTERVAL] ?: UpdateCadence.DAILY.days,
+            lastUpdateCheckAt = p[KEY_LAST_UPDATE_CHECK] ?: 0L,
+            dismissedVersion = p[KEY_DISMISSED_VERSION] ?: "",
+            onboardingDone = p[KEY_ONBOARDING_DONE] ?: false,
+            introSeenVersion = p[KEY_INTRO_SEEN_VERSION] ?: "",
+            yuketangEnabled = p[KEY_YKT_ENABLED] ?: true,
+            yuketangIncludeInReminder = p[KEY_YKT_IN_REMINDER] ?: true,
+            yuketangBackgroundFetch = p[KEY_YKT_BACKGROUND_FETCH] ?: true,
+            yuketangNotifyNew = p[KEY_YKT_NOTIFY_NEW] ?: true,
+            yuketangLastFetchAt = p[KEY_YKT_LAST_FETCH] ?: 0L,
+            yuketangAnnouncementPath = p[KEY_YKT_ANNOUNCEMENT_PATH] ?: "",
+            scheduleAdjustments = p[KEY_ADJUSTMENTS] ?: "",
+            appIconIndex = p[KEY_APP_ICON] ?: AppIcon.DEFAULT.ordinal,
+            iconCarouselEnabled = p[KEY_ICON_CAROUSEL] ?: false,
+            iconCarouselCadence = p[KEY_ICON_CADENCE] ?: IconCadence.LAUNCH.name,
+            classDndEnabled = p[KEY_CLASS_DND] ?: true,
+        )
+    }
         .distinctUntilChanged()
         .shareIn(settingsScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
@@ -168,6 +194,7 @@ class SettingsRepository @Inject constructor(
             p[KEY_AI_MODEL] = s.aiModel
             p[KEY_NOTIFY_ENABLED] = s.notificationsEnabled
             p[KEY_NOTIFY_LEAD] = s.notifyLeadMinutes
+            p[KEY_ADJUSTMENTS] = s.scheduleAdjustments
             p[KEY_SETTINGS_UPDATED_AT] = updatedAt
         }
     }
@@ -195,9 +222,15 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setAiProvider(name: String) = editSettings { it[KEY_AI_PROVIDER] = name }
 
-    /** AI 密钥仅存本机,不同步到云端;密钥变更不触发同步时间戳。 */
+    /** AI 密钥加密存入 SecurePrefs (ai_session.xml),不同步到云端且排除系统备份。 */
     suspend fun setAiKey(key: String) {
-        context.settingsDataStore.edit { it[KEY_AI_KEY] = key.trim() }
+        val trimmed = key.trim()
+        securePrefs.putString("ai_api_key", trimmed)
+        aiKeyFlow.value = trimmed
+        context.settingsDataStore.edit {
+            it.remove(KEY_AI_KEY)
+            it.remove(KEY_GEMINI)
+        }
     }
 
     suspend fun setAiBaseUrl(url: String) = editSettings { it[KEY_AI_BASE_URL] = url.trim().trimEnd('/') }
@@ -256,11 +289,10 @@ class SettingsRepository @Inject constructor(
     }
 
     /**
-     * 调休课表(整表覆盖)。与 AI 密钥同理:属于本机课表数据,不打同步时间戳 ——
-     * 否则改一次调休就会把整包设置当成「本机更新」推上云,而远端并不处理这个字段。
+     * 调休课表(整表覆盖)。与作息、学期同属排课核心规则,纳入云同步时间戳管理。
      */
-    suspend fun setScheduleAdjustments(json: String) {
-        context.settingsDataStore.edit { it[KEY_ADJUSTMENTS] = json }
+    suspend fun setScheduleAdjustments(json: String) = editSettings {
+        it[KEY_ADJUSTMENTS] = json
     }
 
     /**
