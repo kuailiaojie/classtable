@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.11.0 / 92)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.12.0 / 93)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -54,6 +54,10 @@
 - [x] **Phase 10: 安全防护、云同步一致性、后台可靠性与架构工程化加固 (Security, Sync Consistency & Architectural Hardening)**
   - 目标：AI API 密钥 Keystore AES-GCM 隔离存储与备份排除、SecurePrefs 坏密钥自愈重试、Netlify 反代白名单与防重放、Firestore 安全规则最小权限收紧、调休安排与多学期表云同步与离线灾备全覆盖、ReminderPlanner Mutex 并发互斥与排程事件防过度触发、桌面图标后台安全延迟切换、WakeLock 10s 延展、SemVer 2.0 预发布版本比较重构、教务导入 WebView 多层弹窗支持与静态调用优化、统一 FirestoreFields/HttpUtils 工具库、Room exportSchema 快照、纯 Kotlin 核心领域逻辑 JVM 单元测试全覆盖。
   - 状态：✅ 已完成 (3.11.0 / 92 - Commit: 054fb1f)
+
+- [x] **Phase 11: Apple HIG 体验重构、人体工学加固与艺术长图引擎升级 (HIG Ergonomics, Touch Safety, State Preservation & Wallpaper Engine v2)**
+  - 目标：Apple HIG 触控热区安全组件 `YohakuCheckCircle`（44pt+ 热区防误触）、外观设置主色色板规范对齐、课表天气入口热区与微触感、课程详情页编辑上提与删除物理隔离、周视图大标题右侧「导出长图」胶囊入口（方案 A）、日视图空堂智能带入表单起止时间、日程表单全字段 `rememberSaveable` 状态持久化与阻塞提示、多选态系统返回拦截、周日视图已结课程时序淡化、Wallpaper Engine v2 1800×3900 大字号排版系统重构、和纸胶带装饰与纸感微浮雕微墨投影。
+  - 状态：✅ 已完成 (3.12.0 / 93 - Commit: 5458099)
 
 ---
 

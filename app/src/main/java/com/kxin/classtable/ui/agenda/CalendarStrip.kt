@@ -1,5 +1,6 @@
 package com.kxin.classtable.ui.agenda
 
+import com.kxin.classtable.domain.Schedule
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -101,17 +102,21 @@ internal fun CalendarStrip(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            // 「今天」:回到本周并选中今天
+            val today = LocalDate.now()
+            val atToday = selected == today && displayedMonday.toEpochDay() == Schedule.mondayEpochDay(today.toEpochDay())
+            // 「今天」:回到本周并选中今天 (若已在今天则弱化禁用，符合 HIG 诚实反馈)
             Surface(
-                modifier = Modifier.yohakuTouchTarget().clickable(onClick = onToday),
+                modifier = Modifier
+                    .yohakuTouchTarget()
+                    .clickable(enabled = !atToday, onClick = onToday),
                 shape = RoundedCornerShape(YohakuDimens.radiusControl),
                 color = colors.raised,
-                border = BorderStroke(1.dp, colors.line),
+                border = BorderStroke(1.dp, if (atToday) colors.neutral3 else colors.line),
             ) {
                 Text(
                     text = "↩ 今天",
                     style = YohakuType.label12,
-                    color = colors.accent,
+                    color = if (atToday) colors.neutral5 else colors.accent,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }

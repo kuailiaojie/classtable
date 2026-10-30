@@ -54,6 +54,7 @@ import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuOutlineButton
 import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.yohakuTouchTarget
 import com.kxin.classtable.design.accentColor
 import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Schedule
@@ -177,18 +178,25 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(accentColor(hex))
-                                .then(
-                                    if (selected) {
-                                        Modifier.border(2.dp, colors.neutral10, CircleShape)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
+                                .yohakuTouchTarget()
                                 .clickable { viewModel.setAccent(hex) },
-                        )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .then(
+                                        if (selected) {
+                                            Modifier.border(2.dp, colors.neutral10, CircleShape)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor(hex)),
+                            )
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = label,

@@ -27,8 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +82,8 @@ fun AgendaFormScreen(
     defaultDateEpoch: Long,
     defaultCategory: AgendaCategory? = null,
     defaultCourseId: String? = null,
+    defaultStartMinute: Int = -1,
+    defaultEndMinute: Int = -1,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -145,6 +149,8 @@ fun AgendaFormScreen(
                     defaultCategory = defaultCategory,
                     courses = courses,
                     defaultCourseId = defaultCourseId,
+                    defaultStartMinute = defaultStartMinute,
+                    defaultEndMinute = defaultEndMinute,
                     onSave = { viewModel.save(it) },
                     onDelete = { viewModel.delete(it) },
                 )
@@ -163,6 +169,8 @@ private fun AgendaFormBody(
     defaultCategory: AgendaCategory?,
     courses: List<Course> = emptyList(),
     defaultCourseId: String? = null,
+    defaultStartMinute: Int = -1,
+    defaultEndMinute: Int = -1,
     onSave: (AgendaEvent) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -170,35 +178,42 @@ private fun AgendaFormBody(
     val haptics = rememberYohakuHaptics()
     val isCountdown = kind == AgendaKind.COUNTDOWN
 
-    val startInit = initial?.startLocal() ?: defaultDate.atTime(9, 0)
-    val endInit = initial?.endLocal() ?: defaultDate.atTime(10, 0)
+    val startInit = initial?.startLocal()
+        ?: if (defaultStartMinute >= 0) defaultDate.atTime(defaultStartMinute / 60, defaultStartMinute % 60)
+        else defaultDate.atTime(9, 0)
+    val endInit = initial?.endLocal()
+        ?: if (defaultEndMinute >= 0) defaultDate.atTime(defaultEndMinute / 60, defaultEndMinute % 60)
+        else defaultDate.atTime(10, 0)
 
     val key = initial?.id
-    var title by remember(key) { mutableStateOf(initial?.title ?: "") }
-    var category by remember(key, kind) {
+    var title by rememberSaveable(key) { mutableStateOf(initial?.title ?: "") }
+    var category by rememberSaveable(key, kind) {
         mutableStateOf(
             initial?.takeIf { it.category.kind == kind }?.category
                 ?: defaultCategory?.takeIf { it.kind == kind }
                 ?: if (isCountdown) AgendaCategory.EXAM else AgendaCategory.TODO
         )
     }
-    var priority by remember(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
-    var courseId by remember(key) { mutableStateOf(initial?.courseId ?: defaultCourseId) }
-    var completed by remember(key) { mutableStateOf(initial?.completed ?: false) }
-    var allDay by remember(key) { mutableStateOf(initial?.allDay ?: isCountdown) }
-    var location by remember(key) { mutableStateOf(initial?.location ?: "") }
-    var note by remember(key) { mutableStateOf(initial?.note ?: "") }
-    var remindEnabled by remember(key) { mutableStateOf(initial?.remindEnabled ?: false) }
-    var remindLeadMinutes by remember(key, kind) {
+    var priority by rememberSaveable(key) { mutableStateOf(initial?.priority ?: AgendaPriority.NONE) }
+    var courseId by rememberSaveable(key) { mutableStateOf(initial?.courseId ?: defaultCourseId) }
+    var completed by rememberSaveable(key) { mutableStateOf(initial?.completed ?: false) }
+    var allDay by rememberSaveable(key) { mutableStateOf(initial?.allDay ?: isCountdown) }
+    var location by rememberSaveable(key) { mutableStateOf(initial?.location ?: "") }
+    var note by rememberSaveable(key) { mutableStateOf(initial?.note ?: "") }
+    var remindEnabled by rememberSaveable(key) { mutableStateOf(initial?.remindEnabled ?: false) }
+    var remindLeadMinutes by rememberSaveable(key, kind) {
         mutableIntStateOf(
             initial?.remindLeadMinutes
                 ?: if (isCountdown) 1440 else 10 // 倒计时默认提前1天(1440分)，日程默认提前10分钟
         )
     }
-    var startDate by remember(key) { mutableStateOf(startInit.toLocalDate()) }
-    var startMinute by remember(key) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
-    var endDate by remember(key) { mutableStateOf(endInit.toLocalDate()) }
-    var endMinute by remember(key) { mutableIntStateOf(endInit.hour * 60 + endInit.minute) }
+    var startDateEpoch by rememberSaveable(key) { mutableLongStateOf(startInit.toLocalDate().toEpochDay()) }
+    var startMinute by rememberSaveable(key) { mutableIntStateOf(startInit.hour * 60 + startInit.minute) }
+    var endDateEpoch by rememberSaveable(key) { mutableLongStateOf(endInit.toLocalDate().toEpochDay()) }
+    var endMinute by rememberSaveable(key) { mutableIntStateOf(endInit.hour * 60 + endInit.minute) }
+
+    val startDate = LocalDate.ofEpochDay(startDateEpoch)
+    val endDate = LocalDate.ofEpochDay(endDateEpoch)
 
     var pickStartDate by remember { mutableStateOf(false) }
     var pickStartTime by remember { mutableStateOf(false) }
@@ -212,6 +227,11 @@ private fun AgendaFormBody(
         allDay || endDate > startDate || (endDate == startDate && endMinute > startMinute)
     }
     val valid = title.isNotBlank() && timeValid
+    val blockingHint = when {
+        title.isBlank() -> "请填写${kind.label}标题"
+        !timeValid -> "结束时间需晚于开始时间"
+        else -> null
+    }
 
     fun startAtMillis(): Long = if (allDay) {
         startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -250,7 +270,7 @@ private fun AgendaFormBody(
                         }
                         if (newKind == AgendaKind.COUNTDOWN) {
                             allDay = true
-                            endDate = startDate
+                            endDateEpoch = startDateEpoch
                         }
                     }
                 },
@@ -575,11 +595,20 @@ private fun AgendaFormBody(
             Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
         }
 
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(YohakuDimens.screenPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (!valid && blockingHint != null) {
+                Text(
+                    text = blockingHint,
+                    style = YohakuType.label12,
+                    color = colors.neutral7,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
             YohakuButton(
                 text = if (initial != null) {
                     if (isCountdown) "保存倒计时" else "保存日程"
@@ -616,12 +645,11 @@ private fun AgendaFormBody(
 
     if (pickStartDate) {
         YohakuDatePicker(
-            initialEpochDay = startDate.toEpochDay(),
+            initialEpochDay = startDateEpoch,
             onPick = {
-                val d = LocalDate.ofEpochDay(it)
-                startDate = d
-                if (isCountdown || endDate < d) {
-                    endDate = d
+                startDateEpoch = it
+                if (isCountdown || endDateEpoch < it) {
+                    endDateEpoch = it
                 }
                 pickStartDate = false
             },
@@ -637,7 +665,7 @@ private fun AgendaFormBody(
                 pickStartTime = false
                 Schedule.parseClock(it)?.let { m ->
                     startMinute = m
-                    if (endDate == startDate && endMinute < m) {
+                    if (endDateEpoch == startDateEpoch && endMinute < m) {
                         endMinute = (m + 60).coerceAtMost(23 * 60 + 59)
                     }
                 }
@@ -647,11 +675,10 @@ private fun AgendaFormBody(
     }
     if (pickEndDate) {
         YohakuDatePicker(
-            initialEpochDay = endDate.toEpochDay(),
+            initialEpochDay = endDateEpoch,
             onPick = {
-                val d = LocalDate.ofEpochDay(it)
-                endDate = d
-                if (startDate > d) startDate = d
+                endDateEpoch = it
+                if (startDateEpoch > it) startDateEpoch = it
                 pickEndDate = false
             },
             onClear = { pickEndDate = false },

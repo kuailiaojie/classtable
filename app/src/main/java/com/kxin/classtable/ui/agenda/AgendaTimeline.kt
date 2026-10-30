@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
+import com.kxin.classtable.design.YohakuCheckCircle
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
@@ -233,35 +234,15 @@ private fun AgendaRow(
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
-        // 打卡复选圆圈: HIG 交互触感打卡
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(if (event.completed) colors.accent else colors.paper)
-                .border(
-                    BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
-                    CircleShape,
-                )
-                .clickable {
-                    haptics.select()
-                    onToggleCompleted?.invoke()
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (event.completed) {
-                Text(
-                    text = "✓",
-                    style = YohakuType.label12,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+        // 打卡复选圆圈: HIG 44×44pt 触达与触感打卡
+        YohakuCheckCircle(
+            completed = event.completed,
+            onToggle = { onToggleCompleted?.invoke() },
+        )
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
         YohakuCard(
             modifier = Modifier.weight(1f),

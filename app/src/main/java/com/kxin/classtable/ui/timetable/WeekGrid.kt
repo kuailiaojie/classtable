@@ -256,6 +256,10 @@ internal fun WeekGrid(
                     val used = laneCount.coerceAtMost(3)
                     val laneW = colW / used
                     blocks.forEachIndexed { blockIdx, block ->
+                        val courseEndMin = block.course.customEndMinute
+                            ?: periods.getOrNull(block.course.endPeriod - 1)?.end
+                            ?: 0
+                        val isPast = showNowLine && day == today && courseEndMin < nowMinute
                         CourseBlock(
                             course = block.course,
                             rowH = rowH,
@@ -267,6 +271,7 @@ internal fun WeekGrid(
                             // 时间点虽然对得上(只看时刻),但那一天并不是今天,不该再标。
                             isCurrent = showNowLine && day == today &&
                                 Schedule.isCourseOngoing(block.course, periods),
+                            isPast = isPast,
                             prefs = prefs,
                             periods = periods,
                             staggerIndex = colIdx + blockIdx,
@@ -330,6 +335,7 @@ private fun CourseBlock(
     x: Dp,
     width: Dp,
     isCurrent: Boolean,
+    isPast: Boolean = false,
     prefs: TimetablePrefs,
     periods: List<Schedule.Period>,
     staggerIndex: Int,
@@ -399,7 +405,7 @@ private fun CourseBlock(
     Box(
         modifier = Modifier
             .graphicsLayer {
-                alpha = appear.value
+                alpha = appear.value * if (isPast) 0.52f else 1f
                 val s = 0.9f + 0.1f * appear.value
                 scaleX = s
                 scaleY = s

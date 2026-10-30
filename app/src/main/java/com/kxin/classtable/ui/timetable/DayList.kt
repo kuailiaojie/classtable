@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
+import com.kxin.classtable.design.YohakuCheckCircle
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
@@ -114,7 +115,7 @@ internal fun DayList(
     agendaEvents: List<AgendaEvent> = emptyList(),
     onToggleAgenda: ((String, Boolean) -> Unit)? = null,
     onAgendaClick: ((AgendaEvent) -> Unit)? = null,
-    onAddAgenda: (() -> Unit)? = null,
+    onAddAgenda: ((startMinute: Int, endMinute: Int) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -328,10 +329,12 @@ internal fun DayList(
                                 when (item) {
                                     is DayTimelineItem.CourseItem -> {
                                         val isCurrent = isToday && Schedule.isCourseOngoing(item.course, periods)
+                                        val isPast = isToday && (item.endMinute < nowMinute)
                                         YohakuCard(
                                             accentBar = isCurrent,
-                                            containerColor = courseTint(item.course),
+                                            containerColor = if (isPast) colors.neutral2 else courseTint(item.course),
                                             onClick = { onCourseClick(item.course) },
+                                            modifier = if (isPast) Modifier.graphicsLayer { alpha = 0.58f } else Modifier,
                                         ) {
                                             Row(verticalAlignment = Alignment.Top) {
                                                 Text(
@@ -377,33 +380,15 @@ internal fun DayList(
                                                     modifier = Modifier.width(100.dp),
                                                 )
 
-                                                // 触感打卡复选框
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(20.dp)
-                                                        .clip(CircleShape)
-                                                        .background(if (item.event.completed) colors.accent else colors.paper)
-                                                        .border(
-                                                            BorderStroke(1.5.dp, if (item.event.completed) colors.accent else colors.neutral5),
-                                                            CircleShape,
-                                                        )
-                                                        .clickable {
-                                                            haptics.select()
-                                                            onToggleAgenda?.invoke(item.event.id, !item.event.completed)
-                                                        },
-                                                    contentAlignment = Alignment.Center,
-                                                ) {
-                                                    if (item.event.completed) {
-                                                        Text(
-                                                            text = "✓",
-                                                            style = YohakuType.label12,
-                                                            color = Color.White,
-                                                            textAlign = TextAlign.Center,
-                                                        )
-                                                    }
-                                                }
+                                                // 触感打卡复选框: HIG 44×44pt 触达与触感打卡
+                                                YohakuCheckCircle(
+                                                    completed = item.event.completed,
+                                                    onToggle = {
+                                                        onToggleAgenda?.invoke(item.event.id, !item.event.completed)
+                                                    },
+                                                )
 
-                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
 
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
@@ -434,7 +419,7 @@ internal fun DayList(
                                                 .fillMaxWidth()
                                                 .clip(RoundedCornerShape(YohakuDimens.radiusCard))
                                                 .background(colors.neutral2)
-                                                .clickable { onAddAgenda?.invoke() }
+                                                .clickable { onAddAgenda?.invoke(item.startMinute, item.endMinute) }
                                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                                         ) {
                                             Row(
@@ -484,26 +469,11 @@ private fun AllDayAgendaCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(if (event.completed) colors.accent else colors.paper)
-                    .border(
-                        BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
-                        CircleShape,
-                    )
-                    .clickable {
-                        haptics.select()
-                        onToggle()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (event.completed) {
-                    Text(text = "✓", style = YohakuType.label12, color = Color.White)
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+            YohakuCheckCircle(
+                completed = event.completed,
+                onToggle = onToggle,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "[${event.category.label}] ${event.title}",
                 style = YohakuType.copy15.copy(

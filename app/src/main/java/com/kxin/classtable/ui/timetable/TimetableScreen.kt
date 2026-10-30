@@ -1,6 +1,8 @@
 package com.kxin.classtable.ui.timetable
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Surface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.slideInHorizontally
@@ -302,8 +304,13 @@ fun TimetableScreen(
                 )
                 Row(
                     modifier = Modifier
-                        .clickable { showWeather = true }
-                        .padding(end = 4.dp),
+                        .yohakuTouchTarget()
+                        .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                        .clickable {
+                            haptics.tick()
+                            showWeather = true
+                        }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     WeatherIcon(weather = w, modifier = Modifier.size(22.dp))
@@ -342,10 +349,6 @@ fun TimetableScreen(
             HeaderTextAction(text = "✦ 助手", color = colors.accent) {
                 haptics.tick()
                 onOpenAssistant()
-            }
-            HeaderTextAction(text = "导出", color = colors.accent) {
-                haptics.tick()
-                showExportImage = true
             }
         }
 
@@ -421,32 +424,60 @@ fun TimetableScreen(
                         if (atCurrentWeek && weekRange.isNotEmpty()) append(" · ").append(weekRange)
                         if (noStart) append(" · 未设置开学日")
                     }
-                    Column(
+                    Row(
                         modifier = Modifier
-                            .padding(horizontal = YohakuDimens.screenPadding)
-                            .clip(RoundedCornerShape(YohakuDimens.radiusChip))
-                            .clickable {
-                                haptics.tick()
-                                showWeekPicker = true
-                            }
-                            .padding(vertical = 2.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = YohakuDimens.screenPadding),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = title,
-                            style = YohakuType.title20,
-                            color = colors.neutral10,
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                                .clickable {
+                                    haptics.tick()
+                                    showWeekPicker = true
+                                }
+                                .padding(vertical = 2.dp),
+                        ) {
                             Text(
-                                text = subtitle,
-                                style = YohakuType.copy13,
-                                color = colors.neutral7,
+                                text = title,
+                                style = YohakuType.title20,
+                                color = colors.neutral10,
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = subtitle,
+                                    style = YohakuType.copy13,
+                                    color = colors.neutral7,
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "▾",
+                                    style = YohakuType.copy13,
+                                    color = colors.neutral6,
+                                )
+                            }
+                        }
+
+                        // 方案 A:在第 N 周大标题行右侧，放置克制典雅的「⤓ 导出长图」微操作
+                        Surface(
+                            modifier = Modifier
+                                .yohakuTouchTarget()
+                                .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                                .clickable {
+                                    haptics.tick()
+                                    showExportImage = true
+                                },
+                            shape = RoundedCornerShape(YohakuDimens.radiusControl),
+                            color = colors.raised,
+                            border = BorderStroke(1.dp, colors.line),
+                        ) {
                             Text(
-                                text = "▾",
-                                style = YohakuType.copy13,
-                                color = colors.neutral6,
+                                text = "⤓ 导出长图",
+                                style = YohakuType.label12,
+                                color = colors.accent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             )
                         }
                     }
@@ -566,8 +597,8 @@ fun TimetableScreen(
                             onAgendaClick = { agenda ->
                                 nav.navigate("agenda_form?eventId=${agenda.id}&date=${date.toEpochDay()}")
                             },
-                            onAddAgenda = {
-                                nav.navigate("agenda_form?date=${date.toEpochDay()}")
+                            onAddAgenda = { startMin, endMin ->
+                                nav.navigate("agenda_form?date=${date.toEpochDay()}&startMinute=$startMin&endMinute=$endMin")
                             },
                         )
                     }

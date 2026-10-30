@@ -102,10 +102,10 @@ class TimetableImageExporter @Inject constructor(
         // 现代智能手机竖屏黄金规格：1800 × 3900 (9 : 19.5 全面屏壁纸比例)
         val canvasWidth = 1800
         val totalHeight = 3900
-        val marginH = 76f
-        val headerHeight = 330f
-        val weekdayBarHeight = 150f
-        val gutterWidth = 120f
+        val marginH = 68f
+        val headerHeight = 360f
+        val weekdayBarHeight = 164f
+        val gutterWidth = 144f
         val footerHeight = 220f
 
         val gridTop = headerHeight + weekdayBarHeight
@@ -124,65 +124,74 @@ class TimetableImageExporter @Inject constructor(
         }
         canvas.drawRect(0f, 0f, canvasWidth.toFloat(), totalHeight.toFloat(), bgPaint)
 
-        // 艺术典雅外框 (Inner museum frame)
+        // 艺术典雅双重外框 (Museum-grade double frame)
         val outerFramePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#E8E3D8")
-            strokeWidth = 2f
+            color = android.graphics.Color.parseColor("#E4DFD2")
+            strokeWidth = 2.5f
             style = Paint.Style.STROKE
         }
-        canvas.drawRect(26f, 26f, canvasWidth - 26f, totalHeight - 26f, outerFramePaint)
+        canvas.drawRect(28f, 28f, canvasWidth - 28f, totalHeight - 28f, outerFramePaint)
+
+        val innerHairlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#EFEBE0")
+            strokeWidth = 1.2f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawRect(40f, 40f, canvasWidth - 40f, totalHeight - 40f, innerHairlinePaint)
 
         // 2. 顶部艺术排版与朱砂印章
         // 顶栏眉线
         val eyebrowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#8E8A82")
-            textSize = 22f
+            color = android.graphics.Color.parseColor("#7E7A71")
+            textSize = 25f
             typeface = monoTypeface
-            letterSpacing = 0.14f
+            letterSpacing = 0.16f
         }
-        canvas.drawText("—  Y O H A K U   ·   学 期 课 程 历  —", marginH, 100f, eyebrowPaint)
+        canvas.drawText("—  Y O H A K U   ·   学 期 课 程 历  —", marginH, 106f, eyebrowPaint)
 
         // 主标题
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#1A1917")
-            textSize = 64f
+            color = android.graphics.Color.parseColor("#141311")
+            textSize = 76f
             typeface = serifTypeface
+            isFakeBoldText = true
         }
-        canvas.drawText("第 $week 周 课程表", marginH, 178f, titlePaint)
+        canvas.drawText("第 $week 周 课程表", marginH, 192f, titlePaint)
 
         // 朱砂印章 (落款印「余课」)
-        val stampSize = 70f
+        val stampSize = 84f
         val stampRight = canvasWidth - marginH
-        val stampTop = 106f
+        val stampTop = 110f
         val stampRect = RectF(stampRight - stampSize, stampTop, stampRight, stampTop + stampSize)
         val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.parseColor("#C56473") // 传统梅红/朱砂
             style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(stampRect, 10f, 10f, stampPaint)
+        canvas.drawRoundRect(stampRect, 14f, 14f, stampPaint)
 
-        val stampInnerRect = RectF(stampRect.left + 3.5f, stampRect.top + 3.5f, stampRect.right - 3.5f, stampRect.bottom - 3.5f)
+        val stampInnerRect = RectF(stampRect.left + 4f, stampRect.top + 4f, stampRect.right - 4f, stampRect.bottom - 4f)
         val stampBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.argb(160, 255, 255, 255)
-            strokeWidth = 1.2f
+            color = android.graphics.Color.argb(180, 255, 255, 255)
+            strokeWidth = 1.5f
             style = Paint.Style.STROKE
         }
-        canvas.drawRoundRect(stampInnerRect, 8f, 8f, stampBorderPaint)
+        canvas.drawRoundRect(stampInnerRect, 10f, 10f, stampBorderPaint)
 
         val stampTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
             color = android.graphics.Color.WHITE
-            textSize = 26f
+            textSize = 32f
             typeface = serifTypeface
+            isFakeBoldText = true
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("余", stampRect.centerX(), stampRect.top + 28f, stampTextPaint)
-        canvas.drawText("课", stampRect.centerX(), stampRect.top + 57f, stampTextPaint)
+        canvas.drawText("余", stampRect.centerX(), stampRect.top + 34f, stampTextPaint)
+        canvas.drawText("课", stampRect.centerX(), stampRect.top + 70f, stampTextPaint)
 
         // 副标题与元信息行
         val dateRange = Schedule.weekRangeText(settings.semesterStartDay, week)
         val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#5A574F")
-            textSize = 24f
+            color = android.graphics.Color.parseColor("#4C483F")
+            textSize = 28f
             typeface = monoTypeface
         }
         val subtitleText = buildString {
@@ -190,26 +199,26 @@ class TimetableImageExporter @Inject constructor(
             append("学期第 ").append(week).append(" 周")
             if (settings.semesterStartDay <= 0L) append(" (未设置开学日)")
         }
-        canvas.drawText(subtitleText, marginH, 252f, subtitlePaint)
+        canvas.drawText(subtitleText, marginH, 268f, subtitlePaint)
 
         // 本周课程统计胶囊
         val activeCourseCount = courses.count { it.isActiveOnWeek(week) }
         val countBadgeText = "本周共 $activeCourseCount 节课程"
-        val countBadgeWidth = subtitlePaint.measureText(countBadgeText) + 42f
+        val countBadgeWidth = subtitlePaint.measureText(countBadgeText) + 48f
         val countBadgeRect = RectF(
             stampRight - countBadgeWidth,
-            222f,
+            236f,
             stampRight,
-            272f,
+            292f,
         )
         val countBadgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.parseColor("#ECE9E1")
+            color = android.graphics.Color.parseColor("#EBE7DE")
             style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(countBadgeRect, 25f, 25f, countBadgeBgPaint)
+        canvas.drawRoundRect(countBadgeRect, 28f, 28f, countBadgeBgPaint)
         val countBadgeTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#5E5A52")
-            textSize = 21f
+            color = android.graphics.Color.parseColor("#4A463E")
+            textSize = 24f
             typeface = serifTypeface
             textAlign = Paint.Align.CENTER
         }
@@ -226,20 +235,21 @@ class TimetableImageExporter @Inject constructor(
         // 3. 表头星期栏排版
         val colWidth = (canvasWidth - 2 * marginH - gutterWidth) / visibleDays.size
         val weekdayNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#181715")
-            textSize = 34f
+            color = android.graphics.Color.parseColor("#151412")
+            textSize = 42f
             typeface = serifTypeface
+            isFakeBoldText = true
             textAlign = Paint.Align.CENTER
         }
         val weekdayEnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#88847C")
-            textSize = 19f
+            color = android.graphics.Color.parseColor("#7A766E")
+            textSize = 23f
             typeface = monoTypeface
             textAlign = Paint.Align.CENTER
         }
         val dayNumPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#56534C")
-            textSize = 23f
+            color = android.graphics.Color.parseColor("#4A4740")
+            textSize = 28f
             typeface = monoTypeface
             textAlign = Paint.Align.CENTER
         }
@@ -263,15 +273,15 @@ class TimetableImageExporter @Inject constructor(
                     headerHeight + weekdayBarHeight - 12f,
                 )
                 val todayHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = android.graphics.Color.parseColor("#EFEBE2")
+                    color = android.graphics.Color.parseColor("#ECE6DA")
                     style = Paint.Style.FILL
                 }
-                canvas.drawRoundRect(todayHeaderRect, 14f, 14f, todayHeaderPaint)
+                canvas.drawRoundRect(todayHeaderRect, 18f, 18f, todayHeaderPaint)
             }
 
             // 星期文字
             val weekdayText = Dates.weekdayLabel(d)
-            canvas.drawText(weekdayText, cx, headerHeight + 48f, weekdayNamePaint)
+            canvas.drawText(weekdayText, cx, headerHeight + 52f, weekdayNamePaint)
 
             // 英文星期简称
             val enWeekday = when (d) {
@@ -284,14 +294,14 @@ class TimetableImageExporter @Inject constructor(
                 7 -> "SUN"
                 else -> ""
             }
-            canvas.drawText(enWeekday, cx, headerHeight + 80f, weekdayEnPaint)
+            canvas.drawText(enWeekday, cx, headerHeight + 86f, weekdayEnPaint)
 
             // 日期文本
             val dateStr = weekDates.getOrNull(d - 1)?.let {
                 "${it.monthValue.toString().padStart(2, '0')}/${it.dayOfMonth.toString().padStart(2, '0')}"
             } ?: ""
             if (dateStr.isNotEmpty()) {
-                canvas.drawText(dateStr, cx, headerHeight + 118f, dayNumPaint)
+                canvas.drawText(dateStr, cx, headerHeight + 128f, dayNumPaint)
             }
         }
 
@@ -305,20 +315,21 @@ class TimetableImageExporter @Inject constructor(
 
         // 4. 左侧节次与时间留白列
         val periodNumPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#34322D")
-            textSize = 27f
+            color = android.graphics.Color.parseColor("#262420")
+            textSize = 38f
             typeface = monoTypeface
+            isFakeBoldText = true
             textAlign = Paint.Align.RIGHT
         }
         val periodStartPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#747068")
-            textSize = 19f
+            color = android.graphics.Color.parseColor("#6A655C")
+            textSize = 24f
             typeface = monoTypeface
             textAlign = Paint.Align.RIGHT
         }
         val periodEndPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#98948C")
-            textSize = 17f
+            color = android.graphics.Color.parseColor("#8E8980")
+            textSize = 21f
             typeface = monoTypeface
             textAlign = Paint.Align.RIGHT
         }
@@ -331,9 +342,9 @@ class TimetableImageExporter @Inject constructor(
         periods.forEachIndexed { pIdx, p ->
             val y = gridTop + pIdx * rowHeight
             val formattedNum = String.format("%02d", pIdx + 1)
-            canvas.drawText(formattedNum, marginH + gutterWidth - 22f, y + rowHeight * 0.35f, periodNumPaint)
-            canvas.drawText(Schedule.clockText(p.start), marginH + gutterWidth - 22f, y + rowHeight * 0.62f, periodStartPaint)
-            canvas.drawText(Schedule.clockText(p.end), marginH + gutterWidth - 22f, y + rowHeight * 0.84f, periodEndPaint)
+            canvas.drawText(formattedNum, marginH + gutterWidth - 22f, y + rowHeight * 0.36f, periodNumPaint)
+            canvas.drawText(Schedule.clockText(p.start), marginH + gutterWidth - 22f, y + rowHeight * 0.63f, periodStartPaint)
+            canvas.drawText(Schedule.clockText(p.end), marginH + gutterWidth - 22f, y + rowHeight * 0.86f, periodEndPaint)
             // 行底水平网格线
             canvas.drawLine(marginH + gutterWidth, y + rowHeight, canvasWidth - marginH, y + rowHeight, gridLinePaint)
         }
@@ -347,19 +358,20 @@ class TimetableImageExporter @Inject constructor(
 
         // 5. 课程卡片真实色彩与艺术排版渲染
         val courseTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#181715")
+            color = android.graphics.Color.parseColor("#12110F")
             typeface = serifTypeface
+            isFakeBoldText = true
         }
         val courseMetaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#3C3933")
+            color = android.graphics.Color.parseColor("#2E2C27")
             typeface = serifTypeface
         }
         val courseTeacherPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#56524A")
+            color = android.graphics.Color.parseColor("#48443D")
             typeface = serifTypeface
         }
         val courseTimePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#78746C")
+            color = android.graphics.Color.parseColor("#6C675E")
             typeface = monoTypeface
         }
 
@@ -396,37 +408,47 @@ class TimetableImageExporter @Inject constructor(
                 val bw = laneW
                 val bh = block.height * rowHeight
 
-                val blockRect = RectF(bx + 5f, by + 5f, bx + bw - 5f, by + bh - 5f)
+                val blockRect = RectF(bx + 4.5f, by + 5f, bx + bw - 4.5f, by + bh - 5f)
 
                 // 核心:使用与主界面 100% 相同算法解析课程实际底色与色标
                 val bgArgb = CoursePalette.resolveTint(c, scheme, dark = false).toArgb()
                 val markArgb = CoursePalette.resolveMark(c, scheme, dark = false).toArgb()
+
+                // 纸感立体微阴影 (Paper Elevation Soft Shadow)
+                val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = android.graphics.Color.argb(22, 25, 20, 15)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRoundRect(
+                    RectF(blockRect.left + 2f, blockRect.top + 6f, blockRect.right - 2f, blockRect.bottom + 8f),
+                    24f, 24f, shadowPaint,
+                )
 
                 // 水彩纸感背景
                 val blockBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = bgArgb
                     style = Paint.Style.FILL
                 }
-                canvas.drawRoundRect(blockRect, 16f, 16f, blockBgPaint)
+                canvas.drawRoundRect(blockRect, 24f, 24f, blockBgPaint)
 
-                // 雅致微边框:取 markColor 的 25% 透明度，清秀不浑浊
+                // 雅致微边框:取 markColor 的 35% 透明度，清秀不浑浊
                 val borderArgb = android.graphics.Color.argb(
-                    65,
+                    85,
                     android.graphics.Color.red(markArgb),
                     android.graphics.Color.green(markArgb),
                     android.graphics.Color.blue(markArgb),
                 )
                 val blockBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = borderArgb
-                    strokeWidth = 1.5f
+                    strokeWidth = 2f
                     style = Paint.Style.STROKE
                 }
-                canvas.drawRoundRect(blockRect, 16f, 16f, blockBorderPaint)
+                canvas.drawRoundRect(blockRect, 24f, 24f, blockBorderPaint)
 
-                // 左侧和色强调细条 (东方手帐质感)
+                // 左侧和色强调细条 (东方手帐和纸贴条质感)
                 val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = android.graphics.Color.argb(
-                        220,
+                        230,
                         android.graphics.Color.red(markArgb),
                         android.graphics.Color.green(markArgb),
                         android.graphics.Color.blue(markArgb),
@@ -434,27 +456,28 @@ class TimetableImageExporter @Inject constructor(
                     style = Paint.Style.FILL
                 }
                 canvas.drawRoundRect(
-                    RectF(blockRect.left + 5.5f, blockRect.top + 9f, blockRect.left + 9.5f, blockRect.bottom - 9f),
-                    2.5f, 2.5f, barPaint,
+                    RectF(blockRect.left + 6.5f, blockRect.top + 10f, blockRect.left + 12.5f, blockRect.bottom - 10f),
+                    3f, 3f, barPaint,
                 )
 
-                // 卡片内部文字排版 (自适应排版，解决地点/教师丢弃与不一致问题)
+                // 卡片内部文字排版 (自适应高清字号排版)
                 canvas.save()
                 canvas.clipRect(blockRect)
 
-                val contentLeft = blockRect.left + 19f
+                val contentLeft = blockRect.left + 22f
                 val contentRight = blockRect.right - 10f
                 val contentWidth = (contentRight - contentLeft).toInt().coerceAtLeast(35)
-                var currentY = blockRect.top + 16f
+                var currentY = blockRect.top + 18f
 
                 val hasLocation = c.location.isNotBlank()
                 val hasTeacher = c.teacher.isNotBlank()
 
-                // 1. 课程名称排版 (智能字号与截断保护)
+                // 1. 课程名称排版 (大字号清晰可辨)
                 val nameSize = when {
-                    laneCount > 1 -> 21f
-                    bh < 260f -> 24f
-                    else -> 28f
+                    laneCount > 1 -> 28f
+                    bh < 260f -> 36f
+                    bh < 380f -> 44f
+                    else -> 50f
                 }
                 courseTitlePaint.textSize = nameSize
                 val titleMaxLines = if (bh < 340f) 2 else 3
@@ -463,7 +486,7 @@ class TimetableImageExporter @Inject constructor(
                     c.name, 0, c.name.length, courseTitlePaint, contentWidth,
                 ).setMaxLines(titleMaxLines)
                     .setEllipsize(TextUtils.TruncateAt.END)
-                    .setLineSpacing(2.5f, 1f)
+                    .setLineSpacing(3f, 1f)
                     .build()
 
                 canvas.save()
@@ -471,54 +494,54 @@ class TimetableImageExporter @Inject constructor(
                 titleLayout.draw(canvas)
                 canvas.restore()
 
-                currentY += titleLayout.height + 8f
+                currentY += titleLayout.height + 10f
 
-                // 2. 地点与教师排版（彻底解决有的有、有的没有的问题：只要数据有就必排，根据高度自适应布局）
+                // 2. 地点与教师排版 (大字号保障清晰度)
                 val remH = blockRect.bottom - 8f - currentY
 
-                if (bh >= 340f) {
+                if (bh >= 300f) {
                     // 大块课程（>=2节）：独立行排布，舒展留白
                     if (hasLocation) {
-                        val locSize = if (laneCount > 1) 16f else 19f
+                        val locSize = if (laneCount > 1) 22f else 28f
                         courseMetaPaint.textSize = locSize
                         val locText = if (c.location.length > 10) c.location.take(9) + "…" else c.location
-                        canvas.drawText("📍 $locText", contentLeft, currentY + 18f, courseMetaPaint)
-                        currentY += 28f
+                        canvas.drawText("📍 $locText", contentLeft, currentY + locSize * 0.9f, courseMetaPaint)
+                        currentY += locSize + 14f
                     }
                     if (hasTeacher) {
-                        val teacherSize = if (laneCount > 1) 15f else 18f
+                        val teacherSize = if (laneCount > 1) 20f else 26f
                         courseTeacherPaint.textSize = teacherSize
                         val teacherText = if (c.teacher.length > 8) c.teacher.take(7) + "…" else c.teacher
-                        canvas.drawText("👤 $teacherText", contentLeft, currentY + 18f, courseTeacherPaint)
-                        currentY += 28f
+                        canvas.drawText("👤 $teacherText", contentLeft, currentY + teacherSize * 0.9f, courseTeacherPaint)
+                        currentY += teacherSize + 14f
                     }
-                    if (bh >= 520f) {
-                        courseTimePaint.textSize = 16f
+                    if (bh >= 480f) {
+                        val timeSize = if (laneCount > 1) 19f else 23f
+                        courseTimePaint.textSize = timeSize
                         val timeDesc = if (c.hasCustomTime()) {
                             Schedule.courseTimeText(c, periods)
                         } else {
                             "${c.startPeriod}-${c.endPeriod}节"
                         }
-                        canvas.drawText(timeDesc, contentLeft, currentY + 18f, courseTimePaint)
+                        canvas.drawText(timeDesc, contentLeft, currentY + timeSize * 0.9f, courseTimePaint)
                     }
                 } else {
-                    // 单节课或紧凑块：无论如何确保地点与教师完整露出，空间充裕则分两行，空间狭小则同行融合
-                    if (remH >= 48f) {
+                    // 单节课或紧凑块
+                    if (remH >= 54f) {
                         if (hasLocation) {
-                            val locSize = if (laneCount > 1) 15f else 17f
+                            val locSize = if (laneCount > 1) 20f else 25f
                             courseMetaPaint.textSize = locSize
                             val locText = if (c.location.length > 9) c.location.take(8) + "…" else c.location
-                            canvas.drawText("📍 $locText", contentLeft, currentY + 16f, courseMetaPaint)
-                            currentY += 24f
+                            canvas.drawText("📍 $locText", contentLeft, currentY + locSize * 0.9f, courseMetaPaint)
+                            currentY += locSize + 10f
                         }
                         if (hasTeacher) {
-                            val teacherSize = if (laneCount > 1) 14f else 16f
+                            val teacherSize = if (laneCount > 1) 18f else 23f
                             courseTeacherPaint.textSize = teacherSize
                             val teacherText = if (c.teacher.length > 7) c.teacher.take(6) + "…" else c.teacher
-                            canvas.drawText("👤 $teacherText", contentLeft, currentY + 16f, courseTeacherPaint)
+                            canvas.drawText("👤 $teacherText", contentLeft, currentY + teacherSize * 0.9f, courseTeacherPaint)
                         }
                     } else {
-                        // 纵向极度紧凑（如半节自定时间）：融合单行保证两者皆不缺失
                         val combinedMeta = when {
                             hasLocation && hasTeacher -> "📍 ${c.location.take(5)} · ${c.teacher.take(4)}"
                             hasLocation -> "📍 ${c.location}"
@@ -526,8 +549,8 @@ class TimetableImageExporter @Inject constructor(
                             else -> null
                         }
                         if (combinedMeta != null) {
-                            courseMetaPaint.textSize = if (laneCount > 1) 13f else 15f
-                            canvas.drawText(combinedMeta, contentLeft, currentY + 15f, courseMetaPaint)
+                            courseMetaPaint.textSize = if (laneCount > 1) 18f else 22f
+                            canvas.drawText(combinedMeta, contentLeft, currentY + 18f, courseMetaPaint)
                         }
                     }
                 }
@@ -541,24 +564,25 @@ class TimetableImageExporter @Inject constructor(
         canvas.drawLine(marginH, footerLineY, canvasWidth - marginH, footerLineY, dividerLinePaint)
 
         val footerBrandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#3A3732")
-            textSize = 28f
+            color = android.graphics.Color.parseColor("#322F2A")
+            textSize = 32f
             typeface = serifTypeface
+            isFakeBoldText = true
         }
         canvas.drawText("余 白 · 极 简 课 表", marginH, footerLineY + 68f, footerBrandPaint)
 
         val footerEnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#949086")
-            textSize = 16f
+            color = android.graphics.Color.parseColor("#8E8A80")
+            textSize = 18f
             typeface = monoTypeface
-            letterSpacing = 0.15f
+            letterSpacing = 0.16f
         }
-        canvas.drawText("Y O H A K U   C L A S S T A B L E", marginH, footerLineY + 104f, footerEnPaint)
+        canvas.drawText("Y O H A K U   C L A S S T A B L E", marginH, footerLineY + 106f, footerEnPaint)
 
         // 居中艺术铭文
         val footerMottoPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#807C72")
-            textSize = 21f
+            color = android.graphics.Color.parseColor("#747065")
+            textSize = 26f
             typeface = serifTypeface
             textAlign = Paint.Align.CENTER
         }
@@ -567,8 +591,8 @@ class TimetableImageExporter @Inject constructor(
         // 右侧导出日期与周次题跋
         val dateNow = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
         val footerDatePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = android.graphics.Color.parseColor("#68645C")
-            textSize = 20f
+            color = android.graphics.Color.parseColor("#5A564E")
+            textSize = 24f
             typeface = monoTypeface
             textAlign = Paint.Align.RIGHT
         }

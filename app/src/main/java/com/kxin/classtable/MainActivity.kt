@@ -288,7 +288,7 @@ fun ClasstableRoot(
                 composable("courses") { CoursesScreen(nav) }
                 composable("agenda") { AgendaScreen(nav) }
                 composable(
-                    route = "agenda_form?eventId={eventId}&date={date}&category={category}&courseId={courseId}",
+                    route = "agenda_form?eventId={eventId}&date={date}&category={category}&courseId={courseId}&startMinute={startMinute}&endMinute={endMinute}",
                     arguments = listOf(
                         navArgument("eventId") {
                             type = NavType.StringType
@@ -311,6 +311,14 @@ fun ClasstableRoot(
                             nullable = true
                             defaultValue = null
                         },
+                        navArgument("startMinute") {
+                            type = NavType.IntType
+                            defaultValue = -1
+                        },
+                        navArgument("endMinute") {
+                            type = NavType.IntType
+                            defaultValue = -1
+                        },
                     ),
                 ) { entry ->
                     AgendaFormScreen(
@@ -320,6 +328,8 @@ fun ClasstableRoot(
                         defaultCategory = entry.arguments?.getString("category")
                             ?.let { runCatching { AgendaCategory.valueOf(it) }.getOrNull() },
                         defaultCourseId = entry.arguments?.getString("courseId"),
+                        defaultStartMinute = entry.arguments?.getInt("startMinute") ?: -1,
+                        defaultEndMinute = entry.arguments?.getInt("endMinute") ?: -1,
                     )
                 }
                 composable(

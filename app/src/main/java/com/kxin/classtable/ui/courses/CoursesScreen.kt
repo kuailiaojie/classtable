@@ -1,5 +1,7 @@
 package com.kxin.classtable.ui.courses
 
+import androidx.activity.compose.BackHandler
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -103,6 +105,13 @@ fun CoursesScreen(
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val allIds = remember(courses) { courses.map { it.id }.toSet() }
+
+    // HIG 容错与手势对齐:多选状态下侧滑返回优先退出多选模式，避免误退页面
+    BackHandler(enabled = selecting) {
+        haptics.tick()
+        selecting = false
+        selected = emptySet()
+    }
 
     if (confirmDelete) {
         val count = selected.size

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.kxin.classtable.design.EntranceTracker
 import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuCard
+import com.kxin.classtable.design.YohakuCheckCircle
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
@@ -236,34 +237,14 @@ private fun CountdownCard(
                 )
             }
 
-            // 完成打卡复选钮
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 4.dp)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (event.completed) colors.accent else colors.paper)
-                    .border(
-                        BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
-                        CircleShape,
-                    )
-                    .clickable {
-                        haptics.select()
-                        onToggleCompleted?.invoke()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (event.completed) {
-                    Text(
-                        text = "✓",
-                        style = YohakuType.label12,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
+            // 完成打卡复选钮: HIG 44×44pt 触达与触感打卡
+            YohakuCheckCircle(
+                completed = event.completed,
+                onToggle = { onToggleCompleted?.invoke() },
+                visualSize = 22.dp,
+            )
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
             Text(
                 text = rightText,

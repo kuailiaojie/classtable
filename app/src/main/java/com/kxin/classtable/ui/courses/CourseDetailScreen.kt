@@ -52,6 +52,7 @@ import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.yuketang.YuketangAnnouncement
 import com.kxin.classtable.data.yuketang.YuketangRepository
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuCheckCircle
 import com.kxin.classtable.design.YohakuConfirmDialog
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuTopBar
@@ -167,7 +168,25 @@ fun CourseDetailScreen(
                 .widthIn(max = YohakuDimens.maxContentWidth)
                 .fillMaxWidth(),
         ) {
-            YohakuTopBar(title = "课程详情", onBack = { nav.popBackStack() })
+    
+            YohakuTopBar(
+                title = "课程详情",
+                onBack = { nav.popBackStack() },
+                actions = {
+                    if (course != null) {
+                        Text(
+                            text = "编辑",
+                            style = YohakuType.copy13,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .yohakuTouchTarget()
+                                .clickable { nav.navigate("course_form?courseId=${course.id}") }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                        )
+                    }
+                },
+            )
+
 
         val c = course
         if (c == null) {
@@ -342,15 +361,7 @@ fun CourseDetailScreen(
 
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection))
 
-                Text(
-                    text = "编辑",
-                    style = YohakuType.copy13,
-                    color = colors.accent,
-                    modifier = Modifier
-                        .yohakuTouchTarget()
-                        .clickable { nav.navigate("course_form?courseId=${c.id}") }
-                        .padding(vertical = 8.dp),
-                )
+
                 Text(
                     text = "删除课程",
                     style = YohakuType.copy13,
@@ -527,26 +538,11 @@ private fun CourseAgendaCard(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(if (event.completed) colors.accent else colors.paper)
-                .border(
-                    BorderStroke(1.5.dp, if (event.completed) colors.accent else colors.neutral5),
-                    CircleShape,
-                )
-                .clickable {
-                    haptics.select()
-                    onToggle()
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (event.completed) {
-                Text(text = "✓", style = YohakuType.label12, color = Color.White)
-            }
-        }
-        Spacer(modifier = Modifier.width(10.dp))
+        YohakuCheckCircle(
+            completed = event.completed,
+            onToggle = onToggle,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = event.title,
