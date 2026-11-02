@@ -19,6 +19,7 @@
 #     versionName 带后缀(如 1.0.0-rc1)时发布为 Pre-release,且不会成为 /releases/latest ——
 #     应用内「检查更新」默认只提示正式版;用户在设置里打开「接收预发行版」后才会收到 RC。
 #   - Pull Request 不会触发发布。
+#   - 只改 *.md / docs/ 的推送不会触发构建与发布(paths-ignore)。
 #
 # 可选签名(Release):
 #   在仓库 Settings → Secrets and variables → Actions 中配置以下密钥后,
@@ -38,6 +39,10 @@ on:
   push:
     branches: [main, master]
     tags: ["v*"]
+    # 只改文档的推送不构建也不发布,否则会删除并重建当前版本号的 Release
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
     branches: [main, master]
   workflow_dispatch:

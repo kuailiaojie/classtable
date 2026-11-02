@@ -144,3 +144,4 @@ Rules for AI agents working with DevRelay installed.
 
 - **每次提交/推送必须更新版本号 (Mandatory Version Bump on Every Release/Commit)**:
   每次提交新功能、交互优化、Bug修复或发布推送时，必须在 `app/build.gradle.kts` 中递增 `versionCode`（如 `93` -> `94`）并相应升级 `versionName`（如 `"3.13.0"`），同时在 `CHANGELOG.md` 中记录版本更新点，并在 `docs/PLAN.md` 中同步阶段状态与版本号。客户端与设备端严格依赖 `versionCode` 与 `versionName` 的自增来检测并接收最新应用更新。
+  仅修改文档(`*.md`、`docs/`)的提交不需要递增版本号;这类推送会被 `build-apk.yml` 的 `paths-ignore` 跳过,不会重新发布当前版本。
