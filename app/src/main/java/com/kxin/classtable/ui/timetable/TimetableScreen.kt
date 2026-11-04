@@ -262,6 +262,7 @@ fun TimetableScreen(
 
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var newCourseWeekday by remember { mutableStateOf<Int?>(null) }
     var newCoursePeriod by remember { mutableStateOf<Int?>(null) }
     var showWeather by remember { mutableStateOf(false) }
@@ -442,6 +443,39 @@ fun TimetableScreen(
         )
     }
 
+    if (showMoreMenu) {
+        TimetableMoreDialog(
+            atToday = atToday,
+            hasPartner = activePartner != null,
+            onDismiss = { showMoreMenu = false },
+            onToday = {
+                anchorWeek = realWeek
+                anchorWeekday = today
+            },
+            onAddCourse = {
+                newCourseWeekday = null
+                newCoursePeriod = null
+                showAdd = true
+            },
+            onAssistant = {
+                onOpenAssistant()
+            },
+            onExportImage = {
+                showExportImage = true
+            },
+            onDateRadar = {
+                if (activePartner != null) {
+                    showDateRadar = true
+                } else {
+                    nav.navigate("partner")
+                }
+            },
+            onPartnerManage = {
+                nav.navigate("partner")
+            },
+        )
+    }
+
     if (showDateRadar) {
         val partner = activePartner
         if (partner != null) {
@@ -485,7 +519,7 @@ fun TimetableScreen(
             .fillMaxSize()
             .background(colors.paper),
     ) {
-        // 顶栏固定:切换的是内容,不是页头 —— 页头跟着转场一起滑反而显得整屏在晃。
+        // 顶栏固定:切换的是内容,不是页头 —— 极致极简:左侧天气,右侧[周/日]分段切换与更多(···)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -520,48 +554,30 @@ fun TimetableScreen(
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
-            // 导航簇:「我在看哪儿」——定位(今天)+ 视图粒度(周/日)。两者同属一把意思,收紧成一组。
-            // 「今天」:已经在今天时不给可点态 —— 点了没有任何变化,给出可点的样子就是骗人
-            HeaderTextAction(
-                text = "今天",
-                color = if (atToday) colors.neutral5 else colors.neutral7,
-                enabled = !atToday,
-            ) {
-                haptics.tick()
-                anchorWeek = realWeek
-                anchorWeekday = today
-            }
-            // 周 / 日:同一处的两个互斥视图 —— 用分段控件(与「日程 / 倒计时」同一套语言),
-            // 一块底槽 + 会滑动的指示块,比两颗各自描边的 chip 更收敛,也把「切视图」和「做动作」分开。
+            // 视图粒度:周 / 日 互斥视图分段控件
             YohakuSegmentedControl(
                 options = listOf("周", "日"),
                 selectedIndex = if (isDayMode) 1 else 0,
                 onSelect = { isDayMode = it == 1 },
                 modifier = Modifier.width(60.dp),
             )
-            // 动作簇:与导航簇之间留一道更宽的缝,靠留白分组(不画分隔线)
-            Spacer(modifier = Modifier.width(14.dp))
-            HeaderTextAction(text = "添加", color = colors.accent) {
-                newCourseWeekday = null
-                newCoursePeriod = null
-                showAdd = true
-            }
-            // AI 助手:页头里的可见入口;点击后助手从屏幕底部升起
-            HeaderTextAction(text = "助手", color = colors.accent) {
+            Spacer(modifier = Modifier.width(10.dp))
+            // 更多功能菜单:今天、新建/导入、AI 助手、导出长图、双人课表/空闲雷达统一收归于此
+            HeaderTextAction(text = "···", color = colors.neutral9) {
                 haptics.tick()
-                onOpenAssistant()
+                showMoreMenu = true
             }
         }
 
-        // 双人课表控制栏:左侧伴侣/好友身份与空闲交集雷达入口,右侧极简和风三段切换控件(我的 / TA的 / 合盘)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = YohakuDimens.screenPadding, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val currentPartner = activePartner
-            if (currentPartner != null) {
+        // 双人课表控制栏:仅在有绑定伴侣/好友时克制展示,未绑定时不占空间
+        val currentPartner = activePartner
+        if (currentPartner != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = YohakuDimens.screenPadding, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 val markColor = CoursePalette.mark(currentPartner.colorHue, dark, scheme)
                 val tintColor = CoursePalette.tint(currentPartner.colorHue, dark, scheme)
                 Row(
@@ -601,59 +617,21 @@ fun TimetableScreen(
                         color = colors.neutral6,
                     )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
-                        .clickable {
-                            haptics.tick()
-                            showDateRadar = true
-                        },
-                    shape = RoundedCornerShape(YohakuDimens.radiusControl),
-                    color = colors.raised,
-                    border = BorderStroke(1.dp, colors.line),
-                ) {
-                    Text(
-                        text = "空闲雷达",
-                        style = YohakuType.label12,
-                        color = colors.accent,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            } else {
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
-                        .clickable {
-                            haptics.tick()
+                Spacer(modifier = Modifier.weight(1f))
+                YohakuSegmentedControl(
+                    options = TimetableOwnerMode.entries.map { it.label },
+                    selectedIndex = ownerMode.ordinal,
+                    onSelect = { idx ->
+                        val target = TimetableOwnerMode.entries.getOrElse(idx) { TimetableOwnerMode.MINE }
+                        if (target != TimetableOwnerMode.MINE && activePartner == null) {
                             nav.navigate("partner")
-                        },
-                    shape = RoundedCornerShape(YohakuDimens.radiusControl),
-                    color = colors.raised,
-                    border = BorderStroke(1.dp, colors.line),
-                ) {
-                    Text(
-                        text = "双人课表 · 分享与绑定 ›",
-                        style = YohakuType.label12,
-                        color = colors.neutral7,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                    )
-                }
+                        } else {
+                            ownerMode = target
+                        }
+                    },
+                    modifier = Modifier.width(136.dp),
+                )
             }
-            Spacer(modifier = Modifier.weight(1f))
-            YohakuSegmentedControl(
-                options = TimetableOwnerMode.entries.map { it.label },
-                selectedIndex = ownerMode.ordinal,
-                onSelect = { idx ->
-                    val target = TimetableOwnerMode.entries.getOrElse(idx) { TimetableOwnerMode.MINE }
-                    if (target != TimetableOwnerMode.MINE && activePartner == null) {
-                        nav.navigate("partner")
-                    } else {
-                        ownerMode = target
-                    }
-                },
-                modifier = Modifier.width(136.dp),
-            )
         }
 
         // 周 / 日:同一份内容换粒度。横向共享轴 —— 退场页整幅滑出、入场页整幅滑入,
@@ -999,6 +977,151 @@ private fun dayDate(semesterStartDay: Long, week: Int, weekday: Int, todayWeekda
     dates.getOrNull(weekday - 1)?.let { return it }
     val thisMonday = LocalDate.now().minusDays((todayWeekday - 1).toLong())
     return thisMonday.plusDays(((week - 1) * 7 + (weekday - 1)).toLong())
+}
+
+/** 「更多 ⋯」操作菜单弹层：今天定位、新建/导入、AI助手、导出长图、空闲雷达与双人课表管理。 */
+@Composable
+private fun TimetableMoreDialog(
+    atToday: Boolean,
+    hasPartner: Boolean,
+    onDismiss: () -> Unit,
+    onToday: () -> Unit,
+    onAddCourse: () -> Unit,
+    onAssistant: () -> Unit,
+    onExportImage: () -> Unit,
+    onDateRadar: () -> Unit,
+    onPartnerManage: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    data class MoreItem(
+        val title: String,
+        val subtitle: String,
+        val enabled: Boolean = true,
+        val accent: Boolean = false,
+        val action: () -> Unit,
+    )
+
+    val items = buildList {
+        add(
+            MoreItem(
+                title = "回到今天",
+                subtitle = if (atToday) "当前已在今天" else "定位到当前周与今天",
+                enabled = !atToday,
+                action = {
+                    haptics.tick()
+                    onDismiss()
+                    onToday()
+                },
+            ),
+        )
+        add(
+            MoreItem(
+                title = "新建与导入课程",
+                subtitle = "手动添加 / 教务导入 / 表格或 AI 导入",
+                accent = true,
+                action = {
+                    haptics.tick()
+                    onDismiss()
+                    onAddCourse()
+                },
+            ),
+        )
+        add(
+            MoreItem(
+                title = "✦ AI 助手",
+                subtitle = "自然语言调课、加日程、查作息",
+                accent = true,
+                action = {
+                    haptics.tick()
+                    onDismiss()
+                    onAssistant()
+                },
+            ),
+        )
+        add(
+            MoreItem(
+                title = "导出课表长图",
+                subtitle = "生成纸感美学壁纸与分享图片",
+                action = {
+                    haptics.tick()
+                    onDismiss()
+                    onExportImage()
+                },
+            ),
+        )
+        if (hasPartner) {
+            add(
+                MoreItem(
+                    title = "空闲交集雷达",
+                    subtitle = "对比双方无课时段，一键发起约会/自习",
+                    action = {
+                        haptics.tick()
+                        onDismiss()
+                        onDateRadar()
+                    },
+                ),
+            )
+        }
+        add(
+            MoreItem(
+                title = "双人课表管理",
+                subtitle = if (hasPartner) "切换伴侣、改色、口令分享或解绑" else "生成分享口令或绑定朋友/情侣",
+                action = {
+                    haptics.tick()
+                    onDismiss()
+                    onPartnerManage()
+                },
+            ),
+        )
+    }
+
+    YohakuDialog(
+        onDismissRequest = onDismiss,
+        title = "更多功能",
+        actions = { YohakuDialogAction(text = "关闭", onClick = onDismiss) },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            items.forEachIndexed { index, item ->
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(colors.neutral3),
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .then(if (item.enabled) Modifier.clickable(onClick = item.action) else Modifier)
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.title,
+                            style = YohakuType.copy15,
+                            color = when {
+                                !item.enabled -> colors.neutral5
+                                item.accent -> colors.accent
+                                else -> colors.neutral10
+                            },
+                        )
+                        Text(
+                            text = item.subtitle,
+                            style = YohakuType.label12,
+                            color = if (item.enabled) colors.neutral7 else colors.neutral5,
+                        )
+                    }
+                    if (item.enabled) {
+                        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** 「添加 / 新建课程」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入 / 双人课表。 */
