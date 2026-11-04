@@ -54,14 +54,17 @@ import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
 import com.kxin.classtable.domain.model.AgendaEvent
+import com.kxin.classtable.domain.model.CommonFreeSlot
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.domain.model.PartnerProfile
+import com.kxin.classtable.domain.model.PartnerType
 import com.kxin.classtable.ui.agenda.categoryTint
 import com.kxin.classtable.ui.agenda.spans
 import com.kxin.classtable.ui.agenda.startLocal
 import com.kxin.classtable.ui.agenda.endLocal
 import java.time.LocalDate
 
-/** 时间线元素:课程、日程(作业/考试/待办)、课间空堂 */
+/** 时间线元素:课程、日程(作业/考试/待办)、课间空堂、双人共同空闲 */
 internal sealed interface DayTimelineItem {
     val sortMinute: Int
     val key: String
@@ -92,6 +95,13 @@ internal sealed interface DayTimelineItem {
         override val sortMinute: Int get() = startMinute
         override val key: String get() = "gap_${startMinute}_$endMinute"
     }
+
+    data class CommonFreeItem(
+        val slot: CommonFreeSlot,
+    ) : DayTimelineItem {
+        override val sortMinute: Int get() = slot.startMinute
+        override val key: String get() = "common_free_${slot.weekday}_${slot.startPeriod}_${slot.endPeriod}"
+    }
 }
 
 /**
@@ -120,6 +130,9 @@ internal fun DayList(
     onAgendaClick: ((AgendaEvent) -> Unit)? = null,
     onAddAgenda: ((startMinute: Int, endMinute: Int) -> Unit)? = null,
     onAddCourse: ((weekday: Int, period: Int?) -> Unit)? = null,
+    commonFreeSlots: List<CommonFreeSlot> = emptyList(),
+    partnerProfile: PartnerProfile? = null,
+    onFreeSlotClick: ((CommonFreeSlot) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -159,8 +172,8 @@ internal fun DayList(
     val allDayAgendas = remember(dayAgendas) { dayAgendas.filter { it.allDay } }
     val timedAgendas = remember(dayAgendas) { dayAgendas.filterNot { it.allDay } }
 
-    // 全景时间流编排:课程 + 空堂(>=60分钟) + 定时日程
-    val timelineItems = remember(scheduled, timedAgendas) {
+    // 全景时间流编排:课程 + 空堂(>=60分钟) / 双人共同空闲 + 定时日程
+    val timelineItems = remember(scheduled, timedAgendas, commonFreeSlots) {
         val list = mutableListOf<DayTimelineItem>()
 
         // 1. 课程项
@@ -168,13 +181,21 @@ internal fun DayList(
             list.add(DayTimelineItem.CourseItem(c, s, e))
         }
 
-        // 2. 空堂检测(相邻两门课之间间隔 >= 60 分钟)
-        for (i in 0 until scheduled.size - 1) {
-            val curEnd = scheduled[i].third
-            val nextStart = scheduled[i + 1].second
-            val gap = nextStart - curEnd
-            if (gap >= 60) {
-                list.add(DayTimelineItem.GapItem(curEnd, nextStart, gap))
+        // 2. 若处于双人合盘模式且传入了共同空闲时段，则优先展示双人共同空闲雷达卡片；否则展示个人课间空堂(>= 60 分钟)
+        if (commonFreeSlots.isNotEmpty()) {
+            commonFreeSlots.forEach { slot ->
+                if (slot.durationMinutes >= 45) {
+                    list.add(DayTimelineItem.CommonFreeItem(slot))
+                }
+            }
+        } else {
+            for (i in 0 until scheduled.size - 1) {
+                val curEnd = scheduled[i].third
+                val nextStart = scheduled[i + 1].second
+                val gap = nextStart - curEnd
+                if (gap >= 60) {
+                    list.add(DayTimelineItem.GapItem(curEnd, nextStart, gap))
+                }
             }
         }
 
@@ -264,7 +285,7 @@ internal fun DayList(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                if (dayCourses.isEmpty() && dayAgendas.isEmpty()) {
+                if (dayCourses.isEmpty() && dayAgendas.isEmpty() && commonFreeSlots.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -377,9 +398,14 @@ internal fun DayList(
                                                     color = if (isPast) colors.neutral6 else colors.neutral7,
                                                     modifier = Modifier.width(100.dp),
                                                 )
-                                                Column(modifier = Modifier.weight(1f)) {
+                                                 Column(modifier = Modifier.weight(1f)) {
+                                                    val displayTitle = if (item.course.isPartner && !item.course.ownerName.isNullOrBlank()) {
+                                                        "[${item.course.ownerName}] ${item.course.name}"
+                                                    } else {
+                                                        item.course.name
+                                                    }
                                                     Text(
-                                                        text = item.course.name,
+                                                        text = displayTitle,
                                                         style = YohakuType.copy16,
                                                         color = if (isPast) colors.neutral8 else colors.neutral10,
                                                     )
@@ -471,6 +497,57 @@ internal fun DayList(
                                                 )
                                                 Text(
                                                     text = "＋ 安排待办",
+                                                    style = YohakuType.label12,
+                                                    color = colors.accent,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    is DayTimelineItem.CommonFreeItem -> {
+                                        val slot = item.slot
+                                        val h = slot.durationMinutes / 60
+                                        val m = slot.durationMinutes % 60
+                                        val durationStr = if (h > 0 && m > 0) "${h}小时${m}分" else if (h > 0) "${h}小时" else "${m}分钟"
+                                        val partnerName = partnerProfile?.name ?: "TA"
+                                        val actionWord = if (partnerProfile?.type == PartnerType.COUPLE) "约会" else "自习"
+                                        val periodText = if (slot.startPeriod == slot.endPeriod) {
+                                            "第${slot.startPeriod}节"
+                                        } else {
+                                            "第${slot.startPeriod}-${slot.endPeriod}节"
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(YohakuDimens.radiusCard))
+                                                .background(colors.raised)
+                                                .border(1.dp, colors.line, RoundedCornerShape(YohakuDimens.radiusCard))
+                                                .clickable {
+                                                    haptics.tick()
+                                                    onFreeSlotClick?.invoke(slot)
+                                                }
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "与 $partnerName 共同空闲 ($periodText · $durationStr)",
+                                                        style = YohakuType.copy14,
+                                                        color = colors.neutral9,
+                                                    )
+                                                    Text(
+                                                        text = "%02d:%02d–%02d:%02d · 双方均无课程安排".format(
+                                                            slot.startMinute / 60, slot.startMinute % 60,
+                                                            slot.endMinute / 60, slot.endMinute % 60,
+                                                        ),
+                                                        style = YohakuType.label12,
+                                                        color = colors.neutral6,
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "＋ 发起$actionWord",
                                                     style = YohakuType.label12,
                                                     color = colors.accent,
                                                 )

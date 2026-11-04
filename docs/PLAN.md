@@ -13,7 +13,7 @@
 
 ---
 
-## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.13.5 / 99)
+## 阶段进度总览 (Roadmap Milestones - 最新发布版本 3.14.0 / 100)
 
 - [x] **Phase 1: 周次快速选择网格面板 (Week Quick Picker)**
   - 目标：点击课表顶栏「第 N 周」弹出 1~N 周的网格选择器，支持直观展示当前周、周日期区间与课程密度，点击 1-tap 快速跳周。
@@ -83,6 +83,10 @@
   - 目标：彻底废止周/日视图课程块中任何 `graphicsLayer { alpha = ... }` 半透明减淡方案，消除透光与看不清；重构为基于 `compositeOver` 的纯实心浅淡莫兰迪底色生成算法，保留实体 `1dp` 精致微边框与高清晰深色文字，使已结课程真正做到“颜色变淡但轮廓分明、清晰可见、绝不消失”。
   - 状态：✅ 已完成 (3.13.5 / 99)
 
+- [x] **Phase 18: 朋友与情侣双人课表、合盘对比与空闲雷达 (Partner Timetable & Overlap Grid & Date Radar)**
+  - 目标：构建完备的朋友与情侣双人课表系统。实现 Room v13 物理隔离存储（绝对不污染本地闹钟与实时活动胶囊）；支持一键生成课表分享口令与离线/云端导入；顶栏引入极简和风三段切换控件（我的/TA的/双人合盘）；周网格优雅呈现双人合盘车道排版与专属和色；智能识别双方共同空闲时段（空闲交集雷达），点击一键发起约会/自习日程；提供完整的伴侣管理、关系设定（情侣/好友）、专属和色选择与隐私解绑机制。
+  - 状态：✅ 已完成 (3.14.0 / 100)
+
 ---
 
 ## 详细实施记录 (Execution Log)
@@ -101,4 +105,37 @@
   4. 每周卡片展示周次号、简短日期范围（如 `9/14–9/20`）及课程状态；
   5. 点击任意周后弹窗平滑关闭，主课表无缝平移至目标周；
   6. 适配折叠屏与宽屏，弹窗限宽居中。
+* **Commit**：*待提交*
+
+---
+
+### Phase 18: 朋友与情侣双人课表、合盘对比与空闲雷达 (Partner Timetable & Overlap Grid & Date Radar)
+* **执行时间**：2026-11-04
+* **涉及核心文件**：
+  - `app/src/main/java/com/kxin/classtable/domain/model/PartnerProfile.kt`
+  - `app/src/main/java/com/kxin/classtable/data/local/PartnerEntities.kt`
+  - `app/src/main/java/com/kxin/classtable/data/local/PartnerDao.kt`
+  - `app/src/main/java/com/kxin/classtable/data/local/AppDatabase.kt`
+  - `app/src/main/java/com/kxin/classtable/di/DatabaseModule.kt`
+  - `app/src/main/java/com/kxin/classtable/data/PartnerRepository.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/settings/PartnerScreen.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/timetable/TimetableScreen.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/timetable/WeekGrid.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/timetable/DayList.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/agenda/AgendaFormScreen.kt`
+  - `app/src/main/java/com/kxin/classtable/data/BackupManager.kt`
+  - `app/src/main/java/com/kxin/classtable/MainActivity.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/settings/SettingsScreen.kt`
+  - `app/src/main/java/com/kxin/classtable/ui/settings/SettingsHubs.kt`
+  - `app/src/main/java/com/kxin/classtable/data/AiNavigation.kt`
+  - `app/src/test/java/com/kxin/classtable/data/PartnerRepositoryTest.kt`
+  - `app/build.gradle.kts`
+  - `CHANGELOG.md`
+* **验收标准**：
+  1. Room v13 隔离表与迁移脚本（`MIGRATION_12_13`），保证伴侣课程绝不污染本地提醒闹钟、胶囊与免打扰；
+  2. 生成微信/QQ课表口令文本（含隐私脱敏选项），支持剪贴板一键识别导入；
+  3. 课表顶栏极简和风三段切换控件（我的 / TA的 / 合盘），合盘模式按车道并排渲染伴侣专属和色；
+  4. 空闲交集雷达（Date Radar）精准计算双方全周/单日共同空档，一键预填发起约会/自习日程；
+  5. 伴侣管理中心支持多档案切换、修改备注、关系定位、和色挑选、全量离线备份还原与隐私解绑；
+  6. 完整单元测试覆盖，编译校验通过。
 * **Commit**：*待提交*

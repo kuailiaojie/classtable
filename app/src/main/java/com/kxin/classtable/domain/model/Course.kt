@@ -43,6 +43,8 @@ data class Course(
      * 「重新配色」就会给所有课程补上互不重复的色相。
      */
     val colorHue: Int? = null,
+    val isPartner: Boolean = false,
+    val ownerName: String? = null,
 ) {
     /** 是否带具体时刻。导入/保存时会把时刻钉在课程上,所以「第几节」的课也会是 true。 */
     fun hasCustomTime(): Boolean = customStartMinute != null && customEndMinute != null

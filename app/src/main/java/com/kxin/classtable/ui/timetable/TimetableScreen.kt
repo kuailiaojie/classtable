@@ -1,7 +1,9 @@
 package com.kxin.classtable.ui.timetable
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.material3.Surface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateIntAsState
@@ -10,6 +12,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,11 +20,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -47,9 +55,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.data.AgendaRepository
+import com.kxin.classtable.domain.model.AgendaCategory
 import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.ui.agenda.spans
 import com.kxin.classtable.data.CourseRepository
+import com.kxin.classtable.data.PartnerRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.TimetablePrefs
 import com.kxin.classtable.data.TimetableImageExporter
@@ -57,14 +67,16 @@ import com.kxin.classtable.data.TimetablePrefsStore
 import com.kxin.classtable.data.WeekendDisplay
 import com.kxin.classtable.data.Weather
 import com.kxin.classtable.data.WeatherRepository
+import com.kxin.classtable.design.CoursePalette
+import com.kxin.classtable.design.LocalCourseColorScheme
 import com.kxin.classtable.design.LocalYohakuColors
+import com.kxin.classtable.design.YohakuChip
 import com.kxin.classtable.design.YohakuDialog
 import com.kxin.classtable.design.YohakuDialogAction
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.yohakuNavReservedHeight
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuSegmentedControl
-import com.kxin.classtable.design.YohakuTopBar
 import com.kxin.classtable.design.YohakuType
 import com.kxin.classtable.design.rememberEntranceTracker
 import com.kxin.classtable.design.rememberYohakuHaptics
@@ -73,7 +85,10 @@ import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.model.AppSettings
+import com.kxin.classtable.domain.model.CommonFreeSlot
 import com.kxin.classtable.domain.model.Course
+import com.kxin.classtable.domain.model.PartnerProfile
+import com.kxin.classtable.domain.model.PartnerType
 import com.kxin.classtable.domain.weeksText
 import com.kxin.classtable.ui.weather.WeatherCard
 import com.kxin.classtable.ui.weather.WeatherIcon
@@ -88,9 +103,17 @@ import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
+/** 双人课表三段视图模式：我的 / TA的 / 双人合盘。 */
+enum class TimetableOwnerMode(val label: String) {
+    MINE("我的"),
+    PARTNER("TA的"),
+    OVERLAP("合盘"),
+}
+
 @HiltViewModel
 class TimetableViewModel @Inject constructor(
     courseRepository: CourseRepository,
+    private val partnerRepository: PartnerRepository,
     private val agendaRepository: AgendaRepository,
     settingsRepository: SettingsRepository,
     private val weatherRepository: WeatherRepository,
@@ -98,6 +121,15 @@ class TimetableViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     val courses: StateFlow<List<Course>> = courseRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val partnerProfiles: StateFlow<List<PartnerProfile>> = partnerRepository.observeProfiles()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activePartner: StateFlow<PartnerProfile?> = partnerRepository.observeActiveProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val partnerCourses: StateFlow<List<Course>> = partnerRepository.observeActivePartnerCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val agendas: StateFlow<List<AgendaEvent>> = agendaRepository.observeAll()
@@ -108,6 +140,46 @@ class TimetableViewModel @Inject constructor(
             runCatching { agendaRepository.toggleCompleted(id, completed) }
         }
     }
+
+    fun setActivePartner(partnerId: String) {
+        viewModelScope.launch {
+            partnerRepository.setActivePartner(partnerId)
+        }
+    }
+
+    fun calculateDayCommonFreeSlots(
+        myCourses: List<Course>,
+        partnerCourses: List<Course>,
+        periods: List<Schedule.Period>,
+        week: Int,
+        weekday: Int,
+        displayWeekday: Int = weekday,
+    ): List<CommonFreeSlot> = partnerRepository.calculateCommonFreeSlots(
+        myCourses = myCourses,
+        partnerCourses = partnerCourses,
+        periods = periods,
+        week = week,
+        weekday = weekday,
+        displayWeekday = displayWeekday,
+    )
+
+    fun calculateWeekCommonFreeSlots(
+        myCourses: List<Course>,
+        partnerCourses: List<Course>,
+        periods: List<Schedule.Period>,
+        week: Int,
+        teachingDays: List<Pair<Int, Int>?>,
+        visibleDays: List<Int>,
+        minPeriods: Int = 2,
+    ): List<CommonFreeSlot> = partnerRepository.calculateWeekCommonFreeSlots(
+        myCourses = myCourses,
+        partnerCourses = partnerCourses,
+        periods = periods,
+        week = week,
+        teachingDays = teachingDays,
+        visibleDays = visibleDays,
+        minPeriods = minPeriods,
+    )
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -153,7 +225,12 @@ fun TimetableScreen(
     viewModel: TimetableViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
+    val scheme = LocalCourseColorScheme.current
+    val dark = CoursePalette.isDarkTheme(colors.paper)
     val courses by viewModel.courses.collectAsStateWithLifecycle()
+    val partnerProfiles by viewModel.partnerProfiles.collectAsStateWithLifecycle()
+    val activePartner by viewModel.activePartner.collectAsStateWithLifecycle()
+    val partnerCourses by viewModel.partnerCourses.collectAsStateWithLifecycle()
     val agendas by viewModel.agendas.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
@@ -168,6 +245,21 @@ fun TimetableScreen(
     val today = Schedule.todayWeekday()
 
     var isDayMode by rememberSaveable { mutableStateOf(false) }
+    var ownerMode by rememberSaveable { mutableStateOf(TimetableOwnerMode.MINE) }
+    LaunchedEffect(activePartner) {
+        if (activePartner == null && ownerMode != TimetableOwnerMode.MINE) {
+            ownerMode = TimetableOwnerMode.MINE
+        }
+    }
+
+    val displayedCourses = remember(ownerMode, courses, partnerCourses) {
+        when (ownerMode) {
+            TimetableOwnerMode.MINE -> courses
+            TimetableOwnerMode.PARTNER -> partnerCourses
+            TimetableOwnerMode.OVERLAP -> courses + partnerCourses
+        }
+    }
+
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
     var newCourseWeekday by remember { mutableStateOf<Int?>(null) }
@@ -175,6 +267,18 @@ fun TimetableScreen(
     var showWeather by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
     var showExportImage by remember { mutableStateOf(false) }
+    var showDateRadar by remember { mutableStateOf(false) }
+    var showPartnerSwitcher by remember { mutableStateOf(false) }
+
+    fun navigateToFreeSlotAgenda(date: LocalDate, slot: CommonFreeSlot) {
+        val partner = activePartner
+        val actionWord = if (partner?.type == PartnerType.COUPLE) "约会" else "自习"
+        val defaultTitle = Uri.encode("与 ${partner?.name ?: "TA"} $actionWord")
+        nav.navigate(
+            "agenda_form?date=${date.toEpochDay()}&category=${AgendaCategory.ACTIVITY.name}" +
+                "&startMinute=${slot.startMinute}&endMinute=${slot.endMinute}&title=$defaultTitle",
+        )
+    }
 
     // 实时动态:每 30 秒刷新「正在上课 / 距下一节」与当前时间线
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -187,21 +291,41 @@ fun TimetableScreen(
     val nowMinute = Schedule.minuteOfDay(nowMillis)
 
     detailCourse?.let { course ->
+        val isPartnerCourse = course.isPartner
+        val dialogTitle = if (isPartnerCourse && !course.ownerName.isNullOrBlank()) {
+            "${course.ownerName} · ${course.name}"
+        } else {
+            course.name
+        }
         YohakuDialog(
             onDismissRequest = { detailCourse = null },
-            title = course.name,
+            title = dialogTitle,
             actions = {
                 YohakuDialogAction(text = "关闭", onClick = { detailCourse = null })
-                YohakuDialogAction(
-                    text = "查看详情",
-                    accent = true,
-                    onClick = {
-                        detailCourse = null
-                        nav.navigate("course_detail/${course.id}")
-                    },
-                )
+                if (isPartnerCourse) {
+                    YohakuDialogAction(
+                        text = "双人课表设定",
+                        accent = true,
+                        onClick = {
+                            detailCourse = null
+                            nav.navigate("partner")
+                        },
+                    )
+                } else {
+                    YohakuDialogAction(
+                        text = "查看详情",
+                        accent = true,
+                        onClick = {
+                            detailCourse = null
+                            nav.navigate("course_detail/${course.id}")
+                        },
+                    )
+                }
             },
         ) {
+            if (isPartnerCourse && !course.ownerName.isNullOrBlank()) {
+                InfoLine(label = "归属", value = "${course.ownerName}的课表")
+            }
             InfoLine(
                 label = "时间",
                 value = "${Course.weekdaysText(course)} · " +
@@ -283,7 +407,7 @@ fun TimetableScreen(
             currentWeek = realWeek,
             selectedWeek = anchorWeek,
             semesterStartDay = settings.semesterStartDay,
-            courses = courses,
+            courses = displayedCourses,
             onSelectWeek = { week ->
                 showWeekPicker = false
                 anchorWeek = week
@@ -299,6 +423,61 @@ fun TimetableScreen(
             imageExporter = viewModel.imageExporter,
             onDismiss = { showExportImage = false },
         )
+    }
+
+    if (showPartnerSwitcher) {
+        PartnerSwitchDialog(
+            profiles = partnerProfiles,
+            activeId = activePartner?.id,
+            dark = dark,
+            onSelect = { id ->
+                viewModel.setActivePartner(id)
+                showPartnerSwitcher = false
+            },
+            onManage = {
+                showPartnerSwitcher = false
+                nav.navigate("partner")
+            },
+            onDismiss = { showPartnerSwitcher = false },
+        )
+    }
+
+    if (showDateRadar) {
+        val partner = activePartner
+        if (partner != null) {
+            val radarTeachingDays = remember(
+                adjustments,
+                settings.semesterStartDay,
+                settings.semesterWeekCount,
+                anchorWeek,
+            ) {
+                resolveTeachingDays(
+                    adjustments,
+                    settings.semesterStartDay,
+                    settings.semesterWeekCount,
+                    anchorWeek,
+                )
+            }
+            DateRadarDialog(
+                week = anchorWeek,
+                partner = partner,
+                myCourses = courses,
+                partnerCourses = partnerCourses,
+                periods = periods,
+                teachingDays = radarTeachingDays,
+                semesterStartDay = settings.semesterStartDay,
+                todayWeekday = today,
+                viewModel = viewModel,
+                onSelectSlot = { slot ->
+                    showDateRadar = false
+                    val targetDate = dayDate(settings.semesterStartDay, anchorWeek, slot.weekday, today)
+                    navigateToFreeSlotAgenda(targetDate, slot)
+                },
+                onDismiss = { showDateRadar = false },
+            )
+        } else {
+            showDateRadar = false
+        }
     }
 
     Column(
@@ -372,6 +551,109 @@ fun TimetableScreen(
                 haptics.tick()
                 onOpenAssistant()
             }
+        }
+
+        // 双人课表控制栏:左侧伴侣/好友身份与空闲交集雷达入口,右侧极简和风三段切换控件(我的 / TA的 / 合盘)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = YohakuDimens.screenPadding, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val currentPartner = activePartner
+            if (currentPartner != null) {
+                val markColor = CoursePalette.mark(currentPartner.colorHue, dark, scheme)
+                val tintColor = CoursePalette.tint(currentPartner.colorHue, dark, scheme)
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .background(tintColor)
+                        .border(1.dp, colors.line, RoundedCornerShape(YohakuDimens.radiusControl))
+                        .clickable {
+                            haptics.tick()
+                            if (partnerProfiles.size > 1) {
+                                showPartnerSwitcher = true
+                            } else {
+                                nav.navigate("partner")
+                            }
+                        }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(markColor),
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "${currentPartner.name} · ${currentPartner.type.label}",
+                        style = YohakuType.label12,
+                        color = colors.neutral9,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "▾",
+                        style = YohakuType.label12,
+                        color = colors.neutral6,
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .clickable {
+                            haptics.tick()
+                            showDateRadar = true
+                        },
+                    shape = RoundedCornerShape(YohakuDimens.radiusControl),
+                    color = colors.raised,
+                    border = BorderStroke(1.dp, colors.line),
+                ) {
+                    Text(
+                        text = "空闲雷达",
+                        style = YohakuType.label12,
+                        color = colors.accent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .clickable {
+                            haptics.tick()
+                            nav.navigate("partner")
+                        },
+                    shape = RoundedCornerShape(YohakuDimens.radiusControl),
+                    color = colors.raised,
+                    border = BorderStroke(1.dp, colors.line),
+                ) {
+                    Text(
+                        text = "双人课表 · 分享与绑定 ›",
+                        style = YohakuType.label12,
+                        color = colors.neutral7,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            YohakuSegmentedControl(
+                options = TimetableOwnerMode.entries.map { it.label },
+                selectedIndex = ownerMode.ordinal,
+                onSelect = { idx ->
+                    val target = TimetableOwnerMode.entries.getOrElse(idx) { TimetableOwnerMode.MINE }
+                    if (target != TimetableOwnerMode.MINE && activePartner == null) {
+                        nav.navigate("partner")
+                    } else {
+                        ownerMode = target
+                    }
+                },
+                modifier = Modifier.width(136.dp),
+            )
         }
 
         // 周 / 日:同一份内容换粒度。横向共享轴 —— 退场页整幅滑出、入场页整幅滑入,
@@ -536,14 +818,14 @@ fun TimetableScreen(
                                 else -> null
                             }
                         }
-                        val visibleDays = remember(prefs.weekendDisplay, teachingDays, courses) {
+                        val visibleDays = remember(prefs.weekendDisplay, teachingDays, displayedCourses) {
                             when (prefs.weekendDisplay) {
                                 WeekendDisplay.SHOW_ALL -> listOf(1, 2, 3, 4, 5, 6, 7)
                                 WeekendDisplay.HIDE_WEEKEND -> listOf(1, 2, 3, 4, 5)
                                 WeekendDisplay.AUTO_HIDE -> {
                                     val weekendHasClasses = listOf(6, 7).any { d ->
                                         val teaching = teachingDays.getOrNull(d - 1)
-                                        teaching != null && courses.any {
+                                        teaching != null && displayedCourses.any {
                                             it.isOnWeekday(teaching.second) && it.isActiveOnWeek(teaching.first)
                                         }
                                     }
@@ -556,6 +838,30 @@ fun TimetableScreen(
                         }
                         val agendaDots = remember(pageDates, agendas) {
                             pageDates.map { d -> agendas.any { !it.completed && it.spans(d) } }
+                        }
+                        val weekCommonFreeSlots = remember(
+                            ownerMode,
+                            activePartner,
+                            courses,
+                            partnerCourses,
+                            periods,
+                            pageWeek,
+                            teachingDays,
+                            visibleDays,
+                        ) {
+                            if (ownerMode == TimetableOwnerMode.OVERLAP && activePartner != null) {
+                                viewModel.calculateWeekCommonFreeSlots(
+                                    myCourses = courses,
+                                    partnerCourses = partnerCourses,
+                                    periods = periods,
+                                    week = pageWeek,
+                                    teachingDays = teachingDays,
+                                    visibleDays = visibleDays,
+                                    minPeriods = 2,
+                                )
+                            } else {
+                                emptyList()
+                            }
                         }
                         Column(modifier = Modifier.fillMaxSize()) {
                             WeekdayHeader(
@@ -575,7 +881,7 @@ fun TimetableScreen(
                                 },
                             )
                             WeekGrid(
-                                courses = courses,
+                                courses = displayedCourses,
                                 periods = periods,
                                 week = pageWeek,
                                 today = today,
@@ -591,6 +897,12 @@ fun TimetableScreen(
                                     newCoursePeriod = p
                                     showAdd = true
                                 },
+                                showOwnerTag = ownerMode == TimetableOwnerMode.OVERLAP,
+                                commonFreeSlots = weekCommonFreeSlots,
+                                onFreeSlotClick = { slot ->
+                                    val targetDate = dayDate(settings.semesterStartDay, pageWeek, slot.weekday, today)
+                                    navigateToFreeSlotAgenda(targetDate, slot)
+                                },
                                 // 网格排在悬浮导航之上,最后一两节不会被导航栏永久压住
                                 modifier = Modifier
                                     .weight(1f)
@@ -601,10 +913,44 @@ fun TimetableScreen(
                         val pageWeek = page / 7 + 1
                         val weekday = page % 7 + 1
                         val date = dayDate(settings.semesterStartDay, pageWeek, weekday, today)
+                        val dayCommonFreeSlots = remember(
+                            ownerMode,
+                            activePartner,
+                            courses,
+                            partnerCourses,
+                            periods,
+                            adjustments,
+                            date,
+                            pageWeek,
+                            weekday,
+                        ) {
+                            if (ownerMode == TimetableOwnerMode.OVERLAP && activePartner != null) {
+                                val effective = Adjustments.teachingDay(
+                                    adjustments,
+                                    date,
+                                    settings.semesterStartDay,
+                                    settings.semesterWeekCount,
+                                )
+                                if (effective != null) {
+                                    viewModel.calculateDayCommonFreeSlots(
+                                        myCourses = courses,
+                                        partnerCourses = partnerCourses,
+                                        periods = periods,
+                                        week = effective.first,
+                                        weekday = effective.second,
+                                        displayWeekday = weekday,
+                                    )
+                                } else {
+                                    emptyList()
+                                }
+                            } else {
+                                emptyList()
+                            }
+                        }
                         DayList(
                             date = date,
                             weekLabel = weekLabel,
-                            courses = courses,
+                            courses = displayedCourses,
                             periods = periods,
                             adjustments = adjustments,
                             semesterStartDay = settings.semesterStartDay,
@@ -631,6 +977,11 @@ fun TimetableScreen(
                                 newCoursePeriod = p
                                 showAdd = true
                             },
+                            commonFreeSlots = dayCommonFreeSlots,
+                            partnerProfile = activePartner,
+                            onFreeSlotClick = { slot ->
+                                navigateToFreeSlotAgenda(date, slot)
+                            },
                         )
                     }
                 }
@@ -650,7 +1001,7 @@ private fun dayDate(semesterStartDay: Long, week: Int, weekday: Int, todayWeekda
     return thisMonday.plusDays(((week - 1) * 7 + (weekday - 1)).toLong())
 }
 
-/** 「添加 / 新建课程」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入。 */
+/** 「添加 / 新建课程」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入 / 双人课表。 */
 @Composable
 private fun AddDialog(
     targetWeekday: Int? = null,
@@ -676,6 +1027,7 @@ private fun AddDialog(
         Triple("教务导入", "3 步导入,选学校识别方案", "import"),
         Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
         Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
+        Triple("双人课表 · 分享与合盘", "生成分享口令或导入朋友/情侣课表", "partner"),
     )
     YohakuDialog(
         onDismissRequest = onDismiss,
@@ -703,6 +1055,202 @@ private fun AddDialog(
                     Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
                 }
                 Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+            }
+        }
+    }
+}
+
+/** 多伴侣/好友快速切换弹窗。 */
+@Composable
+private fun PartnerSwitchDialog(
+    profiles: List<PartnerProfile>,
+    activeId: String?,
+    dark: Boolean,
+    onSelect: (String) -> Unit,
+    onManage: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val scheme = LocalCourseColorScheme.current
+    YohakuDialog(
+        onDismissRequest = onDismiss,
+        title = "切换双人课表对象",
+        actions = {
+            YohakuDialogAction(text = "取消", onClick = onDismiss)
+            YohakuDialogAction(text = "管理与导入", accent = true, onClick = onManage)
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            profiles.forEach { p ->
+                val selected = p.id == activeId
+                val markColor = CoursePalette.mark(p.colorHue, dark, scheme)
+                val tintColor = CoursePalette.tint(p.colorHue, dark, scheme)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .background(if (selected) tintColor else colors.neutral2)
+                        .border(
+                            width = 1.dp,
+                            color = if (selected) markColor else colors.line,
+                            shape = RoundedCornerShape(YohakuDimens.radiusControl),
+                        )
+                        .clickable { onSelect(p.id) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(markColor),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${p.name} · ${p.type.label}",
+                        style = YohakuType.copy15,
+                        color = colors.neutral10,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (selected) {
+                        Text(
+                            text = "当前",
+                            style = YohakuType.label12,
+                            color = colors.accent,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 空闲交集雷达弹窗：扫描整周双方共同无课的时段，点击一键发起约会或自习日程。 */
+@Composable
+private fun DateRadarDialog(
+    week: Int,
+    partner: PartnerProfile,
+    myCourses: List<Course>,
+    partnerCourses: List<Course>,
+    periods: List<Schedule.Period>,
+    teachingDays: List<Pair<Int, Int>?>,
+    semesterStartDay: Long,
+    todayWeekday: Int,
+    viewModel: TimetableViewModel,
+    onSelectSlot: (CommonFreeSlot) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    var minPeriods by rememberSaveable { mutableIntStateOf(2) }
+    val actionWord = if (partner.type == PartnerType.COUPLE) "约会" else "自习"
+
+    val slots = remember(myCourses, partnerCourses, periods, week, teachingDays, minPeriods) {
+        viewModel.calculateWeekCommonFreeSlots(
+            myCourses = myCourses,
+            partnerCourses = partnerCourses,
+            periods = periods,
+            week = week,
+            teachingDays = teachingDays,
+            visibleDays = (1..7).toList(),
+            minPeriods = minPeriods,
+        )
+    }
+
+    YohakuDialog(
+        onDismissRequest = onDismiss,
+        title = "第 $week 周 · 空闲交集雷达",
+        actions = {
+            YohakuDialogAction(text = "关闭", onClick = onDismiss)
+        },
+    ) {
+        Column {
+            Text(
+                text = "已对比你与「${partner.name}」第 $week 周的课程排期，点选任一共同空闲时段即可一键发起${actionWord}日程：",
+                style = YohakuType.label12,
+                color = colors.neutral7,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YohakuChip(
+                    text = "连堂空闲 (≥2节)",
+                    selected = minPeriods == 2,
+                    onClick = { minPeriods = 2 },
+                )
+                YohakuChip(
+                    text = "全部空闲 (≥1节)",
+                    selected = minPeriods == 1,
+                    onClick = { minPeriods = 1 },
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            if (slots.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "本周暂无符合条件的共同空闲时段",
+                        style = YohakuType.copy14,
+                        color = colors.neutral6,
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    slots.forEach { slot ->
+                        val slotDate = dayDate(semesterStartDay, week, slot.weekday, todayWeekday)
+                        val h = slot.durationMinutes / 60
+                        val m = slot.durationMinutes % 60
+                        val durationStr = if (h > 0 && m > 0) "${h}小时${m}分" else if (h > 0) "${h}小时" else "${m}分钟"
+                        val periodStr = if (slot.startPeriod == slot.endPeriod) {
+                            "第${slot.startPeriod}节"
+                        } else {
+                            "第${slot.startPeriod}-${slot.endPeriod}节"
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                                .background(colors.neutral2)
+                                .border(1.dp, colors.line, RoundedCornerShape(YohakuDimens.radiusControl))
+                                .clickable {
+                                    haptics.tick()
+                                    onSelectSlot(slot)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${Course.weekdayName(slot.weekday)} (${slotDate.monthValue}/${slotDate.dayOfMonth}) · $periodStr",
+                                    style = YohakuType.copy14,
+                                    color = colors.neutral10,
+                                )
+                                Text(
+                                    text = "%02d:%02d–%02d:%02d · 共 $durationStr".format(
+                                        slot.startMinute / 60, slot.startMinute % 60,
+                                        slot.endMinute / 60, slot.endMinute % 60,
+                                    ),
+                                    style = YohakuType.label12,
+                                    color = colors.neutral6,
+                                )
+                            }
+                            Text(
+                                text = "＋ 发起$actionWord",
+                                style = YohakuType.label12,
+                                color = colors.accent,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

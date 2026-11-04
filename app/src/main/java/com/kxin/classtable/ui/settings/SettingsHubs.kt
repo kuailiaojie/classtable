@@ -247,6 +247,7 @@ private fun AppearanceHub(viewModel: SettingsViewModel) {
 @Composable
 private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val activePartnerName by viewModel.activePartnerName.collectAsStateWithLifecycle()
     val periods = remember(settings.periodTimes) { Schedule.parsePeriods(settings.periodTimes) }
     val firstPeriodText = if (periods.isNotEmpty()) {
         "第1节 %02d:%02d".format(periods[0].start / 60, periods[0].start % 60)
@@ -265,6 +266,10 @@ private fun TimetableHub(nav: NavHostController, viewModel: SettingsViewModel) {
         DividerLine()
         SettingRow("调休课表", if (adjustmentDays == 0) "未设置" else "$adjustmentDays 天") {
             nav.navigate("adjustments")
+        }
+        DividerLine()
+        SettingRow("双人课表", activePartnerName ?: "情侣 / 好友合盘对比") {
+            nav.navigate("partner")
         }
         DividerLine()
         SettingRow("课表显示", "课程块的样子与配色") { nav.navigate("timetable_display") }

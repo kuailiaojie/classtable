@@ -84,6 +84,7 @@ fun AgendaFormScreen(
     defaultCourseId: String? = null,
     defaultStartMinute: Int = -1,
     defaultEndMinute: Int = -1,
+    defaultTitle: String? = null,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val colors = LocalYohakuColors.current
@@ -151,6 +152,7 @@ fun AgendaFormScreen(
                     defaultCourseId = defaultCourseId,
                     defaultStartMinute = defaultStartMinute,
                     defaultEndMinute = defaultEndMinute,
+                    defaultTitle = defaultTitle,
                     onSave = { viewModel.save(it) },
                     onDelete = { viewModel.delete(it) },
                 )
@@ -171,6 +173,7 @@ private fun AgendaFormBody(
     defaultCourseId: String? = null,
     defaultStartMinute: Int = -1,
     defaultEndMinute: Int = -1,
+    defaultTitle: String? = null,
     onSave: (AgendaEvent) -> Unit,
     onDelete: (String) -> Unit,
 ) {
@@ -186,7 +189,7 @@ private fun AgendaFormBody(
         else defaultDate.atTime(10, 0)
 
     val key = initial?.id
-    var title by rememberSaveable(key) { mutableStateOf(initial?.title ?: "") }
+    var title by rememberSaveable(key) { mutableStateOf(initial?.title ?: defaultTitle.orEmpty()) }
     var category by rememberSaveable(key, kind) {
         mutableStateOf(
             initial?.takeIf { it.category.kind == kind }?.category

@@ -95,6 +95,7 @@ import com.kxin.classtable.ui.settings.AgendaReminderScreen
 import com.kxin.classtable.ui.settings.AiKeyScreen
 import com.kxin.classtable.ui.settings.AgentMemoryScreen
 import com.kxin.classtable.ui.settings.CourseReminderScreen
+import com.kxin.classtable.ui.settings.PartnerScreen
 import com.kxin.classtable.ui.settings.ScheduleTimesScreen
 import com.kxin.classtable.ui.settings.SemesterScreen
 import com.kxin.classtable.ui.settings.SettingsHub
@@ -311,7 +312,7 @@ fun ClasstableRoot(
                 composable("courses") { CoursesScreen(nav) }
                 composable("agenda") { AgendaScreen(nav) }
                 composable(
-                    route = "agenda_form?eventId={eventId}&date={date}&category={category}&courseId={courseId}&startMinute={startMinute}&endMinute={endMinute}",
+                    route = "agenda_form?eventId={eventId}&date={date}&category={category}&courseId={courseId}&startMinute={startMinute}&endMinute={endMinute}&title={title}",
                     arguments = listOf(
                         navArgument("eventId") {
                             type = NavType.StringType
@@ -342,6 +343,11 @@ fun ClasstableRoot(
                             type = NavType.IntType
                             defaultValue = -1
                         },
+                        navArgument("title") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
                     ),
                 ) { entry ->
                     AgendaFormScreen(
@@ -353,6 +359,7 @@ fun ClasstableRoot(
                         defaultCourseId = entry.arguments?.getString("courseId"),
                         defaultStartMinute = entry.arguments?.getInt("startMinute") ?: -1,
                         defaultEndMinute = entry.arguments?.getInt("endMinute") ?: -1,
+                        defaultTitle = entry.arguments?.getString("title"),
                     )
                 }
                 composable(
@@ -369,6 +376,7 @@ fun ClasstableRoot(
                 composable("schedule_times") { ScheduleTimesScreen(nav) }
                 composable("semester") { SemesterScreen(nav) }
                 composable("adjustments") { AdjustmentsScreen(nav) }
+                composable("partner") { PartnerScreen(nav) }
                 composable("widget_settings") { WidgetSettingsScreen(nav) }
                 composable("timetable_display") { TimetableDisplayScreen(nav) }
                 composable("permissions") { PermissionsScreen(nav) }

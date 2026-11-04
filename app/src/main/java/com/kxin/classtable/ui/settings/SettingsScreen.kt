@@ -23,6 +23,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.kxin.classtable.BuildConfig
 import com.kxin.classtable.data.AuthRepository
+import com.kxin.classtable.data.PartnerRepository
 import com.kxin.classtable.data.SettingsRepository
 import com.kxin.classtable.data.SurveyPrompt
 import com.kxin.classtable.data.TimetablePrefsStore
@@ -51,11 +52,16 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val authRepository: AuthRepository,
     private val surveyPrompt: SurveyPrompt,
+    partnerRepository: PartnerRepository,
     yuketangRepository: YuketangRepository,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    val activePartnerName: StateFlow<String?> = partnerRepository.observeActiveProfile()
+        .map { it?.let { p -> "${p.name} · ${p.type.label}" } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /** 「课表显示 → 配色方案」:课程淡彩用哪一档(色相环大小 + 彩度强弱)。 */
     val colorScheme: StateFlow<CourseColorScheme> = TimetablePrefsStore.flow(context)
@@ -124,6 +130,7 @@ fun SettingsScreen(
 ) {
     val colors = LocalYohakuColors.current
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val activePartnerName by viewModel.activePartnerName.collectAsStateWithLifecycle()
     val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
     val yuketangLoggedIn by viewModel.yuketangLoggedIn.collectAsStateWithLifecycle()
     val memoryCount by viewModel.agentMemoryCount.collectAsStateWithLifecycle()
@@ -154,6 +161,10 @@ fun SettingsScreen(
             SettingRow("外观", themeLabel) { nav.navigate(SettingsHub.APPEARANCE.route) }
             DividerLine()
             SettingRow("课表", "上课时间 / 周次 / 调休 / 显示") { nav.navigate(SettingsHub.TIMETABLE.route) }
+            DividerLine()
+            SettingRow("双人课表", activePartnerName ?: "分享口令 / 合盘 / 空闲雷达") {
+                nav.navigate("partner")
+            }
             DividerLine()
             SettingRow("导入课表", "教务导入 / 识别方案") { nav.navigate(SettingsHub.IMPORT.route) }
             DividerLine()

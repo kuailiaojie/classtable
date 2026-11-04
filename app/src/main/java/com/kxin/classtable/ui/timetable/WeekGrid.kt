@@ -56,6 +56,7 @@ import com.kxin.classtable.design.LocalYohakuColors
 import com.kxin.classtable.design.YohakuDimens
 import com.kxin.classtable.design.YohakuMotion
 import com.kxin.classtable.design.YohakuType
+import com.kxin.classtable.design.courseMark
 import com.kxin.classtable.design.courseTint
 import com.kxin.classtable.design.rememberYohakuHaptics
 import com.kxin.classtable.design.yohakuTouchTarget
@@ -63,6 +64,7 @@ import com.kxin.classtable.domain.Adjustments
 import com.kxin.classtable.domain.Dates
 import com.kxin.classtable.domain.Schedule
 import com.kxin.classtable.domain.ScheduleAdjustment
+import com.kxin.classtable.domain.model.CommonFreeSlot
 import com.kxin.classtable.domain.model.Course
 
 /** 表头:一~日 + 该天日号;今天用 accent 标出,调休日标「休 / 补」。点某一天 → 进入那一天的日视图。 */
@@ -179,6 +181,9 @@ internal fun WeekGrid(
     modifier: Modifier = Modifier,
     visibleDays: List<Int> = (1..7).toList(),
     onGridLongClick: ((day: Int, period: Int) -> Unit)? = null,
+    showOwnerTag: Boolean = false,
+    commonFreeSlots: List<CommonFreeSlot> = emptyList(),
+    onFreeSlotClick: ((CommonFreeSlot) -> Unit)? = null,
 ) {
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
@@ -277,6 +282,29 @@ internal fun WeekGrid(
                     }
                 }
 
+                // 双人合盘共同空闲槽位:双方都无课的连续节次(>=2节),提供轻盈的留白提示块,点击即可一键发起约会/自习日程
+                if (commonFreeSlots.isNotEmpty() && onFreeSlotClick != null) {
+                    commonFreeSlots.forEach { slot ->
+                        val colIdx = visibleDays.indexOf(slot.weekday)
+                        if (colIdx >= 0) {
+                            val top = (slot.startPeriod - 1).toFloat()
+                            val height = slot.periodCount.toFloat()
+                            key("free_slot", slot.weekday, slot.startPeriod, slot.endPeriod) {
+                                CommonFreeGridBlock(
+                                    slot = slot,
+                                    rowH = rowH,
+                                    top = top,
+                                    height = height,
+                                    x = YohakuDimens.gridPadding + gutter + colW * colIdx,
+                                    width = colW,
+                                    prefs = prefs,
+                                    onClick = { onFreeSlotClick(slot) },
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // 课程块(按天分列,同一天内按车道并排)。错峰序号取「第几天 + 当天第几块」——
                 // 早先是一个横跨整周自增的计数器,越到周末延迟越大(周五的课要等近一秒才出现)。
                 // 按天算既有列到列的波,又不会累积。
@@ -302,6 +330,7 @@ internal fun WeekGrid(
                                 isCurrent = showNowLine && day == today &&
                                     Schedule.isCourseOngoing(block.course, periods),
                                 isPast = isPast,
+                                showOwnerTag = showOwnerTag,
                                 prefs = prefs,
                                 periods = periods,
                                 onClick = onCourseClick,
@@ -370,6 +399,7 @@ private fun CourseBlock(
     width: Dp,
     isCurrent: Boolean,
     isPast: Boolean = false,
+    showOwnerTag: Boolean = false,
     prefs: TimetablePrefs,
     periods: List<Schedule.Period>,
     onClick: (Course) -> Unit,
@@ -384,6 +414,7 @@ private fun CourseBlock(
     val spacious = blockH >= 52.dp || (isWideCol && blockH >= 42.dp)
     val shape = RoundedCornerShape(cornerRadius(prefs.corner))
     val tinted = prefs.showTint
+    val markColor = courseMark(course)
 
     // 「正在上」的 accent 条呼吸:真实的脉冲(此前在 1f↔0.98f 之间摆,肉眼等于没动)。
     // 只有当前课才起这条无限动画;初值取 1f,系统「移除动画」时无限动画停在初值 ——
@@ -419,9 +450,11 @@ private fun CourseBlock(
     }
     val metaCount = if (blockH >= 64.dp && isWideCol) 3 else if (spacious) 2 else if (roomy) 1 else 0
 
-    // 已结课程保持实体微边框,防止低彩度在列背景上丧失边界造成「消失」错觉
+    // 已结课程保持实体微边框,防止低彩度在列背景上丧失边界造成「消失」错觉;
+    // 双人合盘中的伴侣课程赋予专属和色描边,清晰区分彼此归属。
     val borderModifier = when {
         isPast -> Modifier.border(1.dp, colors.line, shape)
+        course.isPartner -> Modifier.border(1.dp, markColor.copy(alpha = 0.55f).compositeOver(colors.line), shape)
         !tinted -> Modifier.border(1.dp, colors.line, shape)
         else -> Modifier
     }
@@ -436,6 +469,12 @@ private fun CourseBlock(
         }
     } else {
         if (tinted) courseTint(course) else colors.raised
+    }
+
+    val displayName = if (showOwnerTag && course.isPartner && !course.ownerName.isNullOrBlank()) {
+        "[${course.ownerName.take(2)}] ${course.name}"
+    } else {
+        course.name
     }
 
     Box(
@@ -465,6 +504,13 @@ private fun CourseBlock(
                         .graphicsLayer { alpha = barAlpha }
                         .background(colors.accent),
                 )
+            } else if (showOwnerTag && course.isPartner) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(markColor),
+                )
             }
             Column(
                 modifier = Modifier
@@ -472,7 +518,7 @@ private fun CourseBlock(
                     .padding(horizontal = blockHPadding(prefs.density), vertical = 2.dp),
             ) {
                 Text(
-                    text = course.name,
+                    text = displayName,
                     style = nameStyle(prefs.nameSize),
                     color = if (isPast) colors.neutral8 else colors.neutral10,
                     maxLines = if (roomy) prefs.nameLines else 1,
@@ -487,6 +533,58 @@ private fun CourseBlock(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** 双人合盘下的共同空闲时段轻量网格块(点击一键发起约会/自习日程)。 */
+@Composable
+private fun CommonFreeGridBlock(
+    slot: CommonFreeSlot,
+    rowH: Dp,
+    top: Float,
+    height: Float,
+    x: Dp,
+    width: Dp,
+    prefs: TimetablePrefs,
+    onClick: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    val blockH = rowH * height
+    val shape = RoundedCornerShape(cornerRadius(prefs.corner))
+    Box(
+        modifier = Modifier
+            .offset(x = x, y = rowH * top)
+            .width(width)
+            .height((blockH - YohakuDimens.gridCellGap).coerceAtLeast(12.dp))
+            .clip(shape)
+            .background(colors.neutral1)
+            .border(1.dp, colors.line, shape)
+            .clickable {
+                haptics.tick()
+                onClick()
+            }
+            .padding(horizontal = blockHPadding(prefs.density), vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "共同空闲",
+                style = YohakuType.gridMeta,
+                color = colors.accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (blockH >= 36.dp) {
+                Text(
+                    text = "${slot.startPeriod}-${slot.endPeriod}节 · +约",
+                    style = YohakuType.gridMeta,
+                    color = colors.neutral6,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -511,7 +609,7 @@ private fun layoutDay(
             (c.startPeriod - 1).toFloat() to (c.endPeriod - c.startPeriod + 1).toFloat()
         }
         if (height <= 0f) null else GridBlock(c, top, height)
-    }.sortedWith(compareBy({ it.top }, { -it.height }))
+    }.sortedWith(compareBy({ it.top }, { it.course.isPartner }, { -it.height }))
 
     // 车道:每条车道记住已占据到的最底部,能塞就复用
     val laneEnds = mutableListOf<Float>()

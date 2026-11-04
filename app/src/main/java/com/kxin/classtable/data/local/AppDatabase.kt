@@ -16,8 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AnnouncementEntity::class,
         AgendaEntity::class,
         DeletedAgendaEntity::class,
+        PartnerProfileEntity::class,
+        PartnerCourseEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun announcementDao(): AnnouncementDao
     abstract fun agendaDao(): AgendaDao
     abstract fun deletedAgendaDao(): DeletedAgendaDao
+    abstract fun partnerDao(): PartnerDao
 
     companion object {
         @Volatile
@@ -210,6 +213,50 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v12 → v13: 增加朋友与情侣课表(partner_profiles 与 partner_courses)。 */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `partner_profiles` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`type` TEXT NOT NULL, " +
+                        "`colorHue` INTEGER NOT NULL, " +
+                        "`avatarUrl` TEXT NOT NULL DEFAULT '', " +
+                        "`shareCode` TEXT NOT NULL DEFAULT '', " +
+                        "`isCurrent` INTEGER NOT NULL DEFAULT 0, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `partner_courses` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`partnerId` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`teacher` TEXT NOT NULL DEFAULT '', " +
+                        "`location` TEXT NOT NULL DEFAULT '', " +
+                        "`weekday` INTEGER NOT NULL DEFAULT 1, " +
+                        "`startPeriod` INTEGER NOT NULL DEFAULT 1, " +
+                        "`endPeriod` INTEGER NOT NULL DEFAULT 1, " +
+                        "`weekType` TEXT NOT NULL DEFAULT 'EVERY_WEEK', " +
+                        "`weekStart` INTEGER NOT NULL DEFAULT 1, " +
+                        "`weekEnd` INTEGER NOT NULL DEFAULT 16, " +
+                        "`weeks` TEXT NOT NULL DEFAULT '', " +
+                        "`customStartMinute` INTEGER, " +
+                        "`customEndMinute` INTEGER, " +
+                        "`weekdays` INTEGER NOT NULL DEFAULT 0, " +
+                        "`note` TEXT NOT NULL DEFAULT '', " +
+                        "`colorHex` TEXT NOT NULL DEFAULT '', " +
+                        "`updatedAt` INTEGER NOT NULL DEFAULT 0, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_partner_courses_partnerId` " +
+                        "ON `partner_courses` (`partnerId`)",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -220,7 +267,7 @@ abstract class AppDatabase : RoomDatabase() {
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                         MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     )
                     .build()
                     .also { instance = it }

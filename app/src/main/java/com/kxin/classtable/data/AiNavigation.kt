@@ -19,6 +19,7 @@ object AiPages {
         Entry("SCHEDULE_TIMES", "作息时间", "schedule_times"),
         Entry("SEMESTER", "学期周次", "semester"),
         Entry("ADJUSTMENTS", "调休课表", "adjustments"),
+        Entry("PARTNER", "双人课表 / 情侣好友合盘", "partner"),
         Entry("WIDGETS", "桌面小组件", "widget_settings"),
         Entry("COURSE_REMINDER", "课程提醒", "course_reminder"),
         Entry("AGENDA_REMINDER", "日程提醒", "agenda_reminder"),

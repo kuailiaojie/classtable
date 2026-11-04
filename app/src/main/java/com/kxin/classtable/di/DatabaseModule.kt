@@ -7,6 +7,7 @@ import com.kxin.classtable.data.local.AppDatabase
 import com.kxin.classtable.data.local.CourseDao
 import com.kxin.classtable.data.local.DeletedAgendaDao
 import com.kxin.classtable.data.local.DeletedCourseDao
+import com.kxin.classtable.data.local.PartnerDao
 import com.kxin.classtable.data.local.SemesterDao
 import com.kxin.classtable.data.local.YuketangBindingDao
 import dagger.Module
@@ -44,4 +45,7 @@ object DatabaseModule {
 
     @Provides
     fun provideDeletedAgendaDao(db: AppDatabase): DeletedAgendaDao = db.deletedAgendaDao()
+
+    @Provides
+    fun providePartnerDao(db: AppDatabase): PartnerDao = db.partnerDao()
 }

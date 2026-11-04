@@ -1,5 +1,8 @@
 package com.kxin.classtable.data
 
+import com.kxin.classtable.data.local.PartnerCourseEntity
+import com.kxin.classtable.data.local.PartnerDao
+import com.kxin.classtable.data.local.PartnerProfileEntity
 import com.kxin.classtable.data.local.SemesterDao
 import com.kxin.classtable.data.local.SemesterEntity
 import com.kxin.classtable.domain.WeekSpec
@@ -9,6 +12,7 @@ import com.kxin.classtable.domain.model.AgendaEvent
 import com.kxin.classtable.domain.model.AgendaPriority
 import com.kxin.classtable.domain.model.Course
 import com.kxin.classtable.domain.model.NotifyMode
+import com.kxin.classtable.domain.model.PartnerType
 import com.kxin.classtable.domain.model.ThemeMode
 import com.kxin.classtable.domain.model.WeekType
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +29,7 @@ import javax.inject.Singleton
 /**
  * 本地全量数据离线备份与恢复管理器。
  *
- * 支持将全部课程、日程待办、多学期配置与核心偏好设置序列化为独立的 `.classtable.json` 文件，
+ * 支持将全部课程、日程待办、多学期配置、双人课表档案与核心偏好设置序列化为独立的 `.classtable.json` 文件，
  * 满足无账号、无网络或隐私敏感用户的安全导出与设备间无缝还原。
  */
 @Singleton
@@ -34,11 +38,13 @@ class BackupManager @Inject constructor(
     private val agendaRepository: AgendaRepository,
     private val settingsRepository: SettingsRepository,
     private val semesterDao: SemesterDao,
+    private val partnerDao: PartnerDao,
 ) {
     data class BackupSummary(
         val courseCount: Int,
         val agendaCount: Int,
         val exportedAt: Long,
+        val partnerCount: Int = 0,
     )
 
     /**
@@ -48,6 +54,8 @@ class BackupManager @Inject constructor(
         val courses = courseRepository.getAll()
         val agenda = agendaRepository.getAll()
         val semesters = semesterDao.getAll()
+        val partnerProfiles = partnerDao.getAllProfiles()
+        val partnerCourses = partnerDao.getAllCourses()
         val settings = settingsRepository.settings.first()
 
         val root = JSONObject()
@@ -111,6 +119,46 @@ class BackupManager @Inject constructor(
             semestersArray.put(o)
         }
         root.put("semesters", semestersArray)
+
+        val partnerProfilesArray = JSONArray()
+        partnerProfiles.forEach { p ->
+            val o = JSONObject()
+            o.put("id", p.id)
+            o.put("name", p.name)
+            o.put("type", p.type)
+            o.put("colorHue", p.colorHue)
+            o.put("avatarUrl", p.avatarUrl)
+            o.put("shareCode", p.shareCode)
+            o.put("isCurrent", p.isCurrent)
+            o.put("updatedAt", p.updatedAt)
+            partnerProfilesArray.put(o)
+        }
+        root.put("partnerProfiles", partnerProfilesArray)
+
+        val partnerCoursesArray = JSONArray()
+        partnerCourses.forEach { pc ->
+            val o = JSONObject()
+            o.put("id", pc.id)
+            o.put("partnerId", pc.partnerId)
+            o.put("name", pc.name)
+            o.put("teacher", pc.teacher)
+            o.put("location", pc.location)
+            o.put("weekday", pc.weekday)
+            o.put("startPeriod", pc.startPeriod)
+            o.put("endPeriod", pc.endPeriod)
+            o.put("weekType", pc.weekType)
+            o.put("weekStart", pc.weekStart)
+            o.put("weekEnd", pc.weekEnd)
+            o.put("weeks", pc.weeks)
+            o.put("customStartMinute", pc.customStartMinute ?: JSONObject.NULL)
+            o.put("customEndMinute", pc.customEndMinute ?: JSONObject.NULL)
+            o.put("weekdays", pc.weekdays)
+            o.put("note", pc.note)
+            o.put("colorHex", pc.colorHex)
+            o.put("updatedAt", pc.updatedAt)
+            partnerCoursesArray.put(o)
+        }
+        root.put("partnerCourses", partnerCoursesArray)
 
         val settingsObj = JSONObject()
         settingsObj.put("semesterStartDay", settings.semesterStartDay)
@@ -226,6 +274,57 @@ class BackupManager @Inject constructor(
                 }
             }
 
+            val partnerProfilesList = mutableListOf<PartnerProfileEntity>()
+            val partnerProfilesArray = root.optJSONArray("partnerProfiles")
+            if (partnerProfilesArray != null) {
+                for (i in 0 until partnerProfilesArray.length()) {
+                    val o = partnerProfilesArray.getJSONObject(i)
+                    val pType = PartnerType.of(o.optString("type"))
+                    partnerProfilesList.add(
+                        PartnerProfileEntity(
+                            id = o.optString("id"),
+                            name = o.optString("name", "好友课表"),
+                            type = pType.name,
+                            colorHue = o.optInt("colorHue", pType.defaultHue),
+                            avatarUrl = o.optString("avatarUrl", ""),
+                            shareCode = o.optString("shareCode", ""),
+                            isCurrent = o.optBoolean("isCurrent", false),
+                            updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+                        ),
+                    )
+                }
+            }
+
+            val partnerCoursesList = mutableListOf<PartnerCourseEntity>()
+            val partnerCoursesArray = root.optJSONArray("partnerCourses")
+            if (partnerCoursesArray != null) {
+                for (i in 0 until partnerCoursesArray.length()) {
+                    val o = partnerCoursesArray.getJSONObject(i)
+                    partnerCoursesList.add(
+                        PartnerCourseEntity(
+                            id = o.optString("id"),
+                            partnerId = o.optString("partnerId"),
+                            name = o.optString("name"),
+                            teacher = o.optString("teacher", ""),
+                            location = o.optString("location", ""),
+                            weekday = o.optInt("weekday", 1),
+                            startPeriod = o.optInt("startPeriod", 1),
+                            endPeriod = o.optInt("endPeriod", 1),
+                            weekType = o.optString("weekType", WeekType.EVERY_WEEK.name),
+                            weekStart = o.optInt("weekStart", 1),
+                            weekEnd = o.optInt("weekEnd", 16),
+                            weeks = o.optString("weeks", ""),
+                            customStartMinute = if (o.isNull("customStartMinute")) null else o.optInt("customStartMinute"),
+                            customEndMinute = if (o.isNull("customEndMinute")) null else o.optInt("customEndMinute"),
+                            weekdays = o.optInt("weekdays", 1 shl (o.optInt("weekday", 1) - 1)),
+                            note = o.optString("note", ""),
+                            colorHex = o.optString("colorHex", ""),
+                            updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
+                        ),
+                    )
+                }
+            }
+
             val settingsObj = root.optJSONObject("settings")
             if (settingsObj != null) {
                 val startDay = settingsObj.optLong("semesterStartDay", 0L)
@@ -278,11 +377,15 @@ class BackupManager @Inject constructor(
                 semesterDao.deleteAll()
                 semesterDao.insertAll(semestersList)
             }
+            if (root.has("partnerProfiles") || root.has("partnerCourses")) {
+                partnerDao.replaceAllPartners(partnerProfilesList, partnerCoursesList)
+            }
 
             BackupSummary(
                 courseCount = courses.size,
                 agendaCount = agendaList.size,
                 exportedAt = root.optLong("exportedAt", System.currentTimeMillis()),
+                partnerCount = partnerProfilesList.size,
             )
         }
     }
