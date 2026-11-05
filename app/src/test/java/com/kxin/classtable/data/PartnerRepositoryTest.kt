@@ -35,10 +35,18 @@ class PartnerRepositoryTest {
         override suspend fun deleteAllCourses() {}
     }
 
-    private val repo = PartnerRepository(dummyDao)
+    private val repo = PartnerRepository(dummyDao, FirebaseGateway())
 
     @Test
-    fun `exportSharePayload and parseSharePayload round-trip preserves courses and metadata`() {
+    fun `normalizeShareCode accepts lowercase and rejects malformed codes`() {
+        assertEquals("K7M2Q9", PartnerRepository.normalizeShareCode(" k7m2q9 "))
+        assertEquals("K7M2Q9", PartnerRepository.normalizeShareCode("K7M-2Q9"))
+        val invalid = runCatching { PartnerRepository.normalizeShareCode("ABC") }
+        assertTrue(invalid.isFailure)
+    }
+
+    @Test
+    fun `createShareJson and parseSharePayload round-trip preserves courses and metadata`() {
         val sampleCourses = listOf(
             Course(
                 id = "c1",
@@ -66,16 +74,16 @@ class PartnerRepositoryTest {
             ),
         )
 
-        val tokenText = repo.exportSharePayload(
+        val payloadJson = repo.createShareJson(
             ownerName = "小鹿",
             type = PartnerType.COUPLE,
             colorHue = 345,
             courses = sampleCourses,
             obscureCourseDetails = false,
         )
-        assertTrue(tokenText.contains("余课课表口令￥"))
+        assertTrue(payloadJson.trimStart().startsWith("{"))
 
-        val parsed = repo.parseSharePayload(tokenText).getOrThrow()
+        val parsed = repo.parseSharePayload(payloadJson).getOrThrow()
         val profile = parsed.first
         val courses = parsed.second
 
@@ -91,7 +99,7 @@ class PartnerRepositoryTest {
     }
 
     @Test
-    fun `exportSharePayload with obscureCourseDetails masks course names and locations`() {
+    fun `createShareJson with obscureCourseDetails masks course names and locations`() {
         val sampleCourses = listOf(
             Course(
                 id = "c1",
@@ -105,7 +113,7 @@ class PartnerRepositoryTest {
             ),
         )
 
-        val tokenText = repo.exportSharePayload(
+        val payloadJson = repo.createShareJson(
             ownerName = "阿泽",
             type = PartnerType.FRIEND,
             colorHue = 165,
@@ -113,7 +121,7 @@ class PartnerRepositoryTest {
             obscureCourseDetails = true,
         )
 
-        val parsed = repo.parseSharePayload(tokenText).getOrThrow()
+        val parsed = repo.parseSharePayload(payloadJson).getOrThrow()
         val course = parsed.second.single()
         assertEquals("忙碌(有课)", course.name)
         assertEquals("", course.location)

@@ -9,6 +9,24 @@ service cloud.firestore {
       return request.resource.data.keys().size() <= maxFields;
     }
 
+    // 课表云端分享：6 位提取码即凭证。
+    // - 只能由登录用户创建，creatorUid 必须是自己；
+    // - 任何登录用户都可凭码读取（接收方需要读别人的文档）；
+    // - 只有创建者能覆盖 / 删除自己的提取码。
+    match /shares/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && code.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.creatorUid == request.auth.uid
+        && isValidSize(12);
+      allow update: if request.auth != null
+        && resource.data.creatorUid == request.auth.uid
+        && request.resource.data.creatorUid == request.auth.uid
+        && isValidSize(12);
+      allow delete: if request.auth != null
+        && resource.data.creatorUid == request.auth.uid;
+    }
+
     // 仅允许登录用户在其自身的 users/{userId} 作用域下读写白名单子集合
     match /users/{userId} {
       match /courses/{courseId} {

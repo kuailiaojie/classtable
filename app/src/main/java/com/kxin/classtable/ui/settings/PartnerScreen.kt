@@ -43,11 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import com.kxin.classtable.data.AuthRepository
 import com.kxin.classtable.data.CourseRepository
 import com.kxin.classtable.data.PartnerRepository
 import com.kxin.classtable.design.CoursePalette
@@ -74,6 +76,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -84,6 +87,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PartnerViewModel @Inject constructor(
     private val partnerRepository: PartnerRepository,
+    private val authRepository: AuthRepository,
     courseRepository: CourseRepository,
 ) : ViewModel() {
     val profiles: StateFlow<List<PartnerProfile>> = partnerRepository.observeProfiles()
@@ -98,42 +102,93 @@ class PartnerViewModel @Inject constructor(
     val myCourses: StateFlow<List<Course>> = courseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** 云端分享与导入都要求已注册/登录。 */
+    val signedIn: StateFlow<Boolean> = authRepository.currentUser
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authRepository.isSignedIn)
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _shareCode = MutableStateFlow<String?>(null)
+    val shareCode: StateFlow<String?> = _shareCode.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     fun consumeMessage() {
         _message.value = null
     }
 
-    fun generateShareToken(
+    /** 上传当前课表并生成 6 位云端提取码。 */
+    fun publishCloudShare(
         ownerName: String,
         type: PartnerType,
         colorHue: Int,
         obscureCourseDetails: Boolean,
-    ): String {
-        return partnerRepository.exportSharePayload(
-            ownerName = ownerName.trim().ifEmpty { "我的课表" },
-            type = type,
-            colorHue = colorHue,
-            courses = myCourses.value,
-            obscureCourseDetails = obscureCourseDetails,
-        )
-    }
-
-    fun importShareText(rawText: String, onSuccess: () -> Unit = {}) {
-        if (rawText.isBlank()) {
-            _message.value = "请先粘贴或复制余课课表口令"
+    ) {
+        val uid = authRepository.uid
+        if (uid == null) {
+            _message.value = "云端分享需要先注册或登录账号"
+            return
+        }
+        if (myCourses.value.isEmpty()) {
+            _message.value = "当前学期还没有课程，先添加几门再分享吧"
             return
         }
         viewModelScope.launch {
-            partnerRepository.importFromShareText(rawText)
+            _busy.value = true
+            val token = authRepository.freshIdToken()
+            if (token == null) {
+                _message.value = "登录状态已失效，请重新登录"
+                _busy.value = false
+                return@launch
+            }
+            partnerRepository.publishShareToCloud(
+                uid = uid,
+                idToken = token,
+                ownerName = ownerName,
+                type = type,
+                colorHue = colorHue,
+                courses = myCourses.value,
+                obscureCourseDetails = obscureCourseDetails,
+            ).onSuccess { code ->
+                _shareCode.value = code
+                _message.value = "已生成提取码 $code，复制后发给对方即可"
+            }.onFailure { e ->
+                _message.value = e.message ?: "提取码生成失败，请稍后重试"
+            }
+            _busy.value = false
+        }
+    }
+
+    /** 用 6 位提取码从云端导入并绑定对方课表。 */
+    fun importCloudCode(code: String, onSuccess: () -> Unit = {}) {
+        if (code.isBlank()) {
+            _message.value = "请输入对方的 6 位提取码"
+            return
+        }
+        if (authRepository.uid == null) {
+            _message.value = "导入云端课表需要先注册或登录账号"
+            return
+        }
+        viewModelScope.launch {
+            _busy.value = true
+            val token = authRepository.freshIdToken()
+            if (token == null) {
+                _message.value = "登录状态已失效，请重新登录"
+                _busy.value = false
+                return@launch
+            }
+            partnerRepository.importFromCloudCode(code, token)
                 .onSuccess { (profile, count) ->
                     _message.value = "已绑定「${profile.name}」的课表（共 $count 门课）"
                     onSuccess()
                 }
                 .onFailure { e ->
-                    _message.value = e.message ?: "口令解析失败，请检查是否复制完整"
+                    _message.value = e.message ?: "提取码导入失败，请核对后重试"
                 }
+            _busy.value = false
         }
     }
 
@@ -162,8 +217,8 @@ class PartnerViewModel @Inject constructor(
 /**
  * 朋友与情侣双人课表管理中心：
  * 1. 管理已绑定的伴侣/好友档案（切换活跃对象、修改昵称与关系、挑选专属和色、隐私解绑）；
- * 2. 一键从剪贴板或口令导入对方课表；
- * 3. 生成我的课表分享口令（支持隐私脱敏，仅共享忙闲时段）。
+ * 2. 用 6 位提取码从云端导入对方课表；
+ * 3. 把课表上传到云端并生成提取码（支持隐私脱敏，仅共享忙闲时段）。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -181,13 +236,15 @@ fun PartnerScreen(
     val courseCounts by viewModel.courseCounts.collectAsStateWithLifecycle()
     val myCourses by viewModel.myCourses.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
+    val shareCode by viewModel.shareCode.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
 
-    var importInput by rememberSaveable { mutableStateOf("") }
+    var importCode by rememberSaveable { mutableStateOf("") }
     var myNickname by rememberSaveable { mutableStateOf("我的课表") }
     var shareType by rememberSaveable { mutableStateOf(PartnerType.COUPLE) }
     var shareHue by rememberSaveable { mutableIntStateOf(PartnerType.COUPLE.defaultHue) }
     var obscureDetails by rememberSaveable { mutableStateOf(false) }
-    var generatedToken by rememberSaveable { mutableStateOf<String?>(null) }
 
     var editingProfile by remember { mutableStateOf<PartnerProfile?>(null) }
     var unbindingProfile by remember { mutableStateOf<PartnerProfile?>(null) }
@@ -261,7 +318,7 @@ fun PartnerScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "粘贴对方的分享口令即可绑定；绑定后可在课表页顶栏一键切换「我的 / TA的 / 合盘」，并探测双方共同空闲时段。",
+                                text = "输入对方的 6 位云端提取码即可绑定；绑定后可在课表页顶栏一键切换「我的 / TA的 / 合盘」，并探测双方共同空闲时段。",
                                 style = YohakuType.label12,
                                 color = colors.neutral7,
                             )
@@ -412,7 +469,7 @@ fun PartnerScreen(
                     }
                 }
 
-                // 2. 导入 TA 的课表口令
+                // 2. 用 6 位提取码从云端导入
                 SettingsSection(title = "导入朋友 / 情侣课表") {
                     Column(
                         modifier = Modifier
@@ -420,46 +477,65 @@ fun PartnerScreen(
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                     ) {
                         YohakuTextField(
-                            value = importInput,
-                            onValueChange = { importInput = it },
-                            label = "课表分享口令",
-                            placeholder = "粘贴「余课课表口令￥...￥」整段文字",
-                            singleLine = false,
+                            value = importCode,
+                            onValueChange = { input ->
+                                importCode = input.uppercase()
+                                    .filter { it in '0'..'9' || it in 'A'..'Z' }
+                                    .take(6)
+                            },
+                            label = "6 位提取码",
+                            placeholder = "例如 K7M2Q9",
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             YohakuOutlineButton(
-                                text = "读取剪贴板导入",
+                                text = "粘贴提取码",
                                 onClick = {
                                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                     val text = cm?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
-                                    if (text.isBlank()) {
-                                        Toast.makeText(context, "剪贴板为空，请先复制口令", Toast.LENGTH_SHORT).show()
+                                    val pasted = text.uppercase()
+                                        .filter { it in '0'..'9' || it in 'A'..'Z' }
+                                        .take(6)
+                                    if (pasted.length < 6) {
+                                        Toast.makeText(context, "剪贴板里没有 6 位提取码", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        importInput = text
-                                        viewModel.importShareText(text) {
-                                            importInput = ""
-                                        }
+                                        importCode = pasted
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
                             )
-                            YohakuButton(
-                                text = "识别并绑定",
-                                onClick = {
-                                    viewModel.importShareText(importInput) {
-                                        importInput = ""
-                                    }
-                                },
-                                enabled = importInput.isNotBlank(),
-                                modifier = Modifier.weight(1f),
+                            if (signedIn) {
+                                YohakuButton(
+                                    text = if (busy) "导入中…" else "从云端导入",
+                                    onClick = {
+                                        viewModel.importCloudCode(importCode) {
+                                            importCode = ""
+                                        }
+                                    },
+                                    enabled = !busy && importCode.length == 6,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            } else {
+                                YohakuButton(
+                                    text = "登录后导入",
+                                    onClick = { nav.navigate("account") },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        if (!signedIn) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "云端课表需要登录账号才能读取；课表只会在你与分享者之间传递。",
+                                style = YohakuType.label12,
+                                color = colors.neutral6,
                             )
                         }
                     }
                 }
 
-                // 3. 生成我的课表分享口令
-                SettingsSection(title = "分享我的课表口令") {
+                // 3. 云端分享我的课表（生成 6 位提取码，需先注册/登录）
+                SettingsSection(title = "云端分享我的课表") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -511,71 +587,135 @@ fun PartnerScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                     ) {
-                        Text(
-                            text = "当前学期共有 ${myCourses.size} 门课程将写入分享口令。",
-                            style = YohakuType.label12,
-                            color = colors.neutral6,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            YohakuButton(
-                                text = "复制分享口令",
-                                onClick = {
-                                    val token = viewModel.generateShareToken(
-                                        ownerName = myNickname,
-                                        type = shareType,
-                                        colorHue = shareHue,
-                                        obscureCourseDetails = obscureDetails,
-                                    )
-                                    generatedToken = token
-                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                    cm?.setPrimaryClip(ClipData.newPlainText("余课课表口令", token))
-                                    Toast.makeText(context, "已复制课表分享口令，快去发给对方吧", Toast.LENGTH_SHORT).show()
-                                },
-                                enabled = myCourses.isNotEmpty(),
-                                modifier = Modifier.weight(1f),
-                            )
-                            YohakuOutlineButton(
-                                text = "发送给好友",
-                                onClick = {
-                                    val token = viewModel.generateShareToken(
-                                        ownerName = myNickname,
-                                        type = shareType,
-                                        colorHue = shareHue,
-                                        obscureCourseDetails = obscureDetails,
-                                    )
-                                    generatedToken = token
-                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, token)
-                                    }
-                                    runCatching {
-                                        context.startActivity(Intent.createChooser(sendIntent, "分享我的余课课表口令"))
-                                    }
-                                },
-                                enabled = myCourses.isNotEmpty(),
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (generatedToken != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                        if (!signedIn) {
                             Text(
-                                text = "口令已生成并复制，对方复制整段文字后在此页点「读取剪贴板导入」即可完成绑定。",
+                                text = "云端分享需要先注册或登录账号。生成 6 位提取码后，对方在余课里输入即可导入你的课表。",
                                 style = YohakuType.label12,
-                                color = colors.accent,
+                                color = colors.neutral7,
                             )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            YohakuButton(
+                                text = "登录 / 注册账号",
+                                onClick = { nav.navigate("account") },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Text(
+                                text = "当前学期共有 ${myCourses.size} 门课程，将上传课程、周次到云端并生成 6 位提取码。",
+                                style = YohakuType.label12,
+                                color = colors.neutral6,
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            YohakuButton(
+                                text = if (busy) "生成中…" else if (shareCode == null) "生成提取码" else "重新生成提取码",
+                                onClick = {
+                                    viewModel.publishCloudShare(
+                                        ownerName = myNickname,
+                                        type = shareType,
+                                        colorHue = shareHue,
+                                        obscureCourseDetails = obscureDetails,
+                                    )
+                                },
+                                enabled = !busy && myCourses.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+
+                            val code = shareCode
+                            if (code != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                CloudShareCodeCard(
+                                    code = code,
+                                    onCopy = {
+                                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        cm?.setPrimaryClip(ClipData.newPlainText("余课提取码", code))
+                                        Toast.makeText(context, "提取码已复制", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onShare = {
+                                        val text = "我在余课分享了课表，打开 App →「双人课表」→ 输入提取码 $code 即可导入。"
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, text)
+                                        }
+                                        runCatching {
+                                            context.startActivity(Intent.createChooser(sendIntent, "分享我的余课课表"))
+                                        }
+                                    },
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "提取码生成后只在本页展示，复制发送给对方即可；对方也需登录余课。",
+                                    style = YohakuType.label12,
+                                    color = colors.neutral6,
+                                )
+                            }
                         }
                     }
                 }
 
                 Text(
-                    text = "隐私与隔离保障：伴侣与好友的课程存储在独立的沙盒数据表中，绝不会触发你的上课提醒闹钟、免打扰或锁屏实况胶囊；解绑即彻底清空。",
+                    text = "隐私与隔离保障：伴侣与好友的课程存储在独立的沙盒数据表中，绝不会触发你的上课提醒闹钟、免打扰或锁屏实况胶囊；云端分享仅在登录后上传一份课表快照，解绑即彻底清空本机数据。",
                     style = YohakuType.label12,
                     color = colors.neutral6,
                     modifier = Modifier.padding(horizontal = 24.dp),
                 )
                 Spacer(modifier = Modifier.height(YohakuDimens.gapSection * 2))
             }
+        }
+    }
+}
+
+/** 云端分享结果：6 位提取码像一张小票，复制 / 分享都收在卡内。 */
+@Composable
+private fun CloudShareCodeCard(
+    code: String,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val haptics = rememberYohakuHaptics()
+    val shape = RoundedCornerShape(YohakuDimens.radiusControl)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.neutral2)
+            .border(1.dp, colors.line, shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(text = "对方提取码", style = YohakuType.label12, color = colors.neutral7)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = code,
+            style = YohakuType.timeMono.copy(fontSize = 24.sp, letterSpacing = 4.sp),
+            color = colors.neutral10,
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = "复制提取码",
+                style = YohakuType.copy13,
+                color = colors.accent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                    .clickable {
+                        haptics.tick()
+                        onCopy()
+                    }
+                    .padding(vertical = 2.dp),
+            )
+            Text(
+                text = "发送给好友",
+                style = YohakuType.copy13,
+                color = colors.neutral8,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(YohakuDimens.radiusChip))
+                    .clickable {
+                        haptics.tick()
+                        onShare()
+                    }
+                    .padding(vertical = 2.dp),
+            )
         }
     }
 }

@@ -27,7 +27,18 @@ import javax.inject.Singleton
 @Singleton
 class PartnerRepository @Inject constructor(
     private val partnerDao: PartnerDao,
+    private val gateway: FirebaseGateway,
 ) {
+    /** Firestore REST 请求路径基址（含 v1 版本前缀）。 */
+    private fun dbBase() = "v1/projects/${gateway.projectId}/databases/(default)/documents"
+
+    /** commit 请求体里 write.update.name 的资源名基址（Firestore 要求以 "projects" 开头）。 */
+    private fun docBase() = "projects/${gateway.projectId}/databases/(default)/documents"
+
+    private fun sharePath(code: String) = "${dbBase()}/shares/$code"
+
+    private fun shareDocName(code: String) = "${docBase()}/shares/$code"
+
     /** 观察所有关注的伴侣/朋友列表。 */
     fun observeProfiles(): Flow<List<PartnerProfile>> =
         partnerDao.observeAllProfiles().map { list -> list.map { it.toDomain() } }
@@ -80,10 +91,22 @@ class PartnerRepository @Inject constructor(
     }
 
     /**
-     * 解析口令并入库（若同名档案已存在则覆盖更新其课程，保留原有关系与配色偏好）。
+     * 把云端提取码对应的课表入库（若同名档案已存在则覆盖更新其课程，保留原有关系与配色偏好）。
      */
-    suspend fun importFromShareText(rawText: String): Result<Pair<PartnerProfile, Int>> = runCatching {
-        val (parsedProfile, parsedCourses) = parseSharePayload(rawText).getOrThrow()
+    suspend fun importFromCloudCode(
+        code: String,
+        idToken: String,
+    ): Result<Pair<PartnerProfile, Int>> = runCatching {
+        val cleanCode = normalizeShareCode(code)
+        val (parsedProfile, parsedCourses) = pullShareFromCloud(cleanCode, idToken).getOrThrow()
+        saveImported(parsedProfile, parsedCourses, shareCode = cleanCode)
+    }
+
+    private suspend fun saveImported(
+        parsedProfile: PartnerProfile,
+        parsedCourses: List<Course>,
+        shareCode: String? = null,
+    ): Pair<PartnerProfile, Int> {
         val existing = partnerDao.getAllProfiles().firstOrNull {
             it.name.equals(parsedProfile.name, ignoreCase = true)
         }?.toDomain()
@@ -91,11 +114,13 @@ class PartnerRepository @Inject constructor(
         val finalProfile = if (existing != null) {
             existing.copy(
                 isCurrent = true,
+                shareCode = shareCode ?: existing.shareCode,
                 updatedAt = System.currentTimeMillis(),
             )
         } else {
             parsedProfile.copy(
                 isCurrent = true,
+                shareCode = shareCode ?: parsedProfile.shareCode,
                 updatedAt = System.currentTimeMillis(),
             )
         }
@@ -108,15 +133,100 @@ class PartnerRepository @Inject constructor(
             )
         }
         savePartner(finalProfile, reboundCourses)
-        finalProfile to reboundCourses.size
+        return finalProfile to reboundCourses.size
     }
 
     /**
-     * 生成供微信/QQ分享的课表口令文本。
+     * 把课表发布到云端并生成 6 位提取码（需已登录，uid / idToken 由调用方传入）。
+     * 提取码冲突时自动换一个重试，最多 [CODE_ATTEMPTS] 次。
+     */
+    suspend fun publishShareToCloud(
+        uid: String,
+        idToken: String,
+        ownerName: String,
+        type: PartnerType,
+        colorHue: Int,
+        courses: List<Course>,
+        obscureCourseDetails: Boolean = false,
+    ): Result<String> = runCatching {
+        val payload = createShareJson(
+            ownerName = ownerName,
+            type = type,
+            colorHue = colorHue,
+            courses = courses,
+            obscureCourseDetails = obscureCourseDetails,
+        )
+        val fields = JSONObject().apply {
+            FirestoreFields.putString(this, "creatorUid", uid)
+            FirestoreFields.putString(this, "ownerName", ownerName.trim().ifEmpty { "我的课表" })
+            FirestoreFields.putString(this, "type", type.name)
+            FirestoreFields.putInt(this, "colorHue", colorHue)
+            FirestoreFields.putString(this, "payload", payload)
+            FirestoreFields.putLong(this, "createdAt", System.currentTimeMillis())
+        }
+
+        var lastConflict: FirebaseApiException? = null
+        for (attempt in 0 until CODE_ATTEMPTS) {
+            val code = randomShareCode()
+            // currentDocument.exists=false：撞码时不覆盖别人的课表，换一个重试
+            val write = JSONObject()
+                .put(
+                    "update",
+                    JSONObject().put("name", shareDocName(code)).put("fields", fields),
+                )
+                .put("currentDocument", JSONObject().put("exists", false))
+            try {
+                gateway.firestore(
+                    "${dbBase()}:commit",
+                    "POST",
+                    JSONObject().put("writes", JSONArray().put(write)),
+                    idToken,
+                )
+                return@runCatching code
+            } catch (e: FirebaseApiException) {
+                if (!e.code.contains("ALREADY_EXISTS", ignoreCase = true) &&
+                    !e.code.contains("already exists", ignoreCase = true)
+                ) {
+                    throw e
+                }
+                lastConflict = e
+            }
+        }
+        throw IllegalStateException("提取码生成失败，请稍后重试", lastConflict)
+    }
+
+    /**
+     * 从云端拉取 6 位提取码对应的课表数据（需已登录）。
+     */
+    suspend fun pullShareFromCloud(
+        code: String,
+        idToken: String,
+    ): Result<Pair<PartnerProfile, List<Course>>> = runCatching {
+        val cleanCode = normalizeShareCode(code)
+        val doc = try {
+            gateway.firestore(sharePath(cleanCode), "GET", null, idToken)
+        } catch (e: FirebaseApiException) {
+            if (e.code.contains("NOT_FOUND", ignoreCase = true) ||
+                e.code.contains("not found", ignoreCase = true)
+            ) {
+                throw IllegalArgumentException("提取码不存在或已失效，请核对后重试")
+            }
+            throw e
+        }
+
+        val fields = doc.optJSONObject("fields")
+            ?: throw IllegalArgumentException("提取码对应的课表数据已失效")
+        val payload = FirestoreFields.getString(fields, "payload")
+        if (payload.isBlank()) throw IllegalArgumentException("提取码对应的课表数据为空")
+        parseSharePayload(payload).getOrThrow()
+    }
+
+    /**
+     * 生成上传到云端的课表 JSON（不含口令包装）。
      *
      * @param obscureCourseDetails 若为 true，脱敏隐藏具体课程名和地点，只展示“有课”
      */
-    fun exportSharePayload(
+    fun createShareJson(
         ownerName: String,
         type: PartnerType,
         colorHue: Int,
@@ -151,10 +261,7 @@ class PartnerRepository @Inject constructor(
             arr.put(obj)
         }
         root.put("courses", arr)
-
-        val jsonStr = root.toString()
-        val base64 = Base64.getEncoder().encodeToString(jsonStr.toByteArray(Charsets.UTF_8))
-        return "余课课表口令￥$base64￥(复制本段文字打开余课App即可自动识别导入)"
+        return root.toString()
     }
 
     /**
@@ -370,5 +477,22 @@ class PartnerRepository @Inject constructor(
 
     companion object {
         private val REGEX_TOKEN = "￥([A-Za-z0-9+/=\\s]+)￥".toRegex()
+        private val SHARE_CODE_REGEX = Regex("^[A-Z0-9]{6}$")
+
+        /** 提取码撞车时的重试次数（32^6 ≈ 10 亿，正常一次必中）。 */
+        private const val CODE_ATTEMPTS = 5
+
+        /** 去掉易混淆的 0 / O / 1 / I。 */
+        private const val CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+        /** 规整用户输入的提取码；格式不合法时抛出可读异常。 */
+        fun normalizeShareCode(raw: String): String {
+            val clean = raw.trim().uppercase().filter { it in '0'..'9' || it in 'A'..'Z' }
+            require(SHARE_CODE_REGEX.matches(clean)) { "请输入 6 位提取码（字母或数字）" }
+            return clean
+        }
+
+        private fun randomShareCode(): String =
+            (1..6).map { CODE_ALPHABET.random() }.joinToString("")
     }
 }

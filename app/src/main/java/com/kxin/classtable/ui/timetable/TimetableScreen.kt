@@ -6,7 +6,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.material3.Surface
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -45,10 +51,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -262,6 +273,8 @@ fun TimetableScreen(
 
     var detailCourse by remember { mutableStateOf<Course?>(null) }
     var showAdd by remember { mutableStateOf(false) }
+    // 长按网格是「在这格落一门课」，只给手动录入；从 ··· 菜单进来才展示全部导入方式
+    var addFromGrid by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var newCourseWeekday by remember { mutableStateOf<Int?>(null) }
     var newCoursePeriod by remember { mutableStateOf<Int?>(null) }
@@ -344,13 +357,16 @@ fun TimetableScreen(
         AddDialog(
             targetWeekday = prefillDay,
             targetPeriod = prefillPeriod,
+            manualOnly = addFromGrid,
             onDismiss = {
                 showAdd = false
+                addFromGrid = false
                 newCourseWeekday = null
                 newCoursePeriod = null
             },
             onPick = { route ->
                 showAdd = false
+                addFromGrid = false
                 val finalRoute = if (route == "course_form" && prefillDay != null) {
                     val p = prefillPeriod ?: 1
                     "course_form?weekday=$prefillDay&startPeriod=$p&endPeriod=$p"
@@ -443,39 +459,6 @@ fun TimetableScreen(
         )
     }
 
-    if (showMoreMenu) {
-        TimetableMoreDialog(
-            atToday = atToday,
-            hasPartner = activePartner != null,
-            onDismiss = { showMoreMenu = false },
-            onToday = {
-                anchorWeek = realWeek
-                anchorWeekday = today
-            },
-            onAddCourse = {
-                newCourseWeekday = null
-                newCoursePeriod = null
-                showAdd = true
-            },
-            onAssistant = {
-                onOpenAssistant()
-            },
-            onExportImage = {
-                showExportImage = true
-            },
-            onDateRadar = {
-                if (activePartner != null) {
-                    showDateRadar = true
-                } else {
-                    nav.navigate("partner")
-                }
-            },
-            onPartnerManage = {
-                nav.navigate("partner")
-            },
-        )
-    }
-
     if (showDateRadar) {
         val partner = activePartner
         if (partner != null) {
@@ -562,10 +545,41 @@ fun TimetableScreen(
                 modifier = Modifier.width(60.dp),
             )
             Spacer(modifier = Modifier.width(10.dp))
-            // 更多功能菜单:今天、新建/导入、AI 助手、导出长图、双人课表/空闲雷达统一收归于此
-            HeaderTextAction(text = "···", color = colors.neutral9) {
-                haptics.tick()
-                showMoreMenu = true
+            // 更多功能:贴着「···」向下展开的锚定弹层(不是居中的大弹窗)
+            var moreAnchorHeight by remember { mutableIntStateOf(0) }
+            val anchorGap = with(LocalDensity.current) { 4.dp.roundToPx() }
+            Box(modifier = Modifier.onGloballyPositioned { moreAnchorHeight = it.size.height }) {
+                HeaderTextAction(text = "···", color = colors.neutral9) {
+                    haptics.tick()
+                    showMoreMenu = true
+                }
+                TimetableMoreMenu(
+                    expanded = showMoreMenu,
+                    anchorOffsetPx = moreAnchorHeight + anchorGap,
+                    atToday = atToday,
+                    hasPartner = activePartner != null,
+                    onDismiss = { showMoreMenu = false },
+                    onToday = {
+                        anchorWeek = realWeek
+                        anchorWeekday = today
+                    },
+                    onAddCourse = {
+                        newCourseWeekday = null
+                        newCoursePeriod = null
+                        addFromGrid = false
+                        showAdd = true
+                    },
+                    onAssistant = onOpenAssistant,
+                    onExportImage = { showExportImage = true },
+                    onDateRadar = {
+                        if (activePartner != null) {
+                            showDateRadar = true
+                        } else {
+                            nav.navigate("partner")
+                        }
+                    },
+                    onPartnerManage = { nav.navigate("partner") },
+                )
             }
         }
 
@@ -700,11 +714,11 @@ fun TimetableScreen(
                     } else {
                         weekRange.ifEmpty { "第 $displayedWeek 周" }
                     }
-                    // 副标题不重复区间:区间已经在标题里时就只剩「第 N 周」。
-                    val subtitle = buildString {
-                        append("第 ").append(displayedWeek).append(" 周")
-                        if (atCurrentWeek && weekRange.isNotEmpty()) append(" · ").append(weekRange)
-                        if (noStart) append(" · 未设置开学日")
+                    // 日期区间只留一行,和周次选择器并排 —— 页头不再叠第二行。
+                    val subtitle = when {
+                        noStart -> "未设置开学日"
+                        atCurrentWeek && weekRange.isNotEmpty() -> weekRange
+                        else -> ""
                     }
                     Row(
                         modifier = Modifier
@@ -712,55 +726,40 @@ fun TimetableScreen(
                             .padding(horizontal = YohakuDimens.screenPadding),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(YohakuDimens.radiusChip))
-                                .clickable {
-                                    haptics.tick()
-                                    showWeekPicker = true
-                                }
                                 .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 text = title,
                                 style = YohakuType.title20,
                                 color = colors.neutral10,
+                                maxLines = 1,
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (subtitle.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = subtitle,
                                     style = YohakuType.copy13,
                                     color = colors.neutral7,
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "▾",
-                                    style = YohakuType.copy13,
-                                    color = colors.neutral6,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
                             }
                         }
 
-                        // 方案 A:在第 N 周大标题行右侧，放置克制典雅的「导出」微操作
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(YohakuDimens.radiusControl))
-                                .clickable {
-                                    haptics.tick()
-                                    showExportImage = true
-                                },
-                            shape = RoundedCornerShape(YohakuDimens.radiusControl),
-                            color = colors.raised,
-                            border = BorderStroke(1.dp, colors.line),
-                        ) {
-                            Text(
-                                text = "导出",
-                                style = YohakuType.label12,
-                                color = colors.accent,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp),
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        // 周选择器挪到右侧(原「导出」的位置):导出长图仍在 ··· 菜单里
+                        WeekSelectorPill(
+                            week = displayedWeek,
+                            onClick = {
+                                haptics.tick()
+                                showWeekPicker = true
+                            },
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -873,6 +872,7 @@ fun TimetableScreen(
                                 onGridLongClick = { d, p ->
                                     newCourseWeekday = d
                                     newCoursePeriod = p
+                                    addFromGrid = true
                                     showAdd = true
                                 },
                                 showOwnerTag = ownerMode == TimetableOwnerMode.OVERLAP,
@@ -953,6 +953,7 @@ fun TimetableScreen(
                             onAddCourse = { d, p ->
                                 newCourseWeekday = d
                                 newCoursePeriod = p
+                                addFromGrid = true
                                 showAdd = true
                             },
                             commonFreeSlots = dayCommonFreeSlots,
@@ -979,9 +980,11 @@ private fun dayDate(semesterStartDay: Long, week: Int, weekday: Int, todayWeekda
     return thisMonday.plusDays(((week - 1) * 7 + (weekday - 1)).toLong())
 }
 
-/** 「更多 ⋯」操作菜单弹层：今天定位、新建/导入、AI助手、导出长图、空闲雷达与双人课表管理。 */
+/** 「更多 ⋯」：贴着按钮向下展开的锚定弹层 —— 分组、短行、无副标题，收起时缩回右上角。 */
 @Composable
-private fun TimetableMoreDialog(
+private fun TimetableMoreMenu(
+    expanded: Boolean,
+    anchorOffsetPx: Int,
     atToday: Boolean,
     hasPartner: Boolean,
     onDismiss: () -> Unit,
@@ -992,131 +995,177 @@ private fun TimetableMoreDialog(
     onDateRadar: () -> Unit,
     onPartnerManage: () -> Unit,
 ) {
+    if (!expanded) return
     val colors = LocalYohakuColors.current
     val haptics = rememberYohakuHaptics()
-    data class MoreItem(
+    // 退场动画跑完再通知宿主卸载，菜单不会「啪」地消失
+    val state = remember { MutableTransitionState(false).apply { targetState = true } }
+    var closing by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    fun closeThen(action: (() -> Unit)? = null) {
+        if (closing) return
+        closing = true
+        pendingAction = action
+        state.targetState = false
+    }
+
+    LaunchedEffect(state) {
+        snapshotFlow { state.isIdle && !state.currentState }.collect { closed ->
+            if (closed) {
+                val action = pendingAction
+                pendingAction = null
+                onDismiss()
+                action?.invoke()
+            }
+        }
+    }
+
+    data class MoreEntry(
         val title: String,
-        val subtitle: String,
+        val trailing: String? = null,
         val enabled: Boolean = true,
         val accent: Boolean = false,
         val action: () -> Unit,
     )
 
-    val items = buildList {
-        add(
-            MoreItem(
+    val groups = listOf(
+        listOf(
+            MoreEntry(
                 title = "回到今天",
-                subtitle = if (atToday) "当前已在今天" else "定位到当前周与今天",
+                trailing = if (atToday) "已在今天" else "今天",
                 enabled = !atToday,
                 action = {
                     haptics.tick()
-                    onDismiss()
-                    onToday()
+                    closeThen(onToday)
                 },
             ),
-        )
-        add(
-            MoreItem(
+        ),
+        listOf(
+            MoreEntry(
                 title = "新建与导入课程",
-                subtitle = "手动添加 / 教务导入 / 表格或 AI 导入",
+                trailing = "＋",
                 accent = true,
                 action = {
                     haptics.tick()
-                    onDismiss()
-                    onAddCourse()
+                    closeThen(onAddCourse)
                 },
             ),
-        )
-        add(
-            MoreItem(
-                title = "✦ AI 助手",
-                subtitle = "自然语言调课、加日程、查作息",
+            MoreEntry(
+                title = "AI 助手",
+                trailing = "✦",
                 accent = true,
                 action = {
                     haptics.tick()
-                    onDismiss()
-                    onAssistant()
+                    closeThen(onAssistant)
                 },
             ),
-        )
-        add(
-            MoreItem(
-                title = "导出课表长图",
-                subtitle = "生成纸感美学壁纸与分享图片",
-                action = {
-                    haptics.tick()
-                    onDismiss()
-                    onExportImage()
-                },
-            ),
-        )
-        if (hasPartner) {
+        ),
+        buildList {
             add(
-                MoreItem(
-                    title = "空闲交集雷达",
-                    subtitle = "对比双方无课时段，一键发起约会/自习",
+                MoreEntry(
+                    title = "导出课表长图",
+                    trailing = "↗",
                     action = {
                         haptics.tick()
-                        onDismiss()
-                        onDateRadar()
+                        closeThen(onExportImage)
                     },
                 ),
             )
-        }
-        add(
-            MoreItem(
-                title = "双人课表管理",
-                subtitle = if (hasPartner) "切换伴侣、改色、口令分享或解绑" else "生成分享口令或绑定朋友/情侣",
-                action = {
-                    haptics.tick()
-                    onDismiss()
-                    onPartnerManage()
-                },
-            ),
-        )
-    }
+            if (hasPartner) {
+                add(
+                    MoreEntry(
+                        title = "空闲交集雷达",
+                        action = {
+                            haptics.tick()
+                            closeThen(onDateRadar)
+                        },
+                    ),
+                )
+            }
+            add(
+                MoreEntry(
+                    title = "双人课表管理",
+                    trailing = "›",
+                    action = {
+                        haptics.tick()
+                        closeThen(onPartnerManage)
+                    },
+                ),
+            )
+        },
+    )
 
-    YohakuDialog(
-        onDismissRequest = onDismiss,
-        title = "更多功能",
-        actions = { YohakuDialogAction(text = "关闭", onClick = onDismiss) },
+    val shape = RoundedCornerShape(YohakuDimens.radiusSheet)
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = IntOffset(0, anchorOffsetPx),
+        onDismissRequest = { closeThen() },
+        properties = PopupProperties(focusable = true),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            items.forEachIndexed { index, item ->
-                if (index > 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(colors.neutral3),
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
-                        .then(if (item.enabled) Modifier.clickable(onClick = item.action) else Modifier)
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.title,
-                            style = YohakuType.copy15,
-                            color = when {
-                                !item.enabled -> colors.neutral5
-                                item.accent -> colors.accent
-                                else -> colors.neutral10
-                            },
-                        )
-                        Text(
-                            text = item.subtitle,
-                            style = YohakuType.label12,
-                            color = if (item.enabled) colors.neutral7 else colors.neutral5,
+        AnimatedVisibility(
+            visibleState = state,
+            enter = fadeIn(YohakuMotion.tween(YohakuMotion.durBase)) + scaleIn(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durBase, YohakuMotion.easeBackOut),
+                initialScale = 0.92f,
+                transformOrigin = TransformOrigin(1f, 0f),
+            ),
+            exit = fadeOut(YohakuMotion.tween(YohakuMotion.durFast)) + scaleOut(
+                animationSpec = YohakuMotion.tween(YohakuMotion.durFast, YohakuMotion.easeInOut),
+                targetScale = 0.96f,
+                transformOrigin = TransformOrigin(1f, 0f),
+            ),
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(232.dp)
+                    .clip(shape)
+                    .background(colors.raised)
+                    .border(1.dp, colors.line, shape)
+                    .padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = "更多",
+                    style = YohakuType.label11,
+                    color = colors.neutral6,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                )
+                groups.forEachIndexed { groupIndex, entries ->
+                    if (groupIndex > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .height(1.dp)
+                                .background(colors.neutral3),
                         )
                     }
-                    if (item.enabled) {
-                        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+                    entries.forEach { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (entry.enabled) Modifier.clickable(onClick = entry.action) else Modifier)
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = entry.title,
+                                style = YohakuType.copy14,
+                                color = when {
+                                    !entry.enabled -> colors.neutral5
+                                    entry.accent -> colors.accent
+                                    else -> colors.neutral10
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            entry.trailing?.let { hint ->
+                                Text(
+                                    text = hint,
+                                    style = YohakuType.label11,
+                                    color = if (entry.enabled) colors.neutral6 else colors.neutral5,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1124,62 +1173,144 @@ private fun TimetableMoreDialog(
     }
 }
 
-/** 「添加 / 新建课程」弹层:教务导入 / 手动添加 / 手动表格导入 / AI 图片导入 / 双人课表。 */
+/** 标题行右侧的周选择器：显示当前所看的周次，点开周次面板（原先的「导出」位置）。 */
+@Composable
+private fun WeekSelectorPill(
+    week: Int,
+    onClick: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val shape = RoundedCornerShape(YohakuDimens.radiusControl)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .background(colors.raised)
+            .border(1.dp, colors.line, shape)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = "第 $week 周", style = YohakuType.label12, color = colors.neutral9)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(text = "▾", style = YohakuType.label12, color = colors.neutral6)
+    }
+}
+
+/** 新建课程：长按网格只给「手动添加」，从 ··· 菜单进才展开全部导入方式。 */
 @Composable
 private fun AddDialog(
     targetWeekday: Int? = null,
     targetPeriod: Int? = null,
+    manualOnly: Boolean = false,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
 ) {
     val colors = LocalYohakuColors.current
-    val title = if (targetWeekday != null && targetPeriod != null) {
-        "新建课程 · ${Dates.weekdayChar(targetWeekday)} 第 $targetPeriod 节"
-    } else if (targetWeekday != null) {
-        "新建课程 · ${Dates.weekdayChar(targetWeekday)}"
-    } else {
-        "添加"
+    val haptics = rememberYohakuHaptics()
+    val title = when {
+        targetWeekday != null && targetPeriod != null ->
+            "新建课程 · ${Dates.weekdayLabel(targetWeekday)} 第 $targetPeriod 节"
+        targetWeekday != null -> "新建课程 · ${Dates.weekdayLabel(targetWeekday)}"
+        else -> "添加课程"
     }
-    val manualDesc = if (targetWeekday != null && targetPeriod != null) {
-        "在 ${Dates.weekdayChar(targetWeekday)} 第 $targetPeriod 节自己填一门课"
-    } else {
-        "自己填一门课"
-    }
-    val options = listOf(
-        Triple("手动添加", manualDesc, "course_form"),
-        Triple("教务导入", "3 步导入,选学校识别方案", "import"),
-        Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
-        Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
-        Triple("双人课表 · 分享与合盘", "生成分享口令或导入朋友/情侣课表", "partner"),
-    )
     YohakuDialog(
         onDismissRequest = onDismiss,
         title = title,
         actions = { YohakuDialogAction(text = "取消", onClick = onDismiss) },
     ) {
-        options.forEachIndexed { index, (label, desc, route) ->
-            if (index > 0) {
-                Box(
+        if (manualOnly) {
+            if (targetWeekday != null) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
-                        .background(colors.neutral3),
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onPick(route) }
-                    .padding(vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = label, style = YohakuType.copy15, color = colors.neutral10)
-                    Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+                        .clip(RoundedCornerShape(YohakuDimens.radiusControl))
+                        .background(colors.neutral2)
+                        .border(1.dp, colors.line, RoundedCornerShape(YohakuDimens.radiusControl))
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(text = "落笔位置", style = YohakuType.label12, color = colors.neutral6)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = buildString {
+                            append(Dates.weekdayLabel(targetWeekday))
+                            targetPeriod?.let { append(" · 第 ").append(it).append(" 节") }
+                        },
+                        style = YohakuType.copy13,
+                        color = colors.neutral10,
+                    )
                 }
-                Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            AddOptionCard(
+                label = "手动添加课程",
+                desc = "在这格填写课程名、地点与周次",
+                primary = true,
+                onClick = {
+                    haptics.tick()
+                    onPick("course_form")
+                },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "需要教务系统、表格或截图导入？从右上角 ··· 打开「新建与导入课程」。",
+                style = YohakuType.label12,
+                color = colors.neutral6,
+            )
+        } else {
+            val options = listOf(
+                Triple("手动添加课程", "自己填一门课", "course_form"),
+                Triple("教务系统导入", "3 步导入，选学校识别方案", "import"),
+                Triple("手动表格导入", "粘贴表格或选 Excel 文件", "import_manual"),
+                Triple("AI 图片导入", "截图自动识别课表", "import_ai"),
+                Triple("双人课表 · 分享与合盘", "用 6 位提取码导入朋友/情侣课表", "partner"),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                options.forEach { (label, desc, route) ->
+                    AddOptionCard(
+                        label = label,
+                        desc = desc,
+                        primary = route == "course_form",
+                        onClick = {
+                            haptics.tick()
+                            onPick(route)
+                        },
+                    )
+                }
             }
         }
+    }
+}
+
+/** 新建课程弹层里的选项卡：与双人课表列表同一套圆角、描边与留白。 */
+@Composable
+private fun AddOptionCard(
+    label: String,
+    desc: String,
+    primary: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalYohakuColors.current
+    val shape = RoundedCornerShape(YohakuDimens.radiusControl)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (primary) colors.accent.copy(alpha = 0.06f) else colors.neutral1)
+            .border(1.dp, if (primary) colors.accent.copy(alpha = 0.3f) else colors.line, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = YohakuType.copy15,
+                color = if (primary) colors.accent else colors.neutral10,
+            )
+            Text(text = desc, style = YohakuType.label12, color = colors.neutral7)
+        }
+        Text(text = "›", style = YohakuType.copy15, color = colors.neutral6)
     }
 }
 

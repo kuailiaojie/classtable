@@ -321,7 +321,9 @@ export default async (req) => {
     upstream = AUTH_UPSTREAM + authSub;
   } else if (rest.startsWith("/firestore/")) {
     const fsSub = rest.slice("/firestore".length);
-    const isDocAccess = /^\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents(\/users\/[^/]+.*|:commit|:batchGet)$/.test(fsSub);
+    // 允许：用户自己的 users/{uid}/… 子树、云端分享的 shares/{6位提取码}、commit / batchGet。
+    // 提取码限定大写字母数字 6 位，避免把任意顶层集合暴露成公共读接口。
+    const isDocAccess = /^\/v1\/projects\/[^/]+\/databases\/\(default\)\/documents(\/users\/[^/]+.*|\/shares\/[A-Z0-9]{6}|:commit|:batchGet)$/.test(fsSub);
     if (!isDocAccess) {
       return json(403, { error: { code: 403, message: "firestore path not allowed" } });
     }
