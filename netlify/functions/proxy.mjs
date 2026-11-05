@@ -14,6 +14,8 @@
 // (不是 v1 的 {path, httpMethod, headers, body}),故用 URL / req.method /
 // req.headers.get / await req.text() 取字段,返回 Response。
 
+import { timingSafeEqual } from "node:crypto";
+
 const AUTH_UPSTREAM = "https://identitytoolkit.googleapis.com";
 const FIRESTORE_UPSTREAM = "https://firestore.googleapis.com";
 const PREFIX = "/.netlify/functions/proxy";
@@ -31,6 +33,25 @@ const ABI_NAMES = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"];
 // 需要 Netlify 环境变量:APP_CHECK_CERT_SHA256(允许的签名证书 SHA-256,逗号分隔,可含 release 与 debug;
 // 带不带冒号都行,服务端会自行规整)。
 const APP_CHECK_APP_ID = "1:123208302848:android:dfecc47a03fbf4e48af3e5";
+
+// 桌面端没有 Android 签名，改用「产品内置标识」换 token。性质与包签名指纹同级：
+// 只挡掉抄了反代地址白嫖配额的滥用，标识本身也能从公开安装包里提取。
+// 必须与 Windows 客户端 CloudConfig.DesktopAppCheckKey 保持一致；
+// 需要轮换时在 Netlify 设置 APP_CHECK_DESKTOP_KEY 并同步发版客户端。
+const DESKTOP_APP_CHECK_KEY = "04f79e6218c52a5ee4caaf7bc28c3160024b7074e30b2040";
+
+/** 定长比较，避免逐位比较泄露密钥长度 / 前缀。 */
+function safeEqual(a, b) {
+  const left = Buffer.from(String(a || ""));
+  const right = Buffer.from(String(b || ""));
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+/** 客户端时间戳必须在 5 分钟内，挡掉重放旧请求。 */
+function timestampFresh(timestamp) {
+  const t = Number(timestamp || 0);
+  return t > 0 && Math.abs(Date.now() - t) <= 5 * 60 * 1000;
+}
 
 // Live Updates 发送端:按 uid 读 Firestore devices 集合,定向发 FCM data 消息。
 // 需要 Netlify 环境变量:SERVICE_ACCOUNT(Firebase 服务账号 JSON)、PUSH_API_KEY(自定义管理密钥)。
@@ -86,20 +107,13 @@ async function handlePush(req) {
 }
 
 // POST /appcheck/token → 用 firebase-admin 为该应用签一枚 App Check token。
-// 客户端带上本包签名证书的 SHA-256,只有已知证书才签发(挡掉抄地址白嫖配额的滥用;
-// 这是抬高门槛,不是硬件级证明)。APP_CHECK_CERT_SHA256 未配置时明确报错,便于上线排查。
+// Android:带上本包签名证书的 SHA-256,只有已知证书才签发;
+// Desktop:带上 platform=desktop 与内置标识(见 DESKTOP_APP_CHECK_KEY)。
+// 两者都只是抬高「抄地址白嫖配额」的门槛,不是硬件级证明。
+// APP_CHECK_CERT_SHA256 未配置时明确报错,便于上线排查。
 async function handleAppCheck(req) {
   if (!process.env.SERVICE_ACCOUNT) {
     return json(500, { error: { code: 500, message: "SERVICE_ACCOUNT env not configured (Firebase service account JSON)" } });
-  }
-  // keytool 打出来的 SHA256 带冒号,这里统一规整(去掉冒号 / 空格并大写),粘贴即用。
-  const normalize = (s) => String(s || "").toUpperCase().replace(/[^0-9A-F]/g, "");
-  const allowed = String(process.env.APP_CHECK_CERT_SHA256 || "")
-    .split(",")
-    .map(normalize)
-    .filter(Boolean);
-  if (allowed.length === 0) {
-    return json(503, { error: { code: 503, message: "APP_CHECK_CERT_SHA256 env not configured" } });
   }
   let body;
   try {
@@ -107,17 +121,33 @@ async function handleAppCheck(req) {
   } catch {
     return json(400, { error: { code: 400, message: "invalid JSON body" } });
   }
-  const sha = normalize(body.signingSha256);
-  if (!sha || !allowed.includes(sha)) {
-    return json(403, { error: { code: 403, message: "unrecognized app signature" } });
-  }
-  if (body.package !== "com.kxin.classtable") {
-    return json(403, { error: { code: 403, message: "unrecognized package name" } });
-  }
-  const now = Date.now();
-  const reqTime = Number(body.timestamp || 0);
-  if (!reqTime || Math.abs(now - reqTime) > 5 * 60 * 1000) {
+  if (!timestampFresh(body.timestamp)) {
     return json(400, { error: { code: 400, message: "timestamp expired or missing" } });
+  }
+
+  if (body.platform === "desktop") {
+    // 桌面端(Windows 客户端):用产品内置标识校验,不要求 Android 签名证书。
+    const expected = process.env.APP_CHECK_DESKTOP_KEY || DESKTOP_APP_CHECK_KEY;
+    if (!expected || !safeEqual(body.appKey, expected)) {
+      return json(403, { error: { code: 403, message: "unrecognized desktop client" } });
+    }
+  } else {
+    // keytool 打出来的 SHA256 带冒号,这里统一规整(去掉冒号 / 空格并大写),粘贴即用。
+    const normalize = (s) => String(s || "").toUpperCase().replace(/[^0-9A-F]/g, "");
+    const allowed = String(process.env.APP_CHECK_CERT_SHA256 || "")
+      .split(",")
+      .map(normalize)
+      .filter(Boolean);
+    if (allowed.length === 0) {
+      return json(503, { error: { code: 503, message: "APP_CHECK_CERT_SHA256 env not configured" } });
+    }
+    const sha = normalize(body.signingSha256);
+    if (!sha || !allowed.includes(sha)) {
+      return json(403, { error: { code: 403, message: "unrecognized app signature" } });
+    }
+    if (body.package !== "com.kxin.classtable") {
+      return json(403, { error: { code: 403, message: "unrecognized package name" } });
+    }
   }
   try {
     const app = await getAdmin();

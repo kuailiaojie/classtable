@@ -233,6 +233,7 @@ cd classtable
 | 📦 [`docs/import-system.md`](docs/import-system.md) | 教务导入数据流、沙盒脚本规范与适配仓库协同机制 |
 | 🌧️ [`docs/yuketang-api.md`](docs/yuketang-api.md) | 雨课堂认证流程、公告拉取时间轴与请求收敛机制 |
 | ☁️ [`docs/backend-setup.md`](docs/backend-setup.md) | 账户同步、反向代理与更新服务器部署指引 |
+| 🪟 [`docs/windows-client-api.md`](docs/windows-client-api.md) | Windows 客户端 API、云数据模型与多端一致性协议 |
 | 🔑 [`docs/release-signing.md`](docs/release-signing.md) | Release 签名与 CI 自动化流水线配置 |
 
 ---

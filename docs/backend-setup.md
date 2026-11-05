@@ -152,6 +152,7 @@ curl -X POST "https://<site>/.netlify/functions/proxy/push" \
 
 ## 相关文档
 
+- Windows 客户端接入与多端同步协议:[windows-client-api.md](windows-client-api.md)
 - 签名配置:[release-signing.md](release-signing.md)
 - 整体架构与数据模型:[architecture.md](architecture.md)
 - 教务导入系统:[import-system.md](import-system.md)
